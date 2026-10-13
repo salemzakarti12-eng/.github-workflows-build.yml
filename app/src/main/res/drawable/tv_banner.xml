@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+
+    <!-- Dark Slate Background Gradient -->
+    <path
+        android:pathData="M0,0h320v180h-320z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="0"
+                android:startY="0"
+                android:endX="320"
+                android:endY="180"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#070B14" />
+                <item android:offset="0.5" android:color="#0F172A" />
+                <item android:offset="1.0" android:color="#1E293B" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- TV Display Screen Silhouette -->
+    <path
+        android:fillColor="#111827"
+        android:strokeColor="#38BDF8"
+        android:strokeWidth="2.5"
+        android:pathData="M 70,35 C 70,29 75,24 81,24 L 239,24 C 245,24 250,29 250,35 L 250,135 C 250,141 245,146 239,146 L 81,146 C 75,146 70,141 70,135 Z" />
+
+    <!-- TV Stand -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M 154,146 L 166,146 L 166,158 L 154,158 Z" />
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M 136,158 L 184,158 L 184,162 L 136,162 Z" />
+
+    <!-- Hypnotix Three Accent Gradient Wave Lines inside Screen -->
+    <!-- Red Live TV -->
+    <path
+        android:fillColor="#EF4444"
+        android:pathData="M 85,38 L 125,38 L 125,42 L 85,42 Z" />
+    <!-- Purple Movies -->
+    <path
+        android:fillColor="#8B5CF6"
+        android:pathData="M 140,38 L 180,38 L 180,42 L 140,42 Z" />
+    <!-- Cyan Series -->
+    <path
+        android:fillColor="#06B6D4"
+        android:pathData="M 195,38 L 235,38 L 235,42 L 195,42 Z" />
+
+    <!-- Large Play Triangle in Center -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M 148,70 L 182,90 L 148,110 Z" />
+
+</vector>

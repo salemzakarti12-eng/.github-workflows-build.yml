@@ -1,0 +1,28 @@
+<resources>
+    <string name="app_name">HypnoStream</string>
+    <string name="dashboard_title">HypnoStream</string>
+    <string name="nav_dashboard">Dashboard</string>
+    <string name="nav_channels">Live TV</string>
+    <string name="nav_movies">Movies</string>
+    <string name="nav_series">Series</string>
+    <string name="nav_settings">Sources</string>
+    <string name="card_tv_title">TV Channels</string>
+    <string name="card_tv_desc">Live television broadcasts, news, sports &amp; culture</string>
+    <string name="card_movies_title">Movies</string>
+    <string name="card_movies_desc">On-demand cinema, blockbusters &amp; feature films</string>
+    <string name="card_series_title">Series</string>
+    <string name="card_series_desc">Binge-watch episodic series, TV shows &amp; seasons</string>
+    <string name="btn_login_xtream">Connect Xtream Codes</string>
+    <string name="btn_load_m3u">Load M3U Playlist</string>
+    <string name="btn_demo_mode">Load Demo Streams</string>
+    <string name="server_url_hint">Server URL (e.g. http://iptv.server:8080)</string>
+    <string name="username_hint">Username</string>
+    <string name="password_hint">Password</string>
+    <string name="m3u_url_hint">M3U Playlist URL or Raw Content</string>
+    <string name="source_name_hint">Playlist / Provider Name (Optional)</string>
+    <string name="search_placeholder">Search channels, movies, shows...</string>
+    <string name="retry">Retry</string>
+    <string name="buffering">Buffering stream…</string>
+    <string name="player_aspect_ratio">Aspect Ratio</string>
+    <string name="player_close">Close Player</string>
+</resources>

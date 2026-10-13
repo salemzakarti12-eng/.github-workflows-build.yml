@@ -1,0 +1,6 @@
+{
+  "name": "HypnoStream",
+  "description": "Modern IPTV player with Hypnotix-inspired dashboard, Xtream Codes and M3U playlist support, and HLS/MPEG-TS video playback.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
