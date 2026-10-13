@@ -9,28 +9,29 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - name: Clone Repository
+        run: |
+          git init .
+          git remote add origin https://github.com/${{ github.repository }}.git
+          git fetch --depth 1 origin ${{ github.sha }}
+          git checkout FETCH_HEAD
 
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
+      - name: Build APK Using Built-in Tools
+        run: |
+          echo "Downloading Gradle 8.7..."
+          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip
+          unzip -q gradle-8.7-bin.zip
+          export PATH=$PWD/gradle-8.7/bin:$PATH
+          
+          echo "Accepting Android SDK Licenses..."
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
+          
+          echo "Building Debug APK..."
+          gradle assembleDebug --stacktrace
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Gradle Directly
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.7'
-
-      - name: Build APK with Gradle
-        run: gradle assembleDebug --stacktrace
-
-      - name: Upload APK File
-        uses: actions/upload-artifact@v4
-        with:
-          name: IPTV-Player-APK
-          path: app/build/outputs/apk/debug/*.apk
+      - name: Upload APK to GitHub Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          APK_FILE=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          gh release create "build-${{ github.run_number }}" "$APK_FILE" --title "APK Build #${{ github.run_number }}" --notes "Ready to install Android APK"
