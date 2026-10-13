@@ -3,8 +3,10 @@ package com.example
 import com.example.model.IptvType
 import com.example.model.StreamFormat
 import com.example.parser.M3uParser
+import com.example.parser.XtreamUrlDetector
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class ExampleUnitTest {
@@ -39,5 +41,19 @@ class ExampleUnitTest {
     assertEquals(IptvType.SERIES, series.type)
     assertEquals(1, series.seasonNumber)
     assertEquals(1, series.episodeNumber)
+  }
+
+  @Test
+  fun testXtreamUrlDetection() {
+    val m3uLink = "http://myiptv.com:8080/get.php?username=john_doe&password=secret456&type=m3u_plus&output=ts"
+    val detected = XtreamUrlDetector.detect(m3uLink)
+    assertNotNull(detected)
+    assertEquals("http://myiptv.com:8080", detected!!.serverUrl)
+    assertEquals("john_doe", detected.username)
+    assertEquals("secret456", detected.password)
+
+    val regularM3u = "https://raw.githubusercontent.com/iptv-org/iptv/master/streams/us.m3u"
+    val notDetected = XtreamUrlDetector.detect(regularM3u)
+    assertNull(notDetected)
   }
 }

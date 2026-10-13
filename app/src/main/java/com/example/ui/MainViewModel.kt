@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.IptvRepository
+import com.example.model.CategoryInfo
 import com.example.model.IptvItem
 import com.example.model.IptvSource
 import com.example.model.IptvType
@@ -36,52 +37,68 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _screenHistory = mutableListOf<Screen>()
 
-    // Search and category filtering
+    // Search, category, and pagination controls
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
     private val _selectedCategory = MutableStateFlow("All")
     val selectedCategory: StateFlow<String> = _selectedCategory.asStateFlow()
 
+    private val _displayLimit = MutableStateFlow(100)
+    val displayLimit: StateFlow<Int> = _displayLimit.asStateFlow()
+
     val sources: StateFlow<List<IptvSource>> = repository.sources
     val activeSource: StateFlow<IptvSource?> = repository.activeSource
-    val liveChannels: StateFlow<List<IptvItem>> = repository.liveChannels
-    val movies: StateFlow<List<IptvItem>> = repository.movies
-    val series: StateFlow<List<IptvItem>> = repository.series
+    val totalLiveCount: StateFlow<Int> = repository.totalLiveCount
+    val totalMoviesCount: StateFlow<Int> = repository.totalMoviesCount
+    val totalSeriesCount: StateFlow<Int> = repository.totalSeriesCount
+
+    val liveCategories: StateFlow<List<CategoryInfo>> = repository.liveCategories
+    val movieCategories: StateFlow<List<CategoryInfo>> = repository.movieCategories
+    val seriesCategories: StateFlow<List<CategoryInfo>> = repository.seriesCategories
+
     val favorites: StateFlow<Set<String>> = repository.favorites
     val recentlyWatched: StateFlow<List<IptvItem>> = repository.recentlyWatched
     val isLoading: StateFlow<Boolean> = repository.isLoading
     val statusMessage: StateFlow<String?> = repository.statusMessage
     val playerUiState: StateFlow<PlayerUiState> = playerManager.uiState
 
-    // Filtered lists for the active browsing screen
-    private val currentScreenItems = combine(
+    // Categories list for current screen
+    val currentCategories: StateFlow<List<CategoryInfo>> = combine(
         _currentScreen,
-        repository.liveChannels,
-        repository.movies,
-        repository.series
-    ) { screen, channels, movs, sers ->
+        repository.liveCategories,
+        repository.movieCategories,
+        repository.seriesCategories
+    ) { screen, liveCats, movCats, serCats ->
         when (screen) {
-            Screen.LIVE_CHANNELS -> channels
-            Screen.MOVIES -> movs
-            Screen.SERIES -> sers
-            else -> channels
+            Screen.LIVE_CHANNELS -> liveCats
+            Screen.MOVIES -> movCats
+            Screen.SERIES -> serCats
+            else -> emptyList()
         }
-    }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // Memory-protected paginated & filtered channels for active screen and category
     val currentFilteredItems: StateFlow<List<IptvItem>> = combine(
-        currentScreenItems,
+        _currentScreen,
+        _selectedCategory,
         _searchQuery,
-        _selectedCategory
-    ) { rawList, query, category ->
-        rawList.filter { item ->
-            val matchesCategory = (category == "All") || (category == "Favorites" && item.isFavorite) || item.group.equals(category, ignoreCase = true)
-            val matchesQuery = query.isBlank() ||
-                    item.name.contains(query, ignoreCase = true) ||
-                    item.group.contains(query, ignoreCase = true) ||
-                    (item.seriesTitle?.contains(query, ignoreCase = true) == true)
-            matchesCategory && matchesQuery
+        _displayLimit,
+        repository.totalLiveCount // triggers refresh when new playlist loaded
+    ) { screen, category, query, limit, _ ->
+        val type = when (screen) {
+            Screen.LIVE_CHANNELS -> IptvType.LIVE_TV
+            Screen.MOVIES -> IptvType.MOVIE
+            Screen.SERIES -> IptvType.SERIES
+            else -> IptvType.LIVE_TV
         }
+        repository.queryStreams(
+            type = type,
+            category = category,
+            query = query,
+            page = 0,
+            pageSize = limit
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun navigateTo(screen: Screen) {
@@ -90,6 +107,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _currentScreen.value = screen
             _searchQuery.value = ""
             _selectedCategory.value = "All"
+            _displayLimit.value = 100
         }
     }
 
@@ -99,7 +117,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 playerManager.closeQuickChannelList()
                 return true
             }
-            // Navigate back to the screen we came from or Dashboard
             val previous = _screenHistory.removeLastOrNull() ?: Screen.DASHBOARD
             _currentScreen.value = previous
             return true
@@ -114,10 +131,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
+        _displayLimit.value = 100
     }
 
     fun setSelectedCategory(cat: String) {
         _selectedCategory.value = cat
+        _displayLimit.value = 100
+    }
+
+    fun loadMoreItems() {
+        _displayLimit.value += 100
     }
 
     fun playStream(item: IptvItem) {
@@ -129,9 +152,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun playNextChannel() {
         val current = playerUiState.value.currentItem ?: return
         val list = when (current.type) {
-            IptvType.LIVE_TV -> liveChannels.value
-            IptvType.MOVIE -> movies.value
-            IptvType.SERIES -> series.value
+            IptvType.LIVE_TV -> repository.getAllLiveChannels()
+            IptvType.MOVIE -> repository.getAllMovies()
+            IptvType.SERIES -> repository.getAllSeries()
         }
         if (list.isEmpty()) return
 
@@ -143,9 +166,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun playPreviousChannel() {
         val current = playerUiState.value.currentItem ?: return
         val list = when (current.type) {
-            IptvType.LIVE_TV -> liveChannels.value
-            IptvType.MOVIE -> movies.value
-            IptvType.SERIES -> series.value
+            IptvType.LIVE_TV -> repository.getAllLiveChannels()
+            IptvType.MOVIE -> repository.getAllMovies()
+            IptvType.SERIES -> repository.getAllSeries()
         }
         if (list.isEmpty()) return
 

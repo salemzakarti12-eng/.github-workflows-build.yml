@@ -2,12 +2,14 @@ package com.example.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.example.model.CategoryInfo
 import com.example.model.IptvItem
 import com.example.model.IptvSource
 import com.example.model.IptvType
 import com.example.model.SourceType
 import com.example.parser.M3uParser
 import com.example.parser.XtreamCodesClient
+import com.example.parser.XtreamUrlDetector
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,6 +20,7 @@ import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 class IptvRepository(context: Context) {
@@ -25,8 +28,8 @@ class IptvRepository(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("hypnostream_prefs", Context.MODE_PRIVATE)
     private val xtreamClient = XtreamCodesClient()
     private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(25, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
         .followRedirects(true)
         .build()
 
@@ -36,14 +39,39 @@ class IptvRepository(context: Context) {
     private val _activeSource = MutableStateFlow<IptvSource?>(null)
     val activeSource: StateFlow<IptvSource?> = _activeSource.asStateFlow()
 
-    private val _liveChannels = MutableStateFlow<List<IptvItem>>(emptyList())
-    val liveChannels: StateFlow<List<IptvItem>> = _liveChannels.asStateFlow()
+    // Counts for the 3 Hypnotix Dashboard cards
+    private val _totalLiveCount = MutableStateFlow(0)
+    val totalLiveCount: StateFlow<Int> = _totalLiveCount.asStateFlow()
 
-    private val _movies = MutableStateFlow<List<IptvItem>>(emptyList())
-    val movies: StateFlow<List<IptvItem>> = _movies.asStateFlow()
+    private val _totalMoviesCount = MutableStateFlow(0)
+    val totalMoviesCount: StateFlow<Int> = _totalMoviesCount.asStateFlow()
 
-    private val _series = MutableStateFlow<List<IptvItem>>(emptyList())
-    val series: StateFlow<List<IptvItem>> = _series.asStateFlow()
+    private val _totalSeriesCount = MutableStateFlow(0)
+    val totalSeriesCount: StateFlow<Int> = _totalSeriesCount.asStateFlow()
+
+    // Category lists for Category-First UI navigation
+    private val _liveCategories = MutableStateFlow<List<CategoryInfo>>(emptyList())
+    val liveCategories: StateFlow<List<CategoryInfo>> = _liveCategories.asStateFlow()
+
+    private val _movieCategories = MutableStateFlow<List<CategoryInfo>>(emptyList())
+    val movieCategories: StateFlow<List<CategoryInfo>> = _movieCategories.asStateFlow()
+
+    private val _seriesCategories = MutableStateFlow<List<CategoryInfo>>(emptyList())
+    val seriesCategories: StateFlow<List<CategoryInfo>> = _seriesCategories.asStateFlow()
+
+    // Memory-protected internal maps (grouped by category in background memory)
+    private val liveStreamsByCategory = ConcurrentHashMap<String, MutableList<IptvItem>>()
+    private val movieStreamsByCategory = ConcurrentHashMap<String, MutableList<IptvItem>>()
+    private val seriesStreamsByCategory = ConcurrentHashMap<String, MutableList<IptvItem>>()
+
+    // All channels flat lists for quick access (e.g. next/prev channel)
+    private val allLiveList = ArrayList<IptvItem>()
+    private val allMoviesList = ArrayList<IptvItem>()
+    private val allSeriesList = ArrayList<IptvItem>()
+
+    // Current displayed channels list (capped and paginated to protect Compose)
+    private val _displayedItems = MutableStateFlow<List<IptvItem>>(emptyList())
+    val displayedItems: StateFlow<List<IptvItem>> = _displayedItems.asStateFlow()
 
     private val _favorites = MutableStateFlow<Set<String>>(emptySet())
     val favorites: StateFlow<Set<String>> = _favorites.asStateFlow()
@@ -62,11 +90,9 @@ class IptvRepository(context: Context) {
     }
 
     private fun loadPersistedState() {
-        // Load favorite IDs
         val favStrings = prefs.getStringSet("favorites", emptySet()) ?: emptySet()
         _favorites.value = favStrings
 
-        // Load sources
         val sourcesJson = prefs.getString("saved_sources", null)
         val loadedSources = mutableListOf<IptvSource>()
         if (!sourcesJson.isNullOrEmpty()) {
@@ -95,7 +121,6 @@ class IptvRepository(context: Context) {
             } catch (_: Exception) {}
         }
 
-        // If no sources exist, create default Demo source
         if (loadedSources.isEmpty()) {
             val demo = IptvSource(
                 id = "demo_source_default",
@@ -111,12 +136,9 @@ class IptvRepository(context: Context) {
         }
 
         _sources.value = loadedSources
-
-        // Determine active source
         val active = loadedSources.firstOrNull { it.isActive } ?: loadedSources.first()
         _activeSource.value = active
 
-        // Load initial stream content for active source
         if (active.type == SourceType.DEMO) {
             loadDemoContent(active)
         }
@@ -155,14 +177,8 @@ class IptvRepository(context: Context) {
         _favorites.value = current
         prefs.edit().putStringSet("favorites", current).apply()
 
-        // Update in current lists
-        _liveChannels.value = _liveChannels.value.map {
-            if (it.id == itemId) it.copy(isFavorite = current.contains(itemId)) else it
-        }
-        _movies.value = _movies.value.map {
-            if (it.id == itemId) it.copy(isFavorite = current.contains(itemId)) else it
-        }
-        _series.value = _series.value.map {
+        // Update displayed list
+        _displayedItems.value = _displayedItems.value.map {
             if (it.id == itemId) it.copy(isFavorite = current.contains(itemId)) else it
         }
     }
@@ -183,9 +199,7 @@ class IptvRepository(context: Context) {
         val movs = DemoStreams.demoMovies.map { it.copy(isFavorite = currentFavs.contains(it.id)) }
         val sers = DemoStreams.demoSeries.map { it.copy(isFavorite = currentFavs.contains(it.id)) }
 
-        _liveChannels.value = lives
-        _movies.value = movs
-        _series.value = sers
+        indexStreams(lives, movs, sers)
 
         val targetSource = source ?: _sources.value.firstOrNull { it.type == SourceType.DEMO }
         targetSource?.let {
@@ -199,6 +213,114 @@ class IptvRepository(context: Context) {
             updateActiveSource(updated)
         }
         _statusMessage.value = "Demo streams ready"
+    }
+
+    /**
+     * Internal indexing of streams into background memory grouped by category.
+     * Prevents giant 50k item arrays from locking up the UI thread.
+     */
+    private fun indexStreams(
+        liveList: List<IptvItem>,
+        movList: List<IptvItem>,
+        serList: List<IptvItem>
+    ) {
+        liveStreamsByCategory.clear()
+        movieStreamsByCategory.clear()
+        seriesStreamsByCategory.clear()
+        allLiveList.clear()
+        allMoviesList.clear()
+        allSeriesList.clear()
+
+        allLiveList.addAll(liveList)
+        allMoviesList.addAll(movList)
+        allSeriesList.addAll(serList)
+
+        for (item in liveList) {
+            liveStreamsByCategory.getOrPut(item.group) { ArrayList() }.add(item)
+        }
+        for (item in movList) {
+            movieStreamsByCategory.getOrPut(item.group) { ArrayList() }.add(item)
+        }
+        for (item in serList) {
+            seriesStreamsByCategory.getOrPut(item.group) { ArrayList() }.add(item)
+        }
+
+        _totalLiveCount.value = liveList.size
+        _totalMoviesCount.value = movList.size
+        _totalSeriesCount.value = serList.size
+
+        // Build Category summaries with item counts
+        _liveCategories.value = liveStreamsByCategory.map { (cat, items) ->
+            CategoryInfo(id = "cat_live_$cat", name = cat, itemCount = items.size, type = IptvType.LIVE_TV)
+        }.sortedByDescending { it.itemCount }
+
+        _movieCategories.value = movieStreamsByCategory.map { (cat, items) ->
+            CategoryInfo(id = "cat_mov_$cat", name = cat, itemCount = items.size, type = IptvType.MOVIE)
+        }.sortedByDescending { it.itemCount }
+
+        _seriesCategories.value = seriesStreamsByCategory.map { (cat, items) ->
+            CategoryInfo(id = "cat_ser_$cat", name = cat, itemCount = items.size, type = IptvType.SERIES)
+        }.sortedByDescending { it.itemCount }
+
+        // Default displayed items to top 100 channels of first category or all live
+        val initialBatch = liveList.take(100)
+        _displayedItems.value = initialBatch
+    }
+
+    /**
+     * Category-first memory protection query:
+     * Capped to [limit] (default 100) to keep Compose lightweight and prevent garbage collection freezes.
+     */
+    fun queryStreams(
+        type: IptvType,
+        category: String,
+        query: String,
+        page: Int = 0,
+        pageSize: Int = 100
+    ): List<IptvItem> {
+        val categoryMap = when (type) {
+            IptvType.LIVE_TV -> liveStreamsByCategory
+            IptvType.MOVIE -> movieStreamsByCategory
+            IptvType.SERIES -> seriesStreamsByCategory
+        }
+
+        val favs = _favorites.value
+        val sourceItems: Sequence<IptvItem> = when {
+            category.equals("Favorites", ignoreCase = true) -> {
+                val fullList = when (type) {
+                    IptvType.LIVE_TV -> allLiveList
+                    IptvType.MOVIE -> allMoviesList
+                    IptvType.SERIES -> allSeriesList
+                }
+                fullList.asSequence().filter { favs.contains(it.id) }
+            }
+            category.equals("All", ignoreCase = true) -> {
+                val fullList = when (type) {
+                    IptvType.LIVE_TV -> allLiveList
+                    IptvType.MOVIE -> allMoviesList
+                    IptvType.SERIES -> allSeriesList
+                }
+                fullList.asSequence()
+            }
+            else -> {
+                (categoryMap[category] ?: emptyList()).asSequence()
+            }
+        }
+
+        val filtered = if (query.isBlank()) {
+            sourceItems
+        } else {
+            sourceItems.filter { item ->
+                item.name.contains(query, ignoreCase = true) ||
+                item.group.contains(query, ignoreCase = true) ||
+                (item.seriesTitle?.contains(query, ignoreCase = true) == true)
+            }
+        }
+
+        val offset = page * pageSize
+        return filtered.drop(offset).take(pageSize).map {
+            if (favs.contains(it.id)) it.copy(isFavorite = true) else it
+        }.toList()
     }
 
     suspend fun addOrUpdateXtreamSource(
@@ -219,10 +341,9 @@ class IptvRepository(context: Context) {
             }
 
             val items = authResult.items
-            val favs = _favorites.value
-            val live = items.filter { it.type == IptvType.LIVE_TV }.map { it.copy(isFavorite = favs.contains(it.id)) }
-            val movs = items.filter { it.type == IptvType.MOVIE }.map { it.copy(isFavorite = favs.contains(it.id)) }
-            val sers = items.filter { it.type == IptvType.SERIES }.map { it.copy(isFavorite = favs.contains(it.id)) }
+            val live = items.filter { it.type == IptvType.LIVE_TV }
+            val movs = items.filter { it.type == IptvType.MOVIE }
+            val sers = items.filter { it.type == IptvType.SERIES }
 
             val source = IptvSource(
                 id = UUID.randomUUID().toString(),
@@ -239,13 +360,13 @@ class IptvRepository(context: Context) {
                 statusText = "Connected (${live.size + movs.size + sers.size} items)"
             )
 
-            _liveChannels.value = live
-            _movies.value = movs
-            _series.value = sers
-
+            indexStreams(live, movs, sers)
             updateActiveSource(source)
+
             _isLoading.value = false
-            _statusMessage.value = "Connected! Loaded ${live.size} channels, ${movs.size} movies."
+            _statusMessage.value = "Connected! Loaded %,d channels, %,d movies, %,d series.".format(
+                live.size, movs.size, sers.size
+            )
             Result.success(source)
         } catch (e: Exception) {
             _isLoading.value = false
@@ -260,31 +381,55 @@ class IptvRepository(context: Context) {
         rawContent: String = ""
     ): Result<IptvSource> = withContext(Dispatchers.IO) {
         _isLoading.value = true
-        _statusMessage.value = "Parsing M3U playlist..."
+
+        // Smart M3U-to-Xtream Auto-Detection
+        if (m3uUrl.isNotBlank()) {
+            val detected = XtreamUrlDetector.detect(m3uUrl)
+            if (detected != null) {
+                _statusMessage.value = "Detected Xtream Codes IPTV provider (${detected.username}). Loading via fast API..."
+                return@withContext addOrUpdateXtreamSource(
+                    name = name.ifBlank { "Xtream (${detected.username})" },
+                    serverUrl = detected.serverUrl,
+                    username = detected.username,
+                    password = detected.password
+                )
+            }
+        }
+
+        _statusMessage.value = "Streaming & parsing M3U playlist..."
 
         try {
-            val content = if (m3uUrl.isNotBlank()) {
-                val req = Request.Builder().url(m3uUrl).header("User-Agent", "HypnoStream-IPTV/1.0").build()
+            val items: List<IptvItem> = if (m3uUrl.isNotBlank()) {
+                val req = Request.Builder()
+                    .url(m3uUrl)
+                    .header("User-Agent", "HypnoStream-IPTV/1.0")
+                    .build()
+
                 val resp = httpClient.newCall(req).execute()
                 if (!resp.isSuccessful) {
                     throw Exception("HTTP ${resp.code}: Failed to download M3U playlist")
                 }
-                resp.body?.string().orEmpty()
+
+                val body = resp.body ?: throw Exception("Empty M3U response stream")
+                // STREAMING PARSER: Never call .string() or .readText()!
+                val bufferedReader = body.byteStream().bufferedReader(Charsets.UTF_8)
+                M3uParser.parseStream(bufferedReader) { progress ->
+                    _statusMessage.value = "Loading streams... %,d found".format(progress.totalCount)
+                }
             } else {
-                rawContent
+                if (rawContent.isBlank() || !rawContent.contains("#EXTM3U", ignoreCase = true)) {
+                    throw Exception("Invalid M3U playlist (missing #EXTM3U header)")
+                }
+                M3uParser.parse(rawContent)
             }
 
-            if (content.isBlank() || !content.contains("#EXTM3U", ignoreCase = true)) {
-                _isLoading.value = false
-                _statusMessage.value = "Invalid M3U playlist (missing #EXTM3U header)"
-                return@withContext Result.failure(Exception("Invalid M3U header"))
+            if (items.isEmpty()) {
+                throw Exception("No playable streams found in M3U playlist")
             }
 
-            val items = M3uParser.parse(content)
-            val favs = _favorites.value
-            val live = items.filter { it.type == IptvType.LIVE_TV }.map { it.copy(isFavorite = favs.contains(it.id)) }
-            val movs = items.filter { it.type == IptvType.MOVIE }.map { it.copy(isFavorite = favs.contains(it.id)) }
-            val sers = items.filter { it.type == IptvType.SERIES }.map { it.copy(isFavorite = favs.contains(it.id)) }
+            val live = items.filter { it.type == IptvType.LIVE_TV }
+            val movs = items.filter { it.type == IptvType.MOVIE }
+            val sers = items.filter { it.type == IptvType.SERIES }
 
             val source = IptvSource(
                 id = UUID.randomUUID().toString(),
@@ -296,16 +441,16 @@ class IptvRepository(context: Context) {
                 channelCount = live.size,
                 movieCount = movs.size,
                 seriesCount = sers.size,
-                statusText = "Active (${items.size} streams)"
+                statusText = "Active (%,d streams)".format(items.size)
             )
 
-            _liveChannels.value = live
-            _movies.value = movs
-            _series.value = sers
-
+            indexStreams(live, movs, sers)
             updateActiveSource(source)
+
             _isLoading.value = false
-            _statusMessage.value = "M3U loaded! Found ${items.size} streams."
+            _statusMessage.value = "M3U loaded! Found %,d streams (Live: %,d | Movies: %,d | Series: %,d)".format(
+                items.size, live.size, movs.size, sers.size
+            )
             Result.success(source)
         } catch (e: Exception) {
             _isLoading.value = false
@@ -317,7 +462,6 @@ class IptvRepository(context: Context) {
     private fun updateActiveSource(source: IptvSource) {
         val current = _sources.value.toMutableList()
         val index = current.indexOfFirst { it.id == source.id }
-        // Deactivate all others
         val updatedList = current.map { it.copy(isActive = it.id == source.id) }.toMutableList()
         if (index >= 0) {
             updatedList[index] = source.copy(isActive = true)
@@ -368,4 +512,8 @@ class IptvRepository(context: Context) {
             }
         }
     }
+
+    fun getAllLiveChannels(): List<IptvItem> = allLiveList
+    fun getAllMovies(): List<IptvItem> = allMoviesList
+    fun getAllSeries(): List<IptvItem> = allSeriesList
 }

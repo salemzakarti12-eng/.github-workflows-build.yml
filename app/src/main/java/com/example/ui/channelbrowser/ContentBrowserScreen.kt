@@ -32,6 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.LiveTv
@@ -41,6 +42,8 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -59,7 +62,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -72,12 +74,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.model.CategoryInfo
 import com.example.model.IptvItem
 import com.example.model.IptvType
 import com.example.model.StreamFormat
 import com.example.ui.Screen
 import com.example.ui.theme.AccentCyan
-import com.example.ui.theme.AccentEmerald
 import com.example.ui.theme.AccentRed
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.Slate300
@@ -92,11 +94,14 @@ import com.example.ui.theme.Slate950
 @Composable
 fun ContentBrowserScreen(
     screen: Screen,
+    categories: List<CategoryInfo>,
     items: List<IptvItem>,
     searchQuery: String,
     selectedCategory: String,
+    totalCount: Int,
     onSearchChange: (String) -> Unit,
     onCategoryChange: (String) -> Unit,
+    onLoadMore: () -> Unit,
     onPlayItem: (IptvItem) -> Unit,
     onToggleFavorite: (IptvItem) -> Unit,
     onBack: () -> Unit,
@@ -107,12 +112,6 @@ fun ContentBrowserScreen(
         Screen.MOVIES -> Triple("Movies & Cinema", Icons.Default.Movie, Color(0xFF8B5CF6))
         Screen.SERIES -> Triple("Series & Shows", Icons.Default.VideoLibrary, Color(0xFF06B6D4))
         else -> Triple("Browse Content", Icons.Default.Tv, AccentCyan)
-    }
-
-    // Extract unique groups/categories for filter pills
-    val allCategories = remember(items) {
-        val uniqueGroups = items.map { it.group }.filter { it.isNotBlank() }.distinct().sorted()
-        listOf("All", "Favorites") + uniqueGroups
     }
 
     val backInteractionSource = remember { MutableInteractionSource() }
@@ -128,7 +127,7 @@ fun ContentBrowserScreen(
         val isWideScreen = maxWidth >= 600.dp || isTv
 
         Column(modifier = Modifier.fillMaxSize()) {
-            // Top Bar with TV focus
+            // Top Bar
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -184,15 +183,17 @@ fun ContentBrowserScreen(
                             color = PureWhite
                         )
                         Text(
-                            text = "${items.size} streams found",
+                            text = "%,d total available  •  Showing: %s".format(totalCount, selectedCategory),
                             fontSize = 11.sp,
-                            color = Slate400
+                            color = Slate400,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
             }
 
-            // Search Input with Keyboard & D-Pad support
+            // Search Bar
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = onSearchChange,
@@ -200,7 +201,7 @@ fun ContentBrowserScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp)
                     .testTag("input_search_channels"),
-                placeholder = { Text("Search by name or category...", color = Slate400, fontSize = 14.sp) },
+                placeholder = { Text("Search by stream name or category...", color = Slate400, fontSize = 14.sp) },
                 leadingIcon = {
                     Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = Slate400)
                 },
@@ -223,7 +224,7 @@ fun ContentBrowserScreen(
                 )
             )
 
-            // Category Filter Chips with TV focus
+            // Category Chips Row (Category-First with item counts)
             LazyRow(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -231,47 +232,41 @@ fun ContentBrowserScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(allCategories) { category ->
-                    val isSelected = category.equals(selectedCategory, ignoreCase = true)
-                    val chipInteractionSource = remember { MutableInteractionSource() }
-                    val isChipFocused by chipInteractionSource.collectIsFocusedAsState()
+                // "All" chip
+                item {
+                    CategoryChip(
+                        name = "All",
+                        count = totalCount,
+                        isSelected = selectedCategory.equals("All", ignoreCase = true),
+                        accentColor = accentColor,
+                        onClick = { onCategoryChange("All") }
+                    )
+                }
 
-                    Surface(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .border(
-                                width = if (isChipFocused) 2.5.dp else if (isSelected) 0.dp else 1.dp,
-                                color = if (isChipFocused) PureWhite else Slate700,
-                                shape = RoundedCornerShape(20.dp)
-                            )
-                            .focusable(interactionSource = chipInteractionSource)
-                            .onPreviewKeyEvent { event ->
-                                if (event.type == KeyEventType.KeyUp &&
-                                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                                ) {
-                                    onCategoryChange(category)
-                                    true
-                                } else false
-                            }
-                            .clickable(interactionSource = chipInteractionSource, indication = null) {
-                                onCategoryChange(category)
-                            }
-                            .testTag("filter_chip_$category"),
-                        color = if (isChipFocused) accentColor else if (isSelected) accentColor else Slate850,
-                        shape = RoundedCornerShape(20.dp)
-                    ) {
-                        Text(
-                            text = category,
-                            fontSize = 12.sp,
-                            fontWeight = if (isSelected || isChipFocused) FontWeight.Bold else FontWeight.Medium,
-                            color = PureWhite,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
-                        )
-                    }
+                // "Favorites" chip
+                item {
+                    CategoryChip(
+                        name = "Favorites",
+                        count = null,
+                        isSelected = selectedCategory.equals("Favorites", ignoreCase = true),
+                        accentColor = Color(0xFFEF4444),
+                        onClick = { onCategoryChange("Favorites") }
+                    )
+                }
+
+                // Categorized chips with live counts
+                items(categories, key = { it.id }) { cat ->
+                    CategoryChip(
+                        name = cat.name,
+                        count = cat.itemCount,
+                        isSelected = selectedCategory.equals(cat.name, ignoreCase = true),
+                        accentColor = accentColor,
+                        onClick = { onCategoryChange(cat.name) }
+                    )
                 }
             }
 
-            // Stream List: Responsive Grid on TV/Tablet/Landscape, Column on Phone
+            // Stream List or Grid
             if (items.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -288,13 +283,13 @@ fun ContentBrowserScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "No streams match your filter",
+                            text = "No streams in this category",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Slate300
                         )
                         Text(
-                            text = "Try clearing the search query or selecting a different category.",
+                            text = "Try switching categories or clearing the search query.",
                             fontSize = 13.sp,
                             color = Slate400,
                             modifier = Modifier.padding(top = 4.dp)
@@ -318,6 +313,13 @@ fun ContentBrowserScreen(
                             onToggleFavorite = { onToggleFavorite(item) }
                         )
                     }
+
+                    // Load More trigger in grid
+                    if (items.size >= 100) {
+                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(2) }) {
+                            LoadMoreButton(onLoadMore = onLoadMore, accentColor = accentColor)
+                        }
+                    }
                 }
             } else {
                 // Portrait single column
@@ -334,9 +336,125 @@ fun ContentBrowserScreen(
                             onToggleFavorite = { onToggleFavorite(item) }
                         )
                     }
+
+                    if (items.size >= 100) {
+                        item {
+                            LoadMoreButton(onLoadMore = onLoadMore, accentColor = accentColor)
+                        }
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+fun CategoryChip(
+    name: String,
+    count: Int?,
+    isSelected: Boolean,
+    accentColor: Color,
+    onClick: () -> Unit
+) {
+    val chipInteractionSource = remember { MutableInteractionSource() }
+    val isChipFocused by chipInteractionSource.collectIsFocusedAsState()
+
+    Surface(
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .border(
+                width = if (isChipFocused) 2.5.dp else if (isSelected) 0.dp else 1.dp,
+                color = if (isChipFocused) PureWhite else Slate700,
+                shape = RoundedCornerShape(20.dp)
+            )
+            .focusable(interactionSource = chipInteractionSource)
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyUp &&
+                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                ) {
+                    onClick()
+                    true
+                } else false
+            }
+            .clickable(interactionSource = chipInteractionSource, indication = null) {
+                onClick()
+            }
+            .testTag("filter_chip_$name"),
+        color = if (isChipFocused || isSelected) accentColor else Slate850,
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = name,
+                fontSize = 12.sp,
+                fontWeight = if (isSelected || isChipFocused) FontWeight.Bold else FontWeight.Medium,
+                color = PureWhite
+            )
+            if (count != null && count > 0) {
+                Spacer(modifier = Modifier.width(6.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(Color(0x33000000))
+                        .padding(horizontal = 6.dp, vertical = 1.dp)
+                ) {
+                    Text(
+                        text = "%,d".format(count),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PureWhite
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun LoadMoreButton(
+    onLoadMore: () -> Unit,
+    accentColor: Color
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
+    Button(
+        onClick = onLoadMore,
+        interactionSource = interactionSource,
+        shape = RoundedCornerShape(12.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (isFocused) PureWhite else Slate850,
+            contentColor = if (isFocused) Slate950 else AccentCyan
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp)
+            .border(
+                width = if (isFocused) 2.5.dp else 1.dp,
+                color = if (isFocused) PureWhite else Slate700,
+                shape = RoundedCornerShape(12.dp)
+            )
+            .focusable(interactionSource = interactionSource)
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyUp &&
+                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                ) {
+                    onLoadMore()
+                    true
+                } else false
+            }
+            .testTag("btn_load_more_channels")
+    ) {
+        Icon(Icons.Default.ExpandMore, null, modifier = Modifier.size(20.dp))
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = "Load More Channels",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 
@@ -391,7 +509,6 @@ fun StreamItemCard(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Channel Logo / Poster Thumbnail
             Box(
                 modifier = Modifier
                     .size(60.dp)
@@ -425,7 +542,6 @@ fun StreamItemCard(
 
             Spacer(modifier = Modifier.width(14.dp))
 
-            // Details
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = item.name,
@@ -436,13 +552,11 @@ fun StreamItemCard(
                     overflow = TextOverflow.Ellipsis
                 )
 
-                // Category & Stream Format Tag Row
                 Row(
                     modifier = Modifier.padding(top = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    // Group pill
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
@@ -457,7 +571,6 @@ fun StreamItemCard(
                         )
                     }
 
-                    // Format badge (HLS or TS or MP4)
                     val formatLabel = when (item.streamFormat) {
                         StreamFormat.HLS -> "HLS .m3u8"
                         StreamFormat.MPEG_TS -> "MPEG-TS"
@@ -478,7 +591,6 @@ fun StreamItemCard(
                         )
                     }
 
-                    // Rating if available
                     if (!item.rating.isNullOrBlank()) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
@@ -510,7 +622,6 @@ fun StreamItemCard(
                 }
             }
 
-            // Favorite Button
             IconButton(
                 onClick = onToggleFavorite,
                 modifier = Modifier
@@ -525,7 +636,6 @@ fun StreamItemCard(
                 )
             }
 
-            // Play Button
             IconButton(
                 onClick = onPlay,
                 modifier = Modifier

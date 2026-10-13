@@ -7,11 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,11 +22,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Link
@@ -68,9 +62,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -79,6 +77,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.IptvSource
 import com.example.model.SourceType
+import com.example.parser.XtreamUrlDetector
 import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.AccentEmerald
 import com.example.ui.theme.AccentRed
@@ -105,20 +104,26 @@ fun SourcesScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var selectedTab by remember { mutableIntStateOf(0) } // 0: Xtream Codes, 1: M3U Playlist, 2: Saved Sources
+    // Dual Login Tabs: 0 = M3U URL, 1 = Xtream Codes API, 2 = Saved Providers
+    var selectedTab by remember { mutableIntStateOf(0) }
+
+    // M3U inputs
+    var m3uSourceName by remember { mutableStateOf("") }
+    var m3uUrl by remember { mutableStateOf("") }
+    var m3uRawContent by remember { mutableStateOf("") }
+    var isRawContentMode by remember { mutableStateOf(false) }
 
     // Xtream Codes inputs
+    var xtreamSourceName by remember { mutableStateOf("") }
     var serverUrl by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var xtreamSourceName by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
 
-    // M3U inputs
-    var m3uUrl by remember { mutableStateOf("") }
-    var m3uRawContent by remember { mutableStateOf("") }
-    var m3uSourceName by remember { mutableStateOf("") }
-    var isRawContentMode by remember { mutableStateOf(false) }
+    // Auto-detect Xtream in M3U link
+    val detectedXtream = remember(m3uUrl) {
+        XtreamUrlDetector.detect(m3uUrl)
+    }
 
     Column(
         modifier = modifier
@@ -133,18 +138,36 @@ fun SourcesScreen(
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val backInteraction = remember { MutableInteractionSource() }
+            val isBackFocused by backInteraction.collectIsFocusedAsState()
+
             IconButton(
                 onClick = onBack,
+                interactionSource = backInteraction,
                 modifier = Modifier
                     .size(44.dp)
                     .clip(CircleShape)
-                    .background(Slate850)
+                    .background(if (isBackFocused) AccentCyan else Slate850)
+                    .border(
+                        width = if (isBackFocused) 3.dp else 1.dp,
+                        color = if (isBackFocused) PureWhite else Slate700,
+                        shape = CircleShape
+                    )
+                    .focusable(interactionSource = backInteraction)
+                    .onPreviewKeyEvent { event ->
+                        if (event.type == KeyEventType.KeyUp &&
+                            (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                        ) {
+                            onBack()
+                            true
+                        } else false
+                    }
                     .testTag("btn_sources_back")
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
-                    tint = PureWhite
+                    tint = if (isBackFocused) Slate950 else PureWhite
                 )
             }
             Spacer(modifier = Modifier.width(12.dp))
@@ -156,14 +179,14 @@ fun SourcesScreen(
                     color = PureWhite
                 )
                 Text(
-                    text = "Configure Xtream Codes API or M3U playlist",
+                    text = "Dual Login: M3U Playlist URL or Xtream Codes API",
                     fontSize = 11.sp,
                     color = Slate400
                 )
             }
         }
 
-        // Tabs
+        // Dual Login Tabs (M3U URL | Xtream Codes API | Saved Sources)
         TabRow(
             selectedTabIndex = selectedTab,
             containerColor = Slate900,
@@ -176,72 +199,100 @@ fun SourcesScreen(
                 )
             }
         ) {
+            val tab0Interaction = remember { MutableInteractionSource() }
+            val isTab0Focused by tab0Interaction.collectIsFocusedAsState()
+
             Tab(
                 selected = selectedTab == 0,
                 onClick = { selectedTab = 0 },
+                interactionSource = tab0Interaction,
                 text = {
                     Text(
-                        "Xtream Codes",
-                        fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal,
-                        color = if (selectedTab == 0) AccentCyan else Slate400,
+                        "M3U URL",
+                        fontWeight = if (selectedTab == 0 || isTab0Focused) FontWeight.Bold else FontWeight.Normal,
+                        color = if (selectedTab == 0 || isTab0Focused) AccentCyan else Slate400,
                         fontSize = 13.sp
                     )
                 },
-                modifier = Modifier.testTag("tab_xtream")
+                modifier = Modifier
+                    .focusable(interactionSource = tab0Interaction)
+                    .testTag("tab_m3u")
             )
+
+            val tab1Interaction = remember { MutableInteractionSource() }
+            val isTab1Focused by tab1Interaction.collectIsFocusedAsState()
+
             Tab(
                 selected = selectedTab == 1,
                 onClick = { selectedTab = 1 },
+                interactionSource = tab1Interaction,
                 text = {
                     Text(
-                        "M3U Playlist",
-                        fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal,
-                        color = if (selectedTab == 1) AccentCyan else Slate400,
+                        "Xtream Codes API",
+                        fontWeight = if (selectedTab == 1 || isTab1Focused) FontWeight.Bold else FontWeight.Normal,
+                        color = if (selectedTab == 1 || isTab1Focused) AccentCyan else Slate400,
                         fontSize = 13.sp
                     )
                 },
-                modifier = Modifier.testTag("tab_m3u")
+                modifier = Modifier
+                    .focusable(interactionSource = tab1Interaction)
+                    .testTag("tab_xtream")
             )
+
+            val tab2Interaction = remember { MutableInteractionSource() }
+            val isTab2Focused by tab2Interaction.collectIsFocusedAsState()
+
             Tab(
                 selected = selectedTab == 2,
                 onClick = { selectedTab = 2 },
+                interactionSource = tab2Interaction,
                 text = {
                     Text(
                         "Saved (${sources.size})",
-                        fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal,
-                        color = if (selectedTab == 2) AccentCyan else Slate400,
+                        fontWeight = if (selectedTab == 2 || isTab2Focused) FontWeight.Bold else FontWeight.Normal,
+                        color = if (selectedTab == 2 || isTab2Focused) AccentCyan else Slate400,
                         fontSize = 13.sp
                     )
                 },
-                modifier = Modifier.testTag("tab_saved_sources")
+                modifier = Modifier
+                    .focusable(interactionSource = tab2Interaction)
+                    .testTag("tab_saved_sources")
             )
         }
 
-        // Status message pill if present
-        AnimatedVisibility(visible = !statusMessage.isNullOrBlank()) {
-            Row(
+        // Live Progress Indicator Card with Live Counter
+        AnimatedVisibility(visible = isLoading || !statusMessage.isNullOrBlank()) {
+            Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Slate850)
-                    .border(1.dp, Slate700, RoundedCornerShape(10.dp))
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        color = AccentCyan,
-                        strokeWidth = 2.dp,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                }
-                Text(
-                    text = statusMessage ?: "",
-                    fontSize = 12.sp,
-                    color = if (statusMessage?.contains("Error", true) == true || statusMessage?.contains("failed", true) == true) AccentRed else Slate300
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                colors = CardDefaults.cardColors(containerColor = Slate850),
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (isLoading) AccentCyan else if (statusMessage?.contains("Error", true) == true) AccentRed else Slate700
                 )
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            color = AccentCyan,
+                            strokeWidth = 2.5.dp,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                    }
+                    Text(
+                        text = statusMessage ?: "Processing...",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (statusMessage?.contains("Error", true) == true) AccentRed else PureWhite,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
         }
 
@@ -252,19 +303,190 @@ fun SourcesScreen(
         ) {
             when (selectedTab) {
                 0 -> {
-                    // Xtream Codes API form
+                    // TAB 0: M3U URL LOGIN
                     item {
                         Text(
-                            text = "Connect with Xtream Codes Credentials",
+                            text = "Add M3U Playlist Link",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = PureWhite
                         )
                         Text(
-                            text = "Enter your IPTV provider's server URL, username, and password.",
+                            text = "Streamline 50,000+ channel playlists using high-speed streaming reader.",
                             fontSize = 12.sp,
                             color = Slate400,
-                            modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+                            modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)
+                        )
+                    }
+
+                    item {
+                        OutlinedTextField(
+                            value = m3uSourceName,
+                            onValueChange = { m3uSourceName = it },
+                            label = { Text("Playlist Name (Optional)") },
+                            placeholder = { Text("My IPTV Playlist") },
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("input_m3u_name"),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = PureWhite,
+                                unfocusedTextColor = PureWhite,
+                                focusedBorderColor = AccentCyan,
+                                unfocusedBorderColor = Slate700,
+                                focusedContainerColor = Slate900,
+                                unfocusedContainerColor = Slate900
+                            )
+                        )
+                    }
+
+                    item {
+                        OutlinedTextField(
+                            value = m3uUrl,
+                            onValueChange = { m3uUrl = it },
+                            label = { Text("M3U / M3U8 Playlist URL") },
+                            leadingIcon = { Icon(Icons.Default.Link, null, tint = AccentCyan) },
+                            placeholder = { Text("http://provider.tv:8080/get.php?username=...&password=...") },
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("input_m3u_url"),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = PureWhite,
+                                unfocusedTextColor = PureWhite,
+                                focusedBorderColor = AccentCyan,
+                                unfocusedBorderColor = Slate700,
+                                focusedContainerColor = Slate900,
+                                unfocusedContainerColor = Slate900
+                            )
+                        )
+                    }
+
+                    // Smart M3U-to-Xtream Auto-Detection Banner
+                    if (detectedXtream != null) {
+                        item {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .border(1.5.dp, AccentEmerald, RoundedCornerShape(12.dp)),
+                                colors = CardDefaults.cardColors(containerColor = Slate900)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.AutoAwesome,
+                                        contentDescription = null,
+                                        tint = AccentEmerald,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            text = "Smart Auto-Detection Active",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = AccentEmerald
+                                        )
+                                        Text(
+                                            text = "Xtream Codes API detected (${detectedXtream.username}). Loads instantaneously via API without downloading massive 100MB files!",
+                                            fontSize = 11.sp,
+                                            color = Slate300
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    item {
+                        val m3uBtnInteraction = remember { MutableInteractionSource() }
+                        val isM3uBtnFocused by m3uBtnInteraction.collectIsFocusedAsState()
+
+                        Button(
+                            onClick = {
+                                onLoadM3u(m3uUrl, m3uRawContent, m3uSourceName)
+                            },
+                            interactionSource = m3uBtnInteraction,
+                            enabled = !isLoading && (m3uUrl.isNotBlank() || m3uRawContent.isNotBlank()),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp)
+                                .border(
+                                    width = if (isM3uBtnFocused) 3.dp else 0.dp,
+                                    color = PureWhite,
+                                    shape = RoundedCornerShape(14.dp)
+                                )
+                                .focusable(interactionSource = m3uBtnInteraction)
+                                .onPreviewKeyEvent { event ->
+                                    if (event.type == KeyEventType.KeyUp &&
+                                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                    ) {
+                                        onLoadM3u(m3uUrl, m3uRawContent, m3uSourceName)
+                                        true
+                                    } else false
+                                }
+                                .testTag("btn_load_m3u"),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isM3uBtnFocused) PureWhite else AccentCyan,
+                                contentColor = Slate950
+                            )
+                        ) {
+                            if (isLoading) {
+                                CircularProgressIndicator(color = Slate950, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Parsing Streams...", fontWeight = FontWeight.Bold)
+                            } else {
+                                Icon(Icons.Default.Storage, null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Load M3U Playlist", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    item {
+                        DemoStreamsBanner(onLoadDemo = onLoadDemo)
+                    }
+                }
+
+                1 -> {
+                    // TAB 1: XTREAM CODES API LOGIN
+                    item {
+                        Text(
+                            text = "Connect via Xtream Codes API",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = PureWhite
+                        )
+                        Text(
+                            text = "Instant API category loading for providers using Xtream Codes.",
+                            fontSize = 12.sp,
+                            color = Slate400,
+                            modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)
+                        )
+                    }
+
+                    item {
+                        OutlinedTextField(
+                            value = xtreamSourceName,
+                            onValueChange = { xtreamSourceName = it },
+                            label = { Text("Playlist Name (Optional)") },
+                            placeholder = { Text("Premium Xtream Provider") },
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("input_xtream_name"),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = PureWhite,
+                                unfocusedTextColor = PureWhite,
+                                focusedBorderColor = AccentCyan,
+                                unfocusedBorderColor = Slate700,
+                                focusedContainerColor = Slate900,
+                                unfocusedContainerColor = Slate900
+                            )
                         )
                     }
 
@@ -272,9 +494,9 @@ fun SourcesScreen(
                         OutlinedTextField(
                             value = serverUrl,
                             onValueChange = { serverUrl = it },
-                            label = { Text("Server URL (e.g. http://example.com:8080)") },
+                            label = { Text("Server URL (e.g. http://server.com:8080)") },
                             leadingIcon = { Icon(Icons.Default.Link, null, tint = AccentCyan) },
-                            placeholder = { Text("http://provider.domain:8080") },
+                            placeholder = { Text("http://example.com:8080") },
                             singleLine = true,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -321,7 +543,7 @@ fun SourcesScreen(
                                 IconButton(onClick = { passwordVisible = !passwordVisible }) {
                                     Icon(
                                         imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                        contentDescription = "Toggle password visibility",
+                                        contentDescription = "Toggle password",
                                         tint = Slate400
                                     )
                                 }
@@ -344,192 +566,47 @@ fun SourcesScreen(
                     }
 
                     item {
-                        OutlinedTextField(
-                            value = xtreamSourceName,
-                            onValueChange = { xtreamSourceName = it },
-                            label = { Text("Playlist Name (Optional)") },
-                            placeholder = { Text("My Premium IPTV") },
-                            singleLine = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("input_xtream_name"),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = PureWhite,
-                                unfocusedTextColor = PureWhite,
-                                focusedBorderColor = AccentCyan,
-                                unfocusedBorderColor = Slate700,
-                                focusedContainerColor = Slate900,
-                                unfocusedContainerColor = Slate900
-                            )
-                        )
-                    }
+                        val xtreamBtnInteraction = remember { MutableInteractionSource() }
+                        val isXtreamBtnFocused by xtreamBtnInteraction.collectIsFocusedAsState()
 
-                    item {
                         Button(
                             onClick = {
                                 onConnectXtream(serverUrl, username, password, xtreamSourceName)
                             },
+                            interactionSource = xtreamBtnInteraction,
                             enabled = !isLoading && serverUrl.isNotBlank() && username.isNotBlank() && password.isNotBlank(),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(52.dp)
+                                .border(
+                                    width = if (isXtreamBtnFocused) 3.dp else 0.dp,
+                                    color = PureWhite,
+                                    shape = RoundedCornerShape(14.dp)
+                                )
+                                .focusable(interactionSource = xtreamBtnInteraction)
+                                .onPreviewKeyEvent { event ->
+                                    if (event.type == KeyEventType.KeyUp &&
+                                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                    ) {
+                                        onConnectXtream(serverUrl, username, password, xtreamSourceName)
+                                        true
+                                    } else false
+                                }
                                 .testTag("btn_connect_xtream"),
                             shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = AccentCyan, contentColor = Slate950)
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isXtreamBtnFocused) PureWhite else AccentCyan,
+                                contentColor = Slate950
+                            )
                         ) {
                             if (isLoading) {
                                 CircularProgressIndicator(color = Slate950, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Connecting to Server...", fontWeight = FontWeight.Bold)
+                                Text("Connecting to API...", fontWeight = FontWeight.Bold)
                             } else {
                                 Icon(Icons.Default.Sensors, null)
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text("Connect Xtream Codes", fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-
-                    // Demo streams shortcut
-                    item {
-                        DemoStreamsBanner(onLoadDemo = onLoadDemo)
-                    }
-                }
-
-                1 -> {
-                    // M3U Playlist form
-                    item {
-                        Text(
-                            text = "Add M3U / M3U8 Playlist",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = PureWhite
-                        )
-                        Text(
-                            text = "Paste a remote playlist URL (.m3u/.m3u8) or paste raw playlist text.",
-                            fontSize = 12.sp,
-                            color = Slate400,
-                            modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
-                        )
-                    }
-
-                    item {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            OutlinedButton(
-                                onClick = { isRawContentMode = false },
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    containerColor = if (!isRawContentMode) Slate800 else Color.Transparent
-                                ),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, if (!isRawContentMode) AccentCyan else Slate700),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("URL Link", color = PureWhite)
-                            }
-                            OutlinedButton(
-                                onClick = { isRawContentMode = true },
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    containerColor = if (isRawContentMode) Slate800 else Color.Transparent
-                                ),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, if (isRawContentMode) AccentCyan else Slate700),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Paste Text", color = PureWhite)
-                            }
-                        }
-                    }
-
-                    if (!isRawContentMode) {
-                        item {
-                            OutlinedTextField(
-                                value = m3uUrl,
-                                onValueChange = { m3uUrl = it },
-                                label = { Text("M3U Playlist URL") },
-                                leadingIcon = { Icon(Icons.Default.Link, null, tint = AccentCyan) },
-                                placeholder = { Text("https://example.com/playlist.m3u") },
-                                singleLine = true,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("input_m3u_url"),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = PureWhite,
-                                    unfocusedTextColor = PureWhite,
-                                    focusedBorderColor = AccentCyan,
-                                    unfocusedBorderColor = Slate700,
-                                    focusedContainerColor = Slate900,
-                                    unfocusedContainerColor = Slate900
-                                )
-                            )
-                        }
-                    } else {
-                        item {
-                            OutlinedTextField(
-                                value = m3uRawContent,
-                                onValueChange = { m3uRawContent = it },
-                                label = { Text("Raw M3U Content (#EXTM3U ...)") },
-                                placeholder = { Text("#EXTM3U\n#EXTINF:-1 tvg-name=\"Channel 1\",Channel 1\nhttp://...") },
-                                minLines = 5,
-                                maxLines = 8,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("input_m3u_raw"),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = PureWhite,
-                                    unfocusedTextColor = PureWhite,
-                                    focusedBorderColor = AccentCyan,
-                                    unfocusedBorderColor = Slate700,
-                                    focusedContainerColor = Slate900,
-                                    unfocusedContainerColor = Slate900
-                                )
-                            )
-                        }
-                    }
-
-                    item {
-                        OutlinedTextField(
-                            value = m3uSourceName,
-                            onValueChange = { m3uSourceName = it },
-                            label = { Text("Playlist Name (Optional)") },
-                            placeholder = { Text("Sports & News M3U") },
-                            singleLine = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("input_m3u_name"),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = PureWhite,
-                                unfocusedTextColor = PureWhite,
-                                focusedBorderColor = AccentCyan,
-                                unfocusedBorderColor = Slate700,
-                                focusedContainerColor = Slate900,
-                                unfocusedContainerColor = Slate900
-                            )
-                        )
-                    }
-
-                    item {
-                        Button(
-                            onClick = {
-                                onLoadM3u(m3uUrl, m3uRawContent, m3uSourceName)
-                            },
-                            enabled = !isLoading && (m3uUrl.isNotBlank() || m3uRawContent.isNotBlank()),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(52.dp)
-                                .testTag("btn_load_m3u"),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = AccentCyan, contentColor = Slate950)
-                        ) {
-                            if (isLoading) {
-                                CircularProgressIndicator(color = Slate950, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Parsing Playlist...", fontWeight = FontWeight.Bold)
-                            } else {
-                                Icon(Icons.Default.Storage, null)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Load M3U Playlist", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -540,7 +617,7 @@ fun SourcesScreen(
                 }
 
                 2 -> {
-                    // Saved Sources List
+                    // TAB 2: SAVED SOURCES
                     item {
                         Text(
                             text = "Saved IPTV Providers",
@@ -549,27 +626,41 @@ fun SourcesScreen(
                             color = PureWhite
                         )
                         Text(
-                            text = "Select an IPTV provider to activate or remove old sources.",
+                            text = "Switch active providers or remove outdated playlists.",
                             fontSize = 12.sp,
                             color = Slate400,
-                            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                            modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
                         )
                     }
 
                     items(sources, key = { it.id }) { source ->
                         val isActive = source.id == activeSource?.id
+                        val sourceCardInteraction = remember { MutableInteractionSource() }
+                        val isSourceCardFocused by sourceCardInteraction.collectIsFocusedAsState()
+
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(16.dp))
                                 .border(
-                                    width = if (isActive) 2.dp else 1.dp,
-                                    color = if (isActive) AccentEmerald else Slate800,
+                                    width = if (isSourceCardFocused) 3.dp else if (isActive) 2.dp else 1.dp,
+                                    color = if (isSourceCardFocused) PureWhite else if (isActive) AccentEmerald else Slate800,
                                     shape = RoundedCornerShape(16.dp)
                                 )
-                                .clickable { onSwitchSource(source) }
+                                .focusable(interactionSource = sourceCardInteraction)
+                                .onPreviewKeyEvent { event ->
+                                    if (event.type == KeyEventType.KeyUp &&
+                                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                    ) {
+                                        onSwitchSource(source)
+                                        true
+                                    } else false
+                                }
+                                .clickable(interactionSource = sourceCardInteraction, indication = null) {
+                                    onSwitchSource(source)
+                                }
                                 .testTag("source_item_${source.id}"),
-                            colors = CardDefaults.cardColors(containerColor = Slate900),
+                            colors = CardDefaults.cardColors(containerColor = if (isSourceCardFocused) Slate850 else Slate900),
                             shape = RoundedCornerShape(16.dp)
                         ) {
                             Row(
@@ -620,7 +711,9 @@ fun SourcesScreen(
                                     )
 
                                     Text(
-                                        text = "${source.channelCount} Live TV  •  ${source.movieCount} Movies  •  ${source.seriesCount} Series",
+                                        text = "%,d Live TV  •  %,d Movies  •  %,d Series".format(
+                                            source.channelCount, source.movieCount, source.seriesCount
+                                        ),
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = AccentCyan,
@@ -724,10 +817,10 @@ fun DemoStreamsBanner(onLoadDemo: () -> Unit) {
                 modifier = Modifier
                     .focusable(interactionSource = interactionSource)
                     .onPreviewKeyEvent { event ->
-                        if (event.type == androidx.compose.ui.input.key.KeyEventType.KeyUp &&
-                            (event.key == androidx.compose.ui.input.key.Key.DirectionCenter ||
-                             event.key == androidx.compose.ui.input.key.Key.Enter ||
-                             event.key == androidx.compose.ui.input.key.Key.NumPadEnter)
+                        if (event.type == KeyEventType.KeyUp &&
+                            (event.key == Key.DirectionCenter ||
+                             event.key == Key.Enter ||
+                             event.key == Key.NumPadEnter)
                         ) {
                             onLoadDemo()
                             true

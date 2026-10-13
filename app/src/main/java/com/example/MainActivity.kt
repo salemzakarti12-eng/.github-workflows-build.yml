@@ -112,9 +112,10 @@ fun HypnoStreamApp(viewModel: MainViewModel = viewModel()) {
     val currentScreen by viewModel.currentScreen.collectAsState()
     val activeSource by viewModel.activeSource.collectAsState()
     val sources by viewModel.sources.collectAsState()
-    val liveChannels by viewModel.liveChannels.collectAsState()
-    val movies by viewModel.movies.collectAsState()
-    val series by viewModel.series.collectAsState()
+    val totalLiveCount by viewModel.totalLiveCount.collectAsState()
+    val totalMoviesCount by viewModel.totalMoviesCount.collectAsState()
+    val totalSeriesCount by viewModel.totalSeriesCount.collectAsState()
+    val currentCategories by viewModel.currentCategories.collectAsState()
     val favorites by viewModel.favorites.collectAsState()
     val recentlyWatched by viewModel.recentlyWatched.collectAsState()
     val filteredItems by viewModel.currentFilteredItems.collectAsState()
@@ -124,9 +125,8 @@ fun HypnoStreamApp(viewModel: MainViewModel = viewModel()) {
     val isLoading by viewModel.isLoading.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
 
-    // Filter favorite items
-    val allItems = liveChannels + movies + series
-    val favoriteItems = allItems.filter { favorites.contains(it.id) }
+    // Favorite items
+    val favoriteItems = recentlyWatched.filter { favorites.contains(it.id) }
 
     // System Back Handler
     BackHandler {
@@ -140,7 +140,7 @@ fun HypnoStreamApp(viewModel: MainViewModel = viewModel()) {
         VideoPlayerScreen(
             playerManager = viewModel.playerManager,
             uiState = playerUiState,
-            allChannels = liveChannels,
+            allChannels = viewModel.repository.getAllLiveChannels(),
             onBack = { viewModel.handleBackPress() },
             onPlayNext = { viewModel.playNextChannel() },
             onPlayPrevious = { viewModel.playPreviousChannel() },
@@ -241,9 +241,9 @@ fun HypnoStreamApp(viewModel: MainViewModel = viewModel()) {
                     Screen.DASHBOARD -> {
                         DashboardScreen(
                             activeSource = activeSource,
-                            liveCount = liveChannels.size,
-                            moviesCount = movies.size,
-                            seriesCount = series.size,
+                            liveCount = totalLiveCount,
+                            moviesCount = totalMoviesCount,
+                            seriesCount = totalSeriesCount,
                             favorites = favoriteItems,
                             recentlyWatched = recentlyWatched,
                             onNavigate = { viewModel.navigateTo(it) },
@@ -254,11 +254,19 @@ fun HypnoStreamApp(viewModel: MainViewModel = viewModel()) {
                     Screen.LIVE_CHANNELS, Screen.MOVIES, Screen.SERIES -> {
                         ContentBrowserScreen(
                             screen = currentScreen,
+                            categories = currentCategories,
                             items = filteredItems,
                             searchQuery = searchQuery,
                             selectedCategory = selectedCategory,
+                            totalCount = when (currentScreen) {
+                                Screen.LIVE_CHANNELS -> totalLiveCount
+                                Screen.MOVIES -> totalMoviesCount
+                                Screen.SERIES -> totalSeriesCount
+                                else -> filteredItems.size
+                            },
                             onSearchChange = { viewModel.setSearchQuery(it) },
                             onCategoryChange = { viewModel.setSelectedCategory(it) },
+                            onLoadMore = { viewModel.loadMoreItems() },
                             onPlayItem = { viewModel.playStream(it) },
                             onToggleFavorite = { viewModel.toggleFavorite(it) },
                             onBack = { viewModel.handleBackPress() }
