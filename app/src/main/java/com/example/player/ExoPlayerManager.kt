@@ -3,9 +3,12 @@ package com.example.player
 import android.content.Context
 import android.net.Uri
 import androidx.annotation.OptIn
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -15,6 +18,8 @@ import com.example.model.AspectRatioMode
 import com.example.model.IptvItem
 import com.example.model.PlayerUiState
 import com.example.model.StreamFormat
+import com.example.model.TrackOption
+import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -107,6 +112,10 @@ class ExoPlayerManager(
                     isPlaying = false,
                     errorMessage = errorDetails
                 )
+            }
+
+            override fun onTracksChanged(tracks: Tracks) {
+                updateTracksState(tracks)
             }
         })
     }
@@ -239,6 +248,98 @@ class ExoPlayerManager(
 
     private fun stopProgressTracker() {
         progressJob?.cancel()
+    }
+
+    fun updateTracksState(tracks: Tracks = player.currentTracks) {
+        val audioList = mutableListOf<TrackOption>()
+        val subList = mutableListOf<TrackOption>()
+
+        val groups = tracks.groups
+        for (gIdx in groups.indices) {
+            val group = groups[gIdx]
+            val type = group.type
+            for (tIdx in 0 until group.length) {
+                val format = group.getTrackFormat(tIdx)
+                val isSelected = group.isTrackSelected(tIdx)
+                val lang = format.language?.let {
+                    try { Locale(it).displayLanguage } catch (_: Exception) { it }
+                } ?: format.language
+                val channels = if (format.channelCount > 0) "${format.channelCount}ch" else null
+                val label = listOfNotNull(
+                    format.label?.takeIf { it.isNotBlank() },
+                    lang?.takeIf { it.isNotBlank() },
+                    channels
+                ).joinToString(" • ").ifEmpty {
+                    if (type == C.TRACK_TYPE_AUDIO) "Audio Track ${audioList.size + 1}" else "Subtitle ${subList.size + 1}"
+                }
+
+                val option = TrackOption(
+                    groupIndex = gIdx,
+                    trackIndex = tIdx,
+                    label = label,
+                    language = format.language,
+                    isSelected = isSelected
+                )
+
+                if (type == C.TRACK_TYPE_AUDIO) {
+                    audioList.add(option)
+                } else if (type == C.TRACK_TYPE_TEXT) {
+                    subList.add(option)
+                }
+            }
+        }
+
+        val isSubDisabled = player.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT) ||
+                subList.none { it.isSelected }
+
+        _uiState.value = _uiState.value.copy(
+            audioTracks = audioList,
+            subtitleTracks = subList,
+            isSubtitleOff = isSubDisabled
+        )
+    }
+
+    fun selectAudioTrack(track: TrackOption) {
+        val groups = player.currentTracks.groups
+        if (track.groupIndex in groups.indices) {
+            val group = groups[track.groupIndex]
+            val override = TrackSelectionOverride(group.mediaTrackGroup, track.trackIndex)
+            player.trackSelectionParameters = player.trackSelectionParameters
+                .buildUpon()
+                .setOverrideForType(override)
+                .build()
+            updateTracksState()
+        }
+    }
+
+    fun selectSubtitleTrack(track: TrackOption) {
+        val groups = player.currentTracks.groups
+        if (track.groupIndex in groups.indices) {
+            val group = groups[track.groupIndex]
+            val override = TrackSelectionOverride(group.mediaTrackGroup, track.trackIndex)
+            player.trackSelectionParameters = player.trackSelectionParameters
+                .buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .setOverrideForType(override)
+                .build()
+            updateTracksState()
+        }
+    }
+
+    fun disableSubtitles() {
+        player.trackSelectionParameters = player.trackSelectionParameters
+            .buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            .build()
+        updateTracksState()
+    }
+
+    fun stop() {
+        progressJob?.cancel()
+        controlsHideJob?.cancel()
+        player.stop()
+        player.clearMediaItems()
+        _uiState.value = PlayerUiState()
     }
 
     fun release() {

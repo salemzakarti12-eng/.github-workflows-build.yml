@@ -9,6 +9,8 @@ import com.example.model.IptvItem
 import com.example.model.IptvSource
 import com.example.model.IptvType
 import com.example.model.PlayerUiState
+import com.example.model.SeriesDetails
+import com.example.model.SeriesEpisode
 import com.example.player.ExoPlayerManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -23,6 +25,7 @@ enum class Screen {
     LIVE_CHANNELS,
     MOVIES,
     SERIES,
+    SERIES_DETAIL,
     SOURCES,
     PLAYER
 }
@@ -62,6 +65,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val isLoading: StateFlow<Boolean> = repository.isLoading
     val statusMessage: StateFlow<String?> = repository.statusMessage
     val playerUiState: StateFlow<PlayerUiState> = playerManager.uiState
+
+    // Series detail state
+    private val _selectedSeries = MutableStateFlow<IptvItem?>(null)
+    val selectedSeries: StateFlow<IptvItem?> = _selectedSeries.asStateFlow()
+
+    private val _seriesDetails = MutableStateFlow<SeriesDetails?>(null)
+    val seriesDetails: StateFlow<SeriesDetails?> = _seriesDetails.asStateFlow()
+
+    private val _isSeriesLoading = MutableStateFlow(false)
+    val isSeriesLoading: StateFlow<Boolean> = _isSeriesLoading.asStateFlow()
 
     // Categories list for current screen
     val currentCategories: StateFlow<List<CategoryInfo>> = combine(
@@ -147,6 +160,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         repository.recordRecentlyWatched(item)
         playerManager.playItem(item)
         navigateTo(Screen.PLAYER)
+    }
+
+    fun openSeriesDetail(item: IptvItem) {
+        _selectedSeries.value = item
+        _seriesDetails.value = null
+        _isSeriesLoading.value = true
+        navigateTo(Screen.SERIES_DETAIL)
+        viewModelScope.launch {
+            val result = repository.getSeriesDetails(item)
+            _seriesDetails.value = result.getOrNull()
+            _isSeriesLoading.value = false
+        }
+    }
+
+    fun playEpisode(episode: SeriesEpisode) {
+        val series = _selectedSeries.value
+        val seriesTitle = series?.seriesTitle ?: series?.name ?: "TV Series"
+        val group = series?.group ?: "Series"
+        val item = episode.toIptvItem(seriesTitle, group)
+        playStream(item)
+    }
+
+    fun dismissMiniPlayer() {
+        playerManager.stop()
     }
 
     fun playNextChannel() {

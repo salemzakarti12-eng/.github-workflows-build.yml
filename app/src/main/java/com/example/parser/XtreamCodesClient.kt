@@ -2,6 +2,9 @@ package com.example.parser
 
 import com.example.model.IptvItem
 import com.example.model.IptvType
+import com.example.model.SeriesDetails
+import com.example.model.SeriesEpisode
+import com.example.model.SeriesSeason
 import com.example.model.StreamFormat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -303,5 +306,92 @@ class XtreamCodesClient(
             isSuccess = false,
             serverMessage = "Authentication failed on Xtream Codes server."
         )
+    }
+
+    suspend fun getSeriesInfo(
+        serverUrl: String,
+        username: String,
+        password: String,
+        seriesId: String
+    ): SeriesDetails? = withContext(Dispatchers.IO) {
+        val base = serverUrl.trim().removeSuffix("/")
+        val url = "$base/player_api.php?username=$username&password=$password&action=get_series_info&series_id=$seriesId"
+        try {
+            val req = Request.Builder().url(url).header("User-Agent", "HypnoStream-IPTV/1.0").build()
+            val resp = client.newCall(req).execute()
+            val text = resp.body?.string().orEmpty()
+            if (!text.startsWith("{")) return@withContext null
+            val root = JSONObject(text)
+            val info = root.optJSONObject("info")
+            val title = info?.optString("name") ?: "Series $seriesId"
+            val cover = info?.optString("cover")
+            val backdrop = info?.optJSONArray("backdrop_path")?.optString(0) ?: cover
+            val plot = info?.optString("plot")
+            val genre = info?.optString("genre")
+            val releaseDate = info?.optString("releaseDate")
+            val rating = info?.optString("rating")
+
+            val episodesObj = root.optJSONObject("episodes") ?: JSONObject()
+            val seasonList = mutableListOf<SeriesSeason>()
+
+            val seasonKeys = episodesObj.keys().asSequence().toList().sortedBy { it.toIntOrNull() ?: 0 }
+            for (key in seasonKeys) {
+                val seasonNum = key.toIntOrNull() ?: 1
+                val epArray = episodesObj.optJSONArray(key) ?: JSONArray()
+                val epList = mutableListOf<SeriesEpisode>()
+                for (i in 0 until epArray.length()) {
+                    val epObj = epArray.getJSONObject(i)
+                    val epId = epObj.optString("id")
+                    val epNum = epObj.optInt("episode_num", i + 1)
+                    val epTitle = epObj.optString("title", "Episode $epNum")
+                    val container = epObj.optString("container_extension", "mp4").ifEmpty { "mp4" }
+                    val epInfo = epObj.optJSONObject("info")
+                    val epPlot = epInfo?.optString("plot")
+                    val epDuration = epInfo?.optString("duration")
+                    val epCover = epInfo?.optString("movie_image") ?: cover
+                    val epRating = epInfo?.optString("rating")
+
+                    val streamUrl = "$base/series/$username/$password/$epId.$container"
+                    epList.add(
+                        SeriesEpisode(
+                            id = epId,
+                            seriesId = seriesId,
+                            seasonNumber = seasonNum,
+                            episodeNumber = epNum,
+                            title = epTitle,
+                            streamUrl = streamUrl,
+                            containerExtension = container,
+                            coverUrl = epCover?.takeIf { it.isNotBlank() },
+                            plot = epPlot?.takeIf { it.isNotBlank() },
+                            duration = epDuration?.takeIf { it.isNotBlank() },
+                            rating = epRating?.takeIf { it.isNotBlank() }
+                        )
+                    )
+                }
+                if (epList.isNotEmpty()) {
+                    seasonList.add(
+                        SeriesSeason(
+                            seasonNumber = seasonNum,
+                            name = "Season $seasonNum",
+                            episodes = epList.sortedBy { it.episodeNumber }
+                        )
+                    )
+                }
+            }
+
+            SeriesDetails(
+                seriesId = seriesId,
+                title = title,
+                coverUrl = cover?.takeIf { it.isNotBlank() },
+                backdropUrl = backdrop?.takeIf { it.isNotBlank() },
+                plot = plot?.takeIf { it.isNotBlank() },
+                genre = genre?.takeIf { it.isNotBlank() },
+                releaseDate = releaseDate?.takeIf { it.isNotBlank() },
+                rating = rating?.takeIf { it.isNotBlank() },
+                seasons = seasonList
+            )
+        } catch (_: Exception) {
+            null
+        }
     }
 }

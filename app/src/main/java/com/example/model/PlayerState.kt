@@ -8,6 +8,14 @@ enum class AspectRatioMode(val label: String) {
     ZOOM("Zoom Crop")
 }
 
+data class TrackOption(
+    val groupIndex: Int,
+    val trackIndex: Int,
+    val label: String,
+    val language: String? = null,
+    val isSelected: Boolean = false
+)
+
 data class PlayerUiState(
     val currentItem: IptvItem? = null,
     val isPlaying: Boolean = false,
@@ -17,5 +25,8 @@ data class PlayerUiState(
     val errorMessage: String? = null,
     val durationMs: Long = 0L,
     val currentPositionMs: Long = 0L,
-    val isQuickChannelListOpen: Boolean = false
+    val isQuickChannelListOpen: Boolean = false,
+    val audioTracks: List<TrackOption> = emptyList(),
+    val subtitleTracks: List<TrackOption> = emptyList(),
+    val isSubtitleOff: Boolean = false
 )

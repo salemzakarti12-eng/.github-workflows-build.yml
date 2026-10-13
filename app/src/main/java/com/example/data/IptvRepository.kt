@@ -6,14 +6,20 @@ import com.example.model.CategoryInfo
 import com.example.model.IptvItem
 import com.example.model.IptvSource
 import com.example.model.IptvType
+import com.example.model.SeriesDetails
+import com.example.model.SeriesEpisode
+import com.example.model.SeriesSeason
 import com.example.model.SourceType
 import com.example.parser.M3uParser
 import com.example.parser.XtreamCodesClient
 import com.example.parser.XtreamUrlDetector
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -27,6 +33,7 @@ class IptvRepository(context: Context) {
 
     private val prefs: SharedPreferences = context.getSharedPreferences("hypnostream_prefs", Context.MODE_PRIVATE)
     private val xtreamClient = XtreamCodesClient()
+    private val repositoryScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(25, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
@@ -136,11 +143,44 @@ class IptvRepository(context: Context) {
         }
 
         _sources.value = loadedSources
-        val active = loadedSources.firstOrNull { it.isActive } ?: loadedSources.first()
+        val savedActiveId = prefs.getString("active_source_id", null)
+        val active = loadedSources.firstOrNull { it.id == savedActiveId }
+            ?: loadedSources.firstOrNull { it.isActive }
+            ?: loadedSources.first()
         _activeSource.value = active
 
-        if (active.type == SourceType.DEMO) {
-            loadDemoContent(active)
+        // Auto-reconnect saved active playlist on app launch
+        when (active.type) {
+            SourceType.DEMO -> {
+                loadDemoContent(active)
+            }
+            SourceType.XTREAM_CODES -> {
+                repositoryScope.launch {
+                    addOrUpdateXtreamSource(
+                        name = active.name,
+                        serverUrl = active.serverUrl,
+                        username = active.username,
+                        password = active.password
+                    )
+                }
+            }
+            SourceType.M3U_URL -> {
+                repositoryScope.launch {
+                    addOrUpdateM3uSource(
+                        name = active.name,
+                        m3uUrl = active.m3uUrl
+                    )
+                }
+            }
+            SourceType.M3U_TEXT -> {
+                repositoryScope.launch {
+                    addOrUpdateM3uSource(
+                        name = active.name,
+                        m3uUrl = "",
+                        rawContent = active.m3uContent
+                    )
+                }
+            }
         }
     }
 
@@ -345,12 +385,19 @@ class IptvRepository(context: Context) {
             val movs = items.filter { it.type == IptvType.MOVIE }
             val sers = items.filter { it.type == IptvType.SERIES }
 
+            val existing = _sources.value.firstOrNull {
+                it.type == SourceType.XTREAM_CODES &&
+                it.serverUrl.trim().equals(serverUrl.trim(), ignoreCase = true) &&
+                it.username.trim().equals(username.trim(), ignoreCase = true)
+            }
+            val sourceId = existing?.id ?: UUID.randomUUID().toString()
+
             val source = IptvSource(
-                id = UUID.randomUUID().toString(),
-                name = name.ifBlank { "Xtream ($username)" },
+                id = sourceId,
+                name = name.ifBlank { existing?.name ?: "Xtream ($username)" },
                 type = SourceType.XTREAM_CODES,
-                serverUrl = serverUrl,
-                username = username,
+                serverUrl = serverUrl.trim(),
+                username = username.trim(),
                 password = password,
                 isActive = true,
                 channelCount = live.size,
@@ -431,11 +478,19 @@ class IptvRepository(context: Context) {
             val movs = items.filter { it.type == IptvType.MOVIE }
             val sers = items.filter { it.type == IptvType.SERIES }
 
+            val existing = if (m3uUrl.isNotBlank()) {
+                _sources.value.firstOrNull {
+                    it.type == SourceType.M3U_URL &&
+                    it.m3uUrl.trim().equals(m3uUrl.trim(), ignoreCase = true)
+                }
+            } else null
+            val sourceId = existing?.id ?: UUID.randomUUID().toString()
+
             val source = IptvSource(
-                id = UUID.randomUUID().toString(),
-                name = name.ifBlank { if (m3uUrl.isNotBlank()) "M3U (${m3uUrl.take(25)}...)" else "Custom M3U" },
+                id = sourceId,
+                name = name.ifBlank { existing?.name ?: if (m3uUrl.isNotBlank()) "M3U (${m3uUrl.take(25)}...)" else "Custom M3U" },
                 type = if (m3uUrl.isNotBlank()) SourceType.M3U_URL else SourceType.M3U_TEXT,
-                m3uUrl = m3uUrl,
+                m3uUrl = m3uUrl.trim(),
                 m3uContent = if (m3uUrl.isBlank()) rawContent else "",
                 isActive = true,
                 channelCount = live.size,
@@ -461,16 +516,93 @@ class IptvRepository(context: Context) {
 
     private fun updateActiveSource(source: IptvSource) {
         val current = _sources.value.toMutableList()
-        val index = current.indexOfFirst { it.id == source.id }
-        val updatedList = current.map { it.copy(isActive = it.id == source.id) }.toMutableList()
+        val index = current.indexOfFirst {
+            it.id == source.id ||
+            (it.type == SourceType.XTREAM_CODES && source.type == SourceType.XTREAM_CODES &&
+             it.serverUrl.trim().equals(source.serverUrl.trim(), ignoreCase = true) &&
+             it.username.trim().equals(source.username.trim(), ignoreCase = true)) ||
+            (it.type == SourceType.M3U_URL && source.type == SourceType.M3U_URL &&
+             source.m3uUrl.isNotBlank() && it.m3uUrl.trim().equals(source.m3uUrl.trim(), ignoreCase = true))
+        }
+        val updatedSource = source.copy(isActive = true)
+        val updatedList = current.map { it.copy(isActive = false) }.toMutableList()
         if (index >= 0) {
-            updatedList[index] = source.copy(isActive = true)
+            updatedList[index] = updatedSource
         } else {
-            updatedList.add(source.copy(isActive = true))
+            updatedList.add(updatedSource)
         }
         _sources.value = updatedList
-        _activeSource.value = source.copy(isActive = true)
+        _activeSource.value = updatedSource
+        prefs.edit().putString("active_source_id", updatedSource.id).apply()
         persistSources()
+    }
+
+    suspend fun getSeriesDetails(seriesItem: IptvItem): Result<SeriesDetails> = withContext(Dispatchers.IO) {
+        val active = _activeSource.value
+        if (active != null && active.type == SourceType.XTREAM_CODES) {
+            val rawSeriesId = seriesItem.id.removePrefix("xtream_series_")
+            val details = xtreamClient.getSeriesInfo(
+                serverUrl = active.serverUrl,
+                username = active.username,
+                password = active.password,
+                seriesId = rawSeriesId
+            )
+            if (details != null && details.seasons.isNotEmpty()) {
+                return@withContext Result.success(details)
+            }
+        }
+
+        // For M3U or Demo streams (or fallback):
+        // Group series entries by show title and parse SxxExx tags into seasons and episodes
+        val targetTitle = seriesItem.seriesTitle ?: seriesItem.name
+        val relatedEpisodes = allSeriesList.filter {
+            it.seriesTitle?.equals(targetTitle, ignoreCase = true) == true ||
+            it.name.contains(targetTitle, ignoreCase = true)
+        }
+
+        val seasonMap = mutableMapOf<Int, MutableList<SeriesEpisode>>()
+        val itemsToProcess = if (relatedEpisodes.isNotEmpty()) relatedEpisodes else listOf(seriesItem)
+
+        for (item in itemsToProcess) {
+            val seasonNum = item.seasonNumber ?: 1
+            val epNum = item.episodeNumber ?: (seasonMap[seasonNum]?.size ?: 0) + 1
+            val epList = seasonMap.getOrPut(seasonNum) { mutableListOf() }
+            val epTitle = item.name.substringAfter("-").substringAfter(":").trim().ifEmpty { item.name }
+            epList.add(
+                SeriesEpisode(
+                    id = item.id,
+                    seriesId = seriesItem.id,
+                    seasonNumber = seasonNum,
+                    episodeNumber = epNum,
+                    title = epTitle,
+                    streamUrl = item.streamUrl,
+                    containerExtension = "mp4",
+                    coverUrl = item.logoUrl,
+                    plot = "Episode $epNum: $epTitle",
+                    rating = item.rating
+                )
+            )
+        }
+
+        val seasons = seasonMap.entries.sortedBy { it.key }.map { (sNum, eps) ->
+            SeriesSeason(
+                seasonNumber = sNum,
+                name = "Season $sNum",
+                episodes = eps.sortedBy { it.episodeNumber }
+            )
+        }
+
+        Result.success(
+            SeriesDetails(
+                seriesId = seriesItem.id,
+                title = targetTitle,
+                coverUrl = seriesItem.logoUrl,
+                backdropUrl = seriesItem.logoUrl,
+                plot = "Stream seasons and episodes for $targetTitle.",
+                rating = seriesItem.rating,
+                seasons = seasons
+            )
+        )
     }
 
     suspend fun switchSource(source: IptvSource) {

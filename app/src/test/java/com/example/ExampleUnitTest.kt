@@ -56,4 +56,40 @@ class ExampleUnitTest {
     val notDetected = XtreamUrlDetector.detect(regularM3u)
     assertNull(notDetected)
   }
+
+  @Test
+  fun testSeriesEpisodeConversion() {
+    val ep = com.example.model.SeriesEpisode(
+      id = "101",
+      seriesId = "ser_bb",
+      seasonNumber = 1,
+      episodeNumber = 1,
+      title = "Pilot",
+      streamUrl = "http://iptv.server:8080/series/user/pass/101.mp4",
+      containerExtension = "mp4",
+      coverUrl = "http://example.com/cover.png",
+      plot = "A chemistry teacher turns to crime."
+    )
+
+    val item = ep.toIptvItem(seriesTitle = "Breaking Bad", group = "Crime Drama")
+    assertEquals("Breaking Bad - S01E01: Pilot", item.name)
+    assertEquals(IptvType.SERIES, item.type)
+    assertEquals(1, item.seasonNumber)
+    assertEquals(1, item.episodeNumber)
+    assertEquals("http://iptv.server:8080/series/user/pass/101.mp4", item.streamUrl)
+  }
+
+  @Test
+  fun testTrackOptionModel() {
+    val track = com.example.model.TrackOption(
+      groupIndex = 0,
+      trackIndex = 1,
+      label = "English • 6ch",
+      language = "eng",
+      isSelected = true
+    )
+    assertEquals("English • 6ch", track.label)
+    assertEquals("eng", track.language)
+    assertEquals(true, track.isSelected)
+  }
 }

@@ -36,7 +36,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.Pause
@@ -44,17 +46,23 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -119,6 +127,8 @@ fun VideoPlayerScreen(
 
     val currentItem = uiState.currentItem
     val playPauseFocusRequester = remember { FocusRequester() }
+    var showAudioDialog by remember { mutableStateOf(false) }
+    var showSubtitleDialog by remember { mutableStateOf(false) }
 
     // Request initial focus on Play/Pause when controls appear
     LaunchedEffect(uiState.isControlsVisible) {
@@ -507,6 +517,104 @@ fun VideoPlayerScreen(
                             }
                         }
 
+                        // Audio Track Selector Button
+                        val audioInteraction = remember { MutableInteractionSource() }
+                        val isAudioFocused by audioInteraction.collectIsFocusedAsState()
+
+                        Surface(
+                            color = if (isAudioFocused) AccentCyan else Color(0x66000000),
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(
+                                width = if (isAudioFocused) 3.dp else 1.dp,
+                                color = if (isAudioFocused) PureWhite else Slate700
+                            ),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .focusable(interactionSource = audioInteraction)
+                                .onPreviewKeyEvent { event ->
+                                    if (event.type == KeyEventType.KeyUp &&
+                                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                    ) {
+                                        playerManager.updateTracksState()
+                                        showAudioDialog = true
+                                        true
+                                    } else false
+                                }
+                                .clickable(interactionSource = audioInteraction, indication = null) {
+                                    playerManager.updateTracksState()
+                                    showAudioDialog = true
+                                }
+                                .testTag("btn_player_audio")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Audiotrack,
+                                    contentDescription = "Audio Track",
+                                    tint = if (isAudioFocused) Slate950 else AccentCyan,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Audio",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isAudioFocused) Slate950 else PureWhite
+                                )
+                            }
+                        }
+
+                        // Subtitle (CC) Selector Button
+                        val subInteraction = remember { MutableInteractionSource() }
+                        val isSubFocused by subInteraction.collectIsFocusedAsState()
+
+                        Surface(
+                            color = if (isSubFocused) AccentCyan else Color(0x66000000),
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(
+                                width = if (isSubFocused) 3.dp else 1.dp,
+                                color = if (isSubFocused) PureWhite else Slate700
+                            ),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .focusable(interactionSource = subInteraction)
+                                .onPreviewKeyEvent { event ->
+                                    if (event.type == KeyEventType.KeyUp &&
+                                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                    ) {
+                                        playerManager.updateTracksState()
+                                        showSubtitleDialog = true
+                                        true
+                                    } else false
+                                }
+                                .clickable(interactionSource = subInteraction, indication = null) {
+                                    playerManager.updateTracksState()
+                                    showSubtitleDialog = true
+                                }
+                                .testTag("btn_player_subtitles")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ClosedCaption,
+                                    contentDescription = "Subtitles",
+                                    tint = if (isSubFocused) Slate950 else AccentCyan,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (uiState.isSubtitleOff) "CC Off" else "CC",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isSubFocused) Slate950 else PureWhite
+                                )
+                            }
+                        }
+
                         val drawerBtnInteraction = remember { MutableInteractionSource() }
                         val isDrawerFocused by drawerBtnInteraction.collectIsFocusedAsState()
 
@@ -839,6 +947,227 @@ fun VideoPlayerScreen(
                 }
             }
         }
+    }
+
+    if (showAudioDialog) {
+        AlertDialog(
+            onDismissRequest = { showAudioDialog = false },
+            containerColor = Slate900,
+            title = {
+                Text(
+                    text = "Select Audio Track",
+                    fontWeight = FontWeight.Bold,
+                    color = PureWhite
+                )
+            },
+            text = {
+                if (uiState.audioTracks.isEmpty()) {
+                    Text("No alternate audio tracks available.", color = Slate400, fontSize = 14.sp)
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(uiState.audioTracks) { track ->
+                            val itemInteraction = remember { MutableInteractionSource() }
+                            val isFocused by itemInteraction.collectIsFocusedAsState()
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (isFocused) Slate800 else if (track.isSelected) Slate850 else Color.Transparent)
+                                    .border(
+                                        width = if (isFocused) 2.dp else 1.dp,
+                                        color = if (isFocused) AccentCyan else if (track.isSelected) Slate700 else Color.Transparent,
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .focusable(interactionSource = itemInteraction)
+                                    .onPreviewKeyEvent { event ->
+                                        if (event.type == KeyEventType.KeyUp &&
+                                            (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                        ) {
+                                            playerManager.selectAudioTrack(track)
+                                            showAudioDialog = false
+                                            true
+                                        } else false
+                                    }
+                                    .clickable(interactionSource = itemInteraction, indication = null) {
+                                        playerManager.selectAudioTrack(track)
+                                        showAudioDialog = false
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = track.isSelected,
+                                    onClick = {
+                                        playerManager.selectAudioTrack(track)
+                                        showAudioDialog = false
+                                    },
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = AccentCyan,
+                                        unselectedColor = Slate400
+                                    )
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = track.label,
+                                    color = if (track.isSelected) AccentCyan else PureWhite,
+                                    fontSize = 14.sp,
+                                    fontWeight = if (track.isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAudioDialog = false }) {
+                    Text("Close", color = AccentCyan, fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+
+    if (showSubtitleDialog) {
+        AlertDialog(
+            onDismissRequest = { showSubtitleDialog = false },
+            containerColor = Slate900,
+            title = {
+                Text(
+                    text = "Subtitles / Closed Captions",
+                    fontWeight = FontWeight.Bold,
+                    color = PureWhite
+                )
+            },
+            text = {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    item {
+                        val offInteraction = remember { MutableInteractionSource() }
+                        val isOffFocused by offInteraction.collectIsFocusedAsState()
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isOffFocused) Slate800 else if (uiState.isSubtitleOff) Slate850 else Color.Transparent)
+                                .border(
+                                    width = if (isOffFocused) 2.dp else 1.dp,
+                                    color = if (isOffFocused) AccentCyan else if (uiState.isSubtitleOff) Slate700 else Color.Transparent,
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                                .focusable(interactionSource = offInteraction)
+                                .onPreviewKeyEvent { event ->
+                                    if (event.type == KeyEventType.KeyUp &&
+                                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                    ) {
+                                        playerManager.disableSubtitles()
+                                        showSubtitleDialog = false
+                                        true
+                                    } else false
+                                }
+                                .clickable(interactionSource = offInteraction, indication = null) {
+                                    playerManager.disableSubtitles()
+                                    showSubtitleDialog = false
+                                }
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = uiState.isSubtitleOff,
+                                onClick = {
+                                    playerManager.disableSubtitles()
+                                    showSubtitleDialog = false
+                                },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = AccentCyan,
+                                    unselectedColor = Slate400
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "Off (Disabled)",
+                                color = if (uiState.isSubtitleOff) AccentCyan else PureWhite,
+                                fontSize = 14.sp,
+                                fontWeight = if (uiState.isSubtitleOff) FontWeight.Bold else FontWeight.Normal
+                            )
+                        }
+                    }
+
+                    if (uiState.subtitleTracks.isEmpty()) {
+                        item {
+                            Text(
+                                text = "No embedded subtitle streams detected.",
+                                color = Slate400,
+                                fontSize = 13.sp,
+                                modifier = Modifier.padding(start = 12.dp, top = 6.dp)
+                            )
+                        }
+                    } else {
+                        items(uiState.subtitleTracks) { track ->
+                            val itemInteraction = remember { MutableInteractionSource() }
+                            val isFocused by itemInteraction.collectIsFocusedAsState()
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (isFocused) Slate800 else if (track.isSelected && !uiState.isSubtitleOff) Slate850 else Color.Transparent)
+                                    .border(
+                                        width = if (isFocused) 2.dp else 1.dp,
+                                        color = if (isFocused) AccentCyan else if (track.isSelected && !uiState.isSubtitleOff) Slate700 else Color.Transparent,
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .focusable(interactionSource = itemInteraction)
+                                    .onPreviewKeyEvent { event ->
+                                        if (event.type == KeyEventType.KeyUp &&
+                                            (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                        ) {
+                                            playerManager.selectSubtitleTrack(track)
+                                            showSubtitleDialog = false
+                                            true
+                                        } else false
+                                    }
+                                    .clickable(interactionSource = itemInteraction, indication = null) {
+                                        playerManager.selectSubtitleTrack(track)
+                                        showSubtitleDialog = false
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = track.isSelected && !uiState.isSubtitleOff,
+                                    onClick = {
+                                        playerManager.selectSubtitleTrack(track)
+                                        showSubtitleDialog = false
+                                    },
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = AccentCyan,
+                                        unselectedColor = Slate400
+                                    )
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = track.label,
+                                    color = if (track.isSelected && !uiState.isSubtitleOff) AccentCyan else PureWhite,
+                                    fontSize = 14.sp,
+                                    fontWeight = if (track.isSelected && !uiState.isSubtitleOff) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showSubtitleDialog = false }) {
+                    Text("Close", color = AccentCyan, fontWeight = FontWeight.Bold)
+                }
+            }
+        )
     }
 }
 
