@@ -37,10 +37,10 @@ class ExoPlayerManager(
 ) {
 
     private val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-        .setUserAgent("HypnoStream-IPTV/1.0 (Linux; Android; ExoPlayer)")
+        .setUserAgent("IPTVSmartersPlayer")
         .setAllowCrossProtocolRedirects(true)
-        .setConnectTimeoutMs(15000)
-        .setReadTimeoutMs(25000)
+        .setConnectTimeoutMs(20000)
+        .setReadTimeoutMs(30000)
 
     val player: ExoPlayer = ExoPlayer.Builder(context)
         .setMediaSourceFactory(DefaultMediaSourceFactory(httpDataSourceFactory))
@@ -69,6 +69,7 @@ class ExoPlayerManager(
                             durationMs = player.duration.coerceAtLeast(0L),
                             errorMessage = null
                         )
+                        updateTracksState(player.currentTracks)
                     }
                     Player.STATE_ENDED -> {
                         _uiState.value = _uiState.value.copy(
@@ -129,10 +130,9 @@ class ExoPlayerManager(
         )
 
         try {
-            val uri = Uri.parse(item.streamUrl)
+            val uri = Uri.parse(item.streamUrl.trim())
             val format = item.detectFormat()
 
-            // If explicitly HLS, create HlsMediaSource
             val mediaSource = if (format == StreamFormat.HLS || item.streamUrl.contains(".m3u8", ignoreCase = true)) {
                 HlsMediaSource.Factory(httpDataSourceFactory)
                     .setAllowChunklessPreparation(true)
@@ -306,6 +306,8 @@ class ExoPlayerManager(
             val override = TrackSelectionOverride(group.mediaTrackGroup, track.trackIndex)
             player.trackSelectionParameters = player.trackSelectionParameters
                 .buildUpon()
+                .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
                 .setOverrideForType(override)
                 .build()
             updateTracksState()
@@ -319,6 +321,7 @@ class ExoPlayerManager(
             val override = TrackSelectionOverride(group.mediaTrackGroup, track.trackIndex)
             player.trackSelectionParameters = player.trackSelectionParameters
                 .buildUpon()
+                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
                 .setOverrideForType(override)
                 .build()
@@ -329,6 +332,7 @@ class ExoPlayerManager(
     fun disableSubtitles() {
         player.trackSelectionParameters = player.trackSelectionParameters
             .buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
             .build()
         updateTracksState()
