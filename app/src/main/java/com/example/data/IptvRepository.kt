@@ -35,9 +35,10 @@ class IptvRepository(context: Context) {
     private val xtreamClient = XtreamCodesClient()
     private val repositoryScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(25, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(90, TimeUnit.SECONDS)
         .followRedirects(true)
+        .followSslRedirects(true)
         .build()
 
     private val _sources = MutableStateFlow<List<IptvSource>>(emptyList())
@@ -95,6 +96,9 @@ class IptvRepository(context: Context) {
     private val _appLanguage = MutableStateFlow(prefs.getString("app_language", "en") ?: "en")
     val appLanguage: StateFlow<String> = _appLanguage.asStateFlow()
 
+    private val isAr: Boolean
+        get() = _appLanguage.value == "ar"
+
     fun setAppLanguage(lang: String) {
         val normalized = if (lang.equals("ar", ignoreCase = true)) "ar" else "en"
         _appLanguage.value = normalized
@@ -108,6 +112,14 @@ class IptvRepository(context: Context) {
 
     init {
         loadPersistedState()
+    }
+
+    private fun normalizeServerUrl(raw: String): String {
+        var clean = raw.trim().trimEnd('/')
+        if (!clean.startsWith("http://", ignoreCase = true) && !clean.startsWith("https://", ignoreCase = true)) {
+            clean = "http://$clean"
+        }
+        return clean
     }
 
     private fun loadPersistedState() {
@@ -231,7 +243,6 @@ class IptvRepository(context: Context) {
         _favorites.value = current
         prefs.edit().putStringSet("favorites", current).apply()
 
-        // Update displayed list
         _displayedItems.value = _displayedItems.value.map {
             if (it.id == itemId) it.copy(isFavorite = current.contains(itemId)) else it
         }
@@ -262,17 +273,13 @@ class IptvRepository(context: Context) {
                 channelCount = lives.size,
                 movieCount = movs.size,
                 seriesCount = sers.size,
-                statusText = "Active"
+                statusText = if (isAr) "نشط" else "Active"
             )
             updateActiveSource(updated)
         }
-        _statusMessage.value = "Demo streams ready"
+        _statusMessage.value = if (isAr) "تم تشغيل القنوات التجريبية" else "Demo streams ready"
     }
 
-    /**
-     * Internal indexing of streams into background memory grouped by category.
-     * Prevents giant 50k item arrays from locking up the UI thread.
-     */
     private fun indexStreams(
         liveList: List<IptvItem>,
         movList: List<IptvItem>,
@@ -303,7 +310,6 @@ class IptvRepository(context: Context) {
         _totalMoviesCount.value = movList.size
         _totalSeriesCount.value = serList.size
 
-        // Build Category summaries with item counts
         _liveCategories.value = liveStreamsByCategory.map { (cat, items) ->
             CategoryInfo(id = "cat_live_$cat", name = cat, itemCount = items.size, type = IptvType.LIVE_TV)
         }.sortedByDescending { it.itemCount }
@@ -316,15 +322,10 @@ class IptvRepository(context: Context) {
             CategoryInfo(id = "cat_ser_$cat", name = cat, itemCount = items.size, type = IptvType.SERIES)
         }.sortedByDescending { it.itemCount }
 
-        // Default displayed items to top 100 channels of first category or all live
         val initialBatch = liveList.take(100)
         _displayedItems.value = initialBatch
     }
 
-    /**
-     * Category-first memory protection query:
-     * Capped to [limit] (default 100) to keep Compose lightweight and prevent garbage collection freezes.
-     */
     fun queryStreams(
         type: IptvType,
         category: String,
@@ -340,7 +341,7 @@ class IptvRepository(context: Context) {
 
         val favs = _favorites.value
         val sourceItems: Sequence<IptvItem> = when {
-            category.equals("Favorites", ignoreCase = true) -> {
+            category.equals("Favorites", ignoreCase = true) || category == "المفضلة" -> {
                 val fullList = when (type) {
                     IptvType.LIVE_TV -> allLiveList
                     IptvType.MOVIE -> allMoviesList
@@ -348,7 +349,7 @@ class IptvRepository(context: Context) {
                 }
                 fullList.asSequence().filter { favs.contains(it.id) }
             }
-            category.equals("All", ignoreCase = true) -> {
+            category.equals("All", ignoreCase = true) || category == "الكل" -> {
                 val fullList = when (type) {
                     IptvType.LIVE_TV -> allLiveList
                     IptvType.MOVIE -> allMoviesList
@@ -377,6 +378,29 @@ class IptvRepository(context: Context) {
         }.toList()
     }
 
+    private fun downloadM3uStream(url: String): List<IptvItem> {
+        val req = Request.Builder()
+            .url(url)
+            .header("User-Agent", "IPTVSmartersPlayer")
+            .header("Accept", "*/*")
+            .build()
+
+        val resp = httpClient.newCall(req).execute()
+        if (!resp.isSuccessful) {
+            throw Exception("HTTP ${resp.code}: Failed to download playlist")
+        }
+
+        val body = resp.body ?: throw Exception("Empty playlist stream")
+        val bufferedReader = body.byteStream().bufferedReader(Charsets.UTF_8)
+        return M3uParser.parseStream(bufferedReader) { progress ->
+            _statusMessage.value = if (isAr) {
+                "جاري تحميل القنوات... تم العثور على %,d".format(progress.totalCount)
+            } else {
+                "Loading streams... %,d found".format(progress.totalCount)
+            }
+        }
+    }
+
     suspend fun addOrUpdateXtreamSource(
         name: String,
         serverUrl: String,
@@ -384,54 +408,106 @@ class IptvRepository(context: Context) {
         password: String
     ): Result<IptvSource> = withContext(Dispatchers.IO) {
         _isLoading.value = true
-        _statusMessage.value = "Connecting to Xtream Codes server..."
+        val cleanUrl = normalizeServerUrl(serverUrl)
+        val cleanUser = username.trim()
+        val cleanPass = password.trim()
+
+        _statusMessage.value = if (isAr) "جاري الاتصال بسيرفر Xtream..." else "Connecting to Xtream Codes server..."
 
         try {
-            val authResult = xtreamClient.authenticateAndLoad(serverUrl, username, password)
-            if (!authResult.isSuccess) {
-                _isLoading.value = false
-                _statusMessage.value = authResult.serverMessage ?: "Authentication failed"
-                return@withContext Result.failure(Exception(authResult.serverMessage ?: "Authentication failed"))
+            // Try primary URL, and if it ends with :80 and fails, also test without :80
+            var authResult = xtreamClient.authenticateAndLoad(cleanUrl, cleanUser, cleanPass)
+            if (!authResult.isSuccess && cleanUrl.endsWith(":80")) {
+                val altUrl = cleanUrl.removeSuffix(":80")
+                authResult = xtreamClient.authenticateAndLoad(altUrl, cleanUser, cleanPass)
             }
 
-            val items = authResult.items
+            val items: List<IptvItem>
+            val expDate: String?
+
+            if (authResult.isSuccess && authResult.items.isNotEmpty()) {
+                items = authResult.items
+                expDate = authResult.expirationDate
+            } else {
+                // Automatic Fallback: Load via Xtream get.php M3U Plus endpoint
+                _statusMessage.value = if (isAr) {
+                    "جاري التحميل عبر رابط Xtream المباشر..."
+                } else {
+                    "Loading Xtream playlist via direct stream..."
+                }
+                val fallbackUrls = buildList {
+                    add("$cleanUrl/get.php?username=$cleanUser&password=$cleanPass&type=m3u_plus&output=ts")
+                    if (cleanUrl.endsWith(":80")) {
+                        val noPort = cleanUrl.removeSuffix(":80")
+                        add("$noPort/get.php?username=$cleanUser&password=$cleanPass&type=m3u_plus&output=ts")
+                    }
+                }
+
+                var loadedFallback: List<IptvItem> = emptyList()
+                for (fbUrl in fallbackUrls) {
+                    try {
+                        loadedFallback = downloadM3uStream(fbUrl)
+                        if (loadedFallback.isNotEmpty()) break
+                    } catch (_: Exception) {}
+                }
+
+                if (loadedFallback.isEmpty()) {
+                    _isLoading.value = false
+                    val err = if (isAr) {
+                        "فشل تسجيل الدخول إلى سيرفر Xtream. تأكد من الرابط واسم المستخدم وكلمة المرور."
+                    } else {
+                        authResult.serverMessage ?: "Authentication failed on Xtream Codes server."
+                    }
+                    _statusMessage.value = err
+                    return@withContext Result.failure(Exception(err))
+                }
+                items = loadedFallback
+                expDate = null
+            }
+
             val live = items.filter { it.type == IptvType.LIVE_TV }
             val movs = items.filter { it.type == IptvType.MOVIE }
             val sers = items.filter { it.type == IptvType.SERIES }
 
             val existing = _sources.value.firstOrNull {
                 it.type == SourceType.XTREAM_CODES &&
-                it.serverUrl.trim().equals(serverUrl.trim(), ignoreCase = true) &&
-                it.username.trim().equals(username.trim(), ignoreCase = true)
+                normalizeServerUrl(it.serverUrl).equals(cleanUrl, ignoreCase = true) &&
+                it.username.trim().equals(cleanUser, ignoreCase = true)
             }
             val sourceId = existing?.id ?: UUID.randomUUID().toString()
 
             val source = IptvSource(
                 id = sourceId,
-                name = name.ifBlank { existing?.name ?: "Xtream ($username)" },
+                name = name.trim().ifBlank { existing?.name ?: "Xtream ($cleanUser)" },
                 type = SourceType.XTREAM_CODES,
-                serverUrl = serverUrl.trim(),
-                username = username.trim(),
-                password = password,
+                serverUrl = cleanUrl,
+                username = cleanUser,
+                password = cleanPass,
                 isActive = true,
                 channelCount = live.size,
                 movieCount = movs.size,
                 seriesCount = sers.size,
-                expirationDate = authResult.expirationDate,
-                statusText = "Connected (${live.size + movs.size + sers.size} items)"
+                expirationDate = expDate,
+                statusText = if (isAr) {
+                    "متصل (%,d عنصر)".format(live.size + movs.size + sers.size)
+                } else {
+                    "Connected (${live.size + movs.size + sers.size} items)"
+                }
             )
 
             indexStreams(live, movs, sers)
             updateActiveSource(source)
 
             _isLoading.value = false
-            _statusMessage.value = "Connected! Loaded %,d channels, %,d movies, %,d series.".format(
-                live.size, movs.size, sers.size
-            )
+            _statusMessage.value = if (isAr) {
+                "تم الاتصال! تم تحميل %,d قناة، %,d فيلم، %,d مسلسل.".format(live.size, movs.size, sers.size)
+            } else {
+                "Connected! Loaded %,d channels, %,d movies, %,d series.".format(live.size, movs.size, sers.size)
+            }
             Result.success(source)
         } catch (e: Exception) {
             _isLoading.value = false
-            _statusMessage.value = "Error: ${e.localizedMessage}"
+            _statusMessage.value = if (isAr) "خطأ: ${e.localizedMessage}" else "Error: ${e.localizedMessage}"
             Result.failure(e)
         }
     }
@@ -442,12 +518,17 @@ class IptvRepository(context: Context) {
         rawContent: String = ""
     ): Result<IptvSource> = withContext(Dispatchers.IO) {
         _isLoading.value = true
+        val cleanM3uUrl = m3uUrl.trim()
 
         // Smart M3U-to-Xtream Auto-Detection
-        if (m3uUrl.isNotBlank()) {
-            val detected = XtreamUrlDetector.detect(m3uUrl)
+        if (cleanM3uUrl.isNotBlank()) {
+            val detected = XtreamUrlDetector.detect(cleanM3uUrl)
             if (detected != null) {
-                _statusMessage.value = "Detected Xtream Codes IPTV provider (${detected.username}). Loading via fast API..."
+                _statusMessage.value = if (isAr) {
+                    "تم اكتشاف اشتراك Xtream (${detected.username}). جاري التحميل السريع..."
+                } else {
+                    "Detected Xtream Codes IPTV provider (${detected.username}). Loading via fast API..."
+                }
                 return@withContext addOrUpdateXtreamSource(
                     name = name.ifBlank { "Xtream (${detected.username})" },
                     serverUrl = detected.serverUrl,
@@ -457,73 +538,62 @@ class IptvRepository(context: Context) {
             }
         }
 
-        _statusMessage.value = "Streaming & parsing M3U playlist..."
+        _statusMessage.value = if (isAr) "جاري تحميل وقراءة ملف M3U..." else "Streaming & parsing M3U playlist..."
 
         try {
-            val items: List<IptvItem> = if (m3uUrl.isNotBlank()) {
-                val req = Request.Builder()
-                    .url(m3uUrl)
-                    .header("User-Agent", "HypnoStream-IPTV/1.0")
-                    .build()
-
-                val resp = httpClient.newCall(req).execute()
-                if (!resp.isSuccessful) {
-                    throw Exception("HTTP ${resp.code}: Failed to download M3U playlist")
-                }
-
-                val body = resp.body ?: throw Exception("Empty M3U response stream")
-                // STREAMING PARSER: Never call .string() or .readText()!
-                val bufferedReader = body.byteStream().bufferedReader(Charsets.UTF_8)
-                M3uParser.parseStream(bufferedReader) { progress ->
-                    _statusMessage.value = "Loading streams... %,d found".format(progress.totalCount)
-                }
+            val items: List<IptvItem> = if (cleanM3uUrl.isNotBlank()) {
+                downloadM3uStream(cleanM3uUrl)
             } else {
                 if (rawContent.isBlank() || !rawContent.contains("#EXTM3U", ignoreCase = true)) {
-                    throw Exception("Invalid M3U playlist (missing #EXTM3U header)")
+                    throw Exception(if (isAr) "ملف M3U غير صالح" else "Invalid M3U playlist (missing #EXTM3U header)")
                 }
                 M3uParser.parse(rawContent)
             }
 
             if (items.isEmpty()) {
-                throw Exception("No playable streams found in M3U playlist")
+                throw Exception(if (isAr) "لم يتم العثور على قنوات في هذا الرابط" else "No playable streams found in M3U playlist")
             }
 
             val live = items.filter { it.type == IptvType.LIVE_TV }
             val movs = items.filter { it.type == IptvType.MOVIE }
             val sers = items.filter { it.type == IptvType.SERIES }
 
-            val existing = if (m3uUrl.isNotBlank()) {
+            val existing = if (cleanM3uUrl.isNotBlank()) {
                 _sources.value.firstOrNull {
                     it.type == SourceType.M3U_URL &&
-                    it.m3uUrl.trim().equals(m3uUrl.trim(), ignoreCase = true)
+                    it.m3uUrl.trim().equals(cleanM3uUrl, ignoreCase = true)
                 }
             } else null
             val sourceId = existing?.id ?: UUID.randomUUID().toString()
 
             val source = IptvSource(
                 id = sourceId,
-                name = name.ifBlank { existing?.name ?: if (m3uUrl.isNotBlank()) "M3U (${m3uUrl.take(25)}...)" else "Custom M3U" },
-                type = if (m3uUrl.isNotBlank()) SourceType.M3U_URL else SourceType.M3U_TEXT,
-                m3uUrl = m3uUrl.trim(),
-                m3uContent = if (m3uUrl.isBlank()) rawContent else "",
+                name = name.trim().ifBlank { existing?.name ?: if (cleanM3uUrl.isNotBlank()) "M3U (${cleanM3uUrl.take(25)}...)" else "Custom M3U" },
+                type = if (cleanM3uUrl.isNotBlank()) SourceType.M3U_URL else SourceType.M3U_TEXT,
+                m3uUrl = cleanM3uUrl,
+                m3uContent = if (cleanM3uUrl.isBlank()) rawContent else "",
                 isActive = true,
                 channelCount = live.size,
                 movieCount = movs.size,
                 seriesCount = sers.size,
-                statusText = "Active (%,d streams)".format(items.size)
+                statusText = if (isAr) "نشط (%,d قناة)".format(items.size) else "Active (%,d streams)".format(items.size)
             )
 
             indexStreams(live, movs, sers)
             updateActiveSource(source)
 
             _isLoading.value = false
-            _statusMessage.value = "M3U loaded! Found %,d streams (Live: %,d | Movies: %,d | Series: %,d)".format(
-                items.size, live.size, movs.size, sers.size
-            )
+            _statusMessage.value = if (isAr) {
+                "تم التحميل! القنوات: %,d | الأفلام: %,d | المسلسلات: %,d".format(live.size, movs.size, sers.size)
+            } else {
+                "M3U loaded! Found %,d streams (Live: %,d | Movies: %,d | Series: %,d)".format(
+                    items.size, live.size, movs.size, sers.size
+                )
+            }
             Result.success(source)
         } catch (e: Exception) {
             _isLoading.value = false
-            _statusMessage.value = "M3U Error: ${e.localizedMessage}"
+            _statusMessage.value = if (isAr) "خطأ M3U: ${e.localizedMessage}" else "M3U Error: ${e.localizedMessage}"
             Result.failure(e)
         }
     }
@@ -533,7 +603,7 @@ class IptvRepository(context: Context) {
         val index = current.indexOfFirst {
             it.id == source.id ||
             (it.type == SourceType.XTREAM_CODES && source.type == SourceType.XTREAM_CODES &&
-             it.serverUrl.trim().equals(source.serverUrl.trim(), ignoreCase = true) &&
+             normalizeServerUrl(it.serverUrl).equals(normalizeServerUrl(source.serverUrl), ignoreCase = true) &&
              it.username.trim().equals(source.username.trim(), ignoreCase = true)) ||
             (it.type == SourceType.M3U_URL && source.type == SourceType.M3U_URL &&
              source.m3uUrl.isNotBlank() && it.m3uUrl.trim().equals(source.m3uUrl.trim(), ignoreCase = true))
@@ -566,8 +636,6 @@ class IptvRepository(context: Context) {
             }
         }
 
-        // For M3U or Demo streams (or fallback):
-        // Group series entries by show title and parse SxxExx tags into seasons and episodes
         val targetTitle = seriesItem.seriesTitle ?: seriesItem.name
         val relatedEpisodes = allSeriesList.filter {
             it.seriesTitle?.equals(targetTitle, ignoreCase = true) == true ||
@@ -592,7 +660,7 @@ class IptvRepository(context: Context) {
                     streamUrl = item.streamUrl,
                     containerExtension = "mp4",
                     coverUrl = item.logoUrl,
-                    plot = "Episode $epNum: $epTitle",
+                    plot = if (isAr) "الحلقة $epNum: $epTitle" else "Episode $epNum: $epTitle",
                     rating = item.rating
                 )
             )
@@ -601,7 +669,7 @@ class IptvRepository(context: Context) {
         val seasons = seasonMap.entries.sortedBy { it.key }.map { (sNum, eps) ->
             SeriesSeason(
                 seasonNumber = sNum,
-                name = "Season $sNum",
+                name = if (isAr) "الموسم $sNum" else "Season $sNum",
                 episodes = eps.sortedBy { it.episodeNumber }
             )
         }
@@ -612,7 +680,7 @@ class IptvRepository(context: Context) {
                 title = targetTitle,
                 coverUrl = seriesItem.logoUrl,
                 backdropUrl = seriesItem.logoUrl,
-                plot = "Stream seasons and episodes for $targetTitle.",
+                plot = if (isAr) "تصفح المواسم والحلقات لمسلسل $targetTitle" else "Stream seasons and episodes for $targetTitle.",
                 rating = seriesItem.rating,
                 seasons = seasons
             )
