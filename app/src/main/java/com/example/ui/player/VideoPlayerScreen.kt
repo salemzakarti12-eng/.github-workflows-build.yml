@@ -47,12 +47,15 @@ import androidx.compose.material.icons.filled.BrightnessHigh
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -137,6 +140,19 @@ fun VideoPlayerScreen(
     val activity = context as? Activity
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
 
+    val currentItem = uiState.currentItem
+    val isMovie = currentItem?.type == IptvType.MOVIE
+    val isSeries = currentItem?.type == IptvType.SERIES
+    val isLiveTv = currentItem?.type == IptvType.LIVE_TV
+    val hasDrawerList = !isMovie && allChannels.isNotEmpty()
+
+    // Ensure drawer is closed if playing a Movie
+    LaunchedEffect(isMovie) {
+        if (isMovie && uiState.isQuickChannelListOpen) {
+            playerManager.closeQuickChannelList()
+        }
+    }
+
     // Invisible Gesture States (Left = Volume, Right = Brightness)
     var isGestureActive by remember { mutableStateOf(false) }
     var gestureType by remember { mutableStateOf("") }
@@ -171,9 +187,6 @@ fun VideoPlayerScreen(
         }
     }
 
-    val currentItem = uiState.currentItem
-
-    // Dedicated FocusRequesters so TV Remote Up/Down/Left/Right navigation works predictably
     val playPauseFocusRequester = remember { FocusRequester() }
     val prevFocusRequester = remember { FocusRequester() }
     val nextFocusRequester = remember { FocusRequester() }
@@ -182,13 +195,10 @@ fun VideoPlayerScreen(
     val aspectFocusRequester = remember { FocusRequester() }
     val backFocusRequester = remember { FocusRequester() }
 
-    // Track which button was last used so clicking Next/Prev doesn't jump focus back to Pause!
     var lastFocusedControl by remember { mutableStateOf("play") }
-
     var showAudioDialog by remember { mutableStateOf(false) }
     var showSubtitleDialog by remember { mutableStateOf(false) }
 
-    // Only focus Play/Pause when HUD first opens from hidden state
     var wasControlsVisible by remember { mutableStateOf(false) }
     LaunchedEffect(uiState.isControlsVisible) {
         if (uiState.isControlsVisible && !wasControlsVisible) {
@@ -209,13 +219,10 @@ fun VideoPlayerScreen(
             .background(Color.Black)
             .focusable()
             .onPreviewKeyEvent { event ->
-                // Any key press resets the 5-second auto-hide timer when HUD is open
                 if (uiState.isControlsVisible && event.type == KeyEventType.KeyDown) {
                     playerManager.scheduleControlsAutoHide()
                 }
 
-                // CRITICAL TV FIX: Only intercept Up/Down/OK at the root level when the HUD controls are HIDDEN!
-                // When HUD controls are visible, let D-pad Up/Down/Left/Right move freely to Audio, Subtitles, Fit, Next, Prev!
                 if (!uiState.isControlsVisible && !uiState.isQuickChannelListOpen && !showAudioDialog && !showSubtitleDialog) {
                     if (event.type == KeyEventType.KeyUp) {
                         when (event.key) {
@@ -225,11 +232,11 @@ fun VideoPlayerScreen(
                                 true
                             }
                             Key.DirectionUp, Key.ChannelUp -> {
-                                onPlayPrevious()
+                                if (!isMovie) onPlayPrevious()
                                 true
                             }
                             Key.DirectionDown, Key.ChannelDown -> {
-                                onPlayNext()
+                                if (!isMovie) onPlayNext()
                                 true
                             }
                             Key.Back, Key.Escape -> {
@@ -383,7 +390,7 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Buffering Indicator Overlay (Positioned at top-center or subtle so it never blocks Next/Prev buttons)
+        // Buffering Indicator Overlay
         if (uiState.isBuffering) {
             Box(
                 modifier = Modifier
@@ -519,7 +526,7 @@ fun VideoPlayerScreen(
                         )
                     )
             ) {
-                // Top Control Bar (Back, Title, Fit, Audio, Subtitles, Channel Drawer)
+                // Top Control Bar
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -583,7 +590,7 @@ fun VideoPlayerScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 modifier = Modifier.padding(top = 3.dp)
                             ) {
-                                if (currentItem?.type == IptvType.LIVE_TV) {
+                                if (isLiveTv) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier
@@ -616,7 +623,7 @@ fun VideoPlayerScreen(
                         }
                     }
 
-                    // Top Action Buttons (Fit, Audio, Subtitles, Drawer) with explicit TV focus routing
+                    // Top Action Buttons (Fit, Audio, Subtitles, and Drawer ONLY for Live TV & Series)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -771,44 +778,63 @@ fun VideoPlayerScreen(
                             }
                         }
 
-                        val drawerBtnInteraction = remember { MutableInteractionSource() }
-                        val isDrawerFocused by drawerBtnInteraction.collectIsFocusedAsState()
+                        // Show Channel List / Episodes Drawer Button ONLY for Live TV and Series (Hidden in Movies!)
+                        if (hasDrawerList) {
+                            val drawerBtnInteraction = remember { MutableInteractionSource() }
+                            val isDrawerFocused by drawerBtnInteraction.collectIsFocusedAsState()
 
-                        IconButton(
-                            onClick = { playerManager.toggleQuickChannelList() },
-                            interactionSource = drawerBtnInteraction,
-                            modifier = Modifier
-                                .size(48.dp)
-                                .focusProperties { down = playPauseFocusRequester }
-                                .clip(CircleShape)
-                                .background(if (isDrawerFocused) AccentCyan else Color(0x66000000))
-                                .border(
+                            Surface(
+                                color = if (isDrawerFocused) AccentCyan else Color(0x66000000),
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(
                                     width = if (isDrawerFocused) 3.dp else 1.dp,
-                                    color = if (isDrawerFocused) PureWhite else Slate700,
-                                    shape = CircleShape
-                                )
-                                .focusable(interactionSource = drawerBtnInteraction)
-                                .onPreviewKeyEvent { event ->
-                                    if (event.type == KeyEventType.KeyUp &&
-                                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                                    ) {
+                                    color = if (isDrawerFocused) PureWhite else Slate700
+                                ),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .focusProperties { down = playPauseFocusRequester }
+                                    .focusable(interactionSource = drawerBtnInteraction)
+                                    .onPreviewKeyEvent { event ->
+                                        if (event.type == KeyEventType.KeyUp &&
+                                            (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                        ) {
+                                            playerManager.toggleQuickChannelList()
+                                            true
+                                        } else false
+                                    }
+                                    .clickable(interactionSource = drawerBtnInteraction, indication = null) {
                                         playerManager.toggleQuickChannelList()
-                                        true
-                                    } else false
+                                    }
+                                    .testTag("btn_quick_channel_list")
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = if (isSeries) Icons.Default.VideoLibrary else Icons.Default.FormatListBulleted,
+                                        contentDescription = null,
+                                        tint = if (isDrawerFocused) Slate950 else AccentCyan,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = if (isSeries) {
+                                            if (isAr) "الحلقات" else "Episodes"
+                                        } else {
+                                            if (isAr) "القنوات" else "Channels"
+                                        },
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isDrawerFocused) Slate950 else PureWhite
+                                    )
                                 }
-                                .testTag("btn_quick_channel_list")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.FormatListBulleted,
-                                contentDescription = "Channel List",
-                                tint = if (isDrawerFocused) Slate950 else PureWhite
-                            )
+                            }
                         }
                     }
                 }
 
                 // Center Play / Next / Previous Controls
-                // Pressing Up on any of these 3 buttons moves TV focus directly to the Audio / Subtitle bar!
                 Row(
                     modifier = Modifier.align(Alignment.Center),
                     verticalAlignment = Alignment.CenterVertically,
@@ -817,7 +843,6 @@ fun VideoPlayerScreen(
                     val prevInteraction = remember { MutableInteractionSource() }
                     val isPrevFocused by prevInteraction.collectIsFocusedAsState()
 
-                    // Previous Channel Button (Keeps focus on itself when clicked!)
                     IconButton(
                         onClick = {
                             lastFocusedControl = "prev"
@@ -850,8 +875,8 @@ fun VideoPlayerScreen(
                             .testTag("btn_player_prev")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.SkipPrevious,
-                            contentDescription = "Previous Channel",
+                            imageVector = if (isMovie) Icons.Default.FastRewind else Icons.Default.SkipPrevious,
+                            contentDescription = "Previous",
                             tint = if (isPrevFocused) Slate950 else PureWhite,
                             modifier = Modifier.size(32.dp)
                         )
@@ -860,7 +885,6 @@ fun VideoPlayerScreen(
                     val playInteraction = remember { MutableInteractionSource() }
                     val isPlayFocused by playInteraction.collectIsFocusedAsState()
 
-                    // Main Play/Pause Button (Pressing UP goes straight to Audio button!)
                     IconButton(
                         onClick = {
                             lastFocusedControl = "play"
@@ -901,7 +925,6 @@ fun VideoPlayerScreen(
                     val nextInteraction = remember { MutableInteractionSource() }
                     val isNextFocused by nextInteraction.collectIsFocusedAsState()
 
-                    // Next Channel Button (Keeps focus on itself when clicked so it never pauses!)
                     IconButton(
                         onClick = {
                             lastFocusedControl = "next"
@@ -934,8 +957,8 @@ fun VideoPlayerScreen(
                             .testTag("btn_player_next")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.SkipNext,
-                            contentDescription = "Next Channel",
+                            imageVector = if (isMovie) Icons.Default.FastForward else Icons.Default.SkipNext,
+                            contentDescription = "Next",
                             tint = if (isNextFocused) Slate950 else PureWhite,
                             modifier = Modifier.size(32.dp)
                         )
@@ -949,7 +972,7 @@ fun VideoPlayerScreen(
                         .padding(horizontal = 24.dp, vertical = 20.dp)
                         .align(Alignment.BottomCenter)
                 ) {
-                    if (currentItem?.type != IptvType.LIVE_TV && uiState.durationMs > 0) {
+                    if (!isLiveTv && uiState.durationMs > 0) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -1005,15 +1028,15 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Quick Channel Switcher Drawer
+        // Side Drawer: Shows "Episodes" for TV Series and "Channel List" for Live TV (Disabled in Movies!)
         AnimatedVisibility(
-            visible = uiState.isQuickChannelListOpen,
+            visible = uiState.isQuickChannelListOpen && hasDrawerList,
             enter = slideInHorizontally(initialOffsetX = { it }),
             exit = slideOutHorizontally(targetOffsetX = { it }),
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .fillMaxHeight()
-                .width(320.dp)
+                .width(340.dp)
         ) {
             Surface(
                 color = Slate900,
@@ -1029,7 +1052,11 @@ fun VideoPlayerScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = if (isAr) "قائمة القنوات" else "Channel List",
+                            text = if (isSeries) {
+                                if (isAr) "حلقات المسلسل" else "Series Episodes"
+                            } else {
+                                if (isAr) "قائمة القنوات" else "Channel List"
+                            },
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
                             color = PureWhite
@@ -1047,8 +1074,8 @@ fun VideoPlayerScreen(
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(allChannels, key = { it.id }) { channel ->
-                            val isCurrent = channel.id == currentItem?.id
+                        items(allChannels, key = { it.id }) { item ->
+                            val isCurrent = item.id == currentItem?.id || item.streamUrl == currentItem?.streamUrl
                             val itemInteraction = remember { MutableInteractionSource() }
                             val isItemFocused by itemInteraction.collectIsFocusedAsState()
 
@@ -1060,12 +1087,12 @@ fun VideoPlayerScreen(
                                         when {
                                             isItemFocused -> AccentCyan
                                             isCurrent -> Slate800
-                                            else -> Color.Transparent
+                                            else -> Slate850
                                         }
                                     )
                                     .border(
-                                        width = if (isItemFocused) 2.dp else 0.dp,
-                                        color = PureWhite,
+                                        width = if (isItemFocused) 2.dp else 1.dp,
+                                        color = if (isItemFocused) PureWhite else if (isCurrent) AccentCyan else Slate700,
                                         shape = RoundedCornerShape(10.dp)
                                     )
                                     .focusable(interactionSource = itemInteraction)
@@ -1073,45 +1100,46 @@ fun VideoPlayerScreen(
                                         if (event.type == KeyEventType.KeyUp &&
                                             (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
                                         ) {
-                                            onSelectChannel(channel)
+                                            onSelectChannel(item)
                                             playerManager.closeQuickChannelList()
                                             true
                                         } else false
                                     }
                                     .clickable(interactionSource = itemInteraction, indication = null) {
-                                        onSelectChannel(channel)
+                                        onSelectChannel(item)
                                         playerManager.closeQuickChannelList()
                                     }
                                     .padding(10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                if (!channel.logoUrl.isNullOrBlank()) {
+                                if (!item.logoUrl.isNullOrBlank()) {
                                     AsyncImage(
-                                        model = channel.logoUrl,
+                                        model = item.logoUrl,
                                         contentDescription = null,
                                         modifier = Modifier
-                                            .size(34.dp)
+                                            .size(38.dp)
                                             .clip(RoundedCornerShape(6.dp))
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
                                 }
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = channel.name,
+                                        text = item.name,
                                         fontSize = 13.sp,
                                         fontWeight = if (isCurrent || isItemFocused) FontWeight.Bold else FontWeight.Medium,
                                         color = if (isItemFocused) Slate950 else if (isCurrent) AccentCyan else PureWhite,
-                                        maxLines = 1,
+                                        maxLines = 2,
                                         overflow = TextOverflow.Ellipsis
                                     )
                                     Text(
-                                        text = channel.group,
+                                        text = item.group,
                                         fontSize = 11.sp,
                                         color = if (isItemFocused) Slate800 else Slate400,
                                         maxLines = 1
                                     )
                                 }
                                 if (isCurrent) {
+                                    Spacer(modifier = Modifier.width(6.dp))
                                     Box(
                                         modifier = Modifier
                                             .size(8.dp)
