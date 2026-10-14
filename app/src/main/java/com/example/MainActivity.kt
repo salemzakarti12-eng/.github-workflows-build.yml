@@ -5,11 +5,15 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.util.Rational
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
+import androidx.annotation.OptIn
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -35,6 +39,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
@@ -78,22 +83,26 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
 import com.example.model.IptvItem
 import com.example.model.IptvType
+import com.example.player.ExoPlayerManager
 import com.example.ui.MainViewModel
 import com.example.ui.Screen
 import com.example.ui.channelbrowser.ContentBrowserScreen
 import com.example.ui.dashboard.DashboardScreen
 import com.example.ui.locale.LocalAppLanguage
 import com.example.ui.locale.LocalAppStrings
-import com.example.ui.locale.LocalIsInPipMode
 import com.example.ui.locale.getAppStrings
 import com.example.ui.player.VideoPlayerScreen
 import com.example.ui.series.SeriesDetailScreen
 import com.example.ui.sources.SourcesScreen
 import com.example.ui.theme.AccentCyan
+import com.example.ui.theme.AccentRed
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.Slate400
@@ -105,31 +114,47 @@ import com.example.util.DeviceUtils
 import com.example.util.LocalIsTelevision
 
 class MainActivity : ComponentActivity() {
-    private var mainViewModel: MainViewModel? = null
-    private var isInPipMode by mutableStateOf(false)
 
-    fun enterPipMode() {
-        if (DeviceUtils.isTelevision(this)) return
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val params = PictureInPictureParams.Builder()
-                    .setAspectRatio(Rational(16, 9))
-                    .build()
-                enterPictureInPictureMode(params)
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                @Suppress("DEPRECATION")
-                enterPictureInPictureMode()
+    private val mainViewModel: MainViewModel by viewModels()
+    private var isInPipModeState by mutableStateOf(false)
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        DeviceUtils.configureDeviceOrientation(this)
+        enableEdgeToEdge()
+        setContent {
+            val isTelevision = remember { DeviceUtils.isTelevision(this@MainActivity) }
+            val currentLanguage by mainViewModel.currentLanguage.collectAsState()
+            val layoutDirection = if (currentLanguage == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr
+            val strings = remember(currentLanguage) { getAppStrings(currentLanguage) }
+
+            CompositionLocalProvider(
+                LocalIsTelevision provides isTelevision,
+                LocalAppLanguage provides currentLanguage,
+                LocalAppStrings provides strings,
+                LocalLayoutDirection provides layoutDirection
+            ) {
+                MyApplicationTheme {
+                    HypnoStreamApp(
+                        viewModel = mainViewModel,
+                        isInPipMode = isInPipModeState,
+                        onFinishApp = { finish() }
+                    )
+                }
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
     }
 
+    /**
+     * Automatically enter Picture-in-Picture mode on Phone/Tablet when user presses Home while any stream is playing
+     * (Works from both Fullscreen Player AND the In-App Mini Video Preview!)
+     */
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         val isTv = DeviceUtils.isTelevision(this)
-        val vm = mainViewModel ?: return
-        if (!isTv && vm.currentScreen.value == Screen.PLAYER && vm.playerUiState.value.isPlaying) {
+        val hasActiveStream = mainViewModel.playerUiState.value.currentItem != null
+        val isPlaying = mainViewModel.playerUiState.value.isPlaying
+        if (!isTv && hasActiveStream && isPlaying) {
             enterPipMode()
         }
     }
@@ -139,36 +164,21 @@ class MainActivity : ComponentActivity() {
         newConfig: Configuration
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        isInPipMode = isInPictureInPictureMode
+        isInPipModeState = isInPictureInPictureMode
+        if (isInPictureInPictureMode) {
+            mainViewModel.playerManager.closeQuickChannelList()
+        }
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        DeviceUtils.configureDeviceOrientation(this)
-        enableEdgeToEdge()
-        setContent {
-            val isTelevision = remember { DeviceUtils.isTelevision(this@MainActivity) }
-            val viewModel: MainViewModel = viewModel()
-            mainViewModel = viewModel
-            val currentLanguage by viewModel.currentLanguage.collectAsState()
-            val layoutDirection = if (currentLanguage == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr
-            val strings = remember(currentLanguage) { getAppStrings(currentLanguage) }
-
-            CompositionLocalProvider(
-                LocalIsTelevision provides isTelevision,
-                LocalAppLanguage provides currentLanguage,
-                LocalAppStrings provides strings,
-                LocalLayoutDirection provides layoutDirection,
-                LocalIsInPipMode provides isInPipMode
-            ) {
-                MyApplicationTheme {
-                    HypnoStreamApp(
-                        viewModel = viewModel,
-                        onFinishApp = { finish() },
-                        onEnterPip = { enterPipMode() }
-                    )
-                }
-            }
+    fun enterPipMode() {
+        if (DeviceUtils.isTelevision(this)) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                val params = PictureInPictureParams.Builder()
+                    .setAspectRatio(Rational(16, 9))
+                    .build()
+                enterPictureInPictureMode(params)
+            } catch (_: Exception) {}
         }
     }
 }
@@ -176,8 +186,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun HypnoStreamApp(
     viewModel: MainViewModel = viewModel(),
-    onFinishApp: () -> Unit = {},
-    onEnterPip: () -> Unit = {}
+    isInPipMode: Boolean = false,
+    onFinishApp: () -> Unit = {}
 ) {
     val currentScreen by viewModel.currentScreen.collectAsState()
     val activeSource by viewModel.activeSource.collectAsState()
@@ -202,6 +212,11 @@ fun HypnoStreamApp(
 
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val isTablet = configuration.smallestScreenWidthDp >= 600
+    val isTv = LocalIsTelevision.current
+    // Full Tablet Support: Use NavigationRail layout on Tablets (Portrait & Landscape), TVs, and Phone Landscape
+    val useSideRailLayout = isLandscape || isTablet || isTv
+
     val strings = LocalAppStrings.current
     val isAr = LocalAppLanguage.current == "ar"
     val context = LocalContext.current
@@ -221,9 +236,8 @@ fun HypnoStreamApp(
         }
     }
 
-    if (currentScreen == Screen.PLAYER) {
+    if (currentScreen == Screen.PLAYER || isInPipMode) {
         val activeItem = playerUiState.currentItem
-        // Pass Live Channels for Live TV, Series Episodes for Series, and Empty List for Movies!
         val sideDrawerItems = when (activeItem?.type) {
             IptvType.LIVE_TV -> viewModel.repository.getAllLiveChannels()
             IptvType.SERIES -> currentSeriesEpisodes
@@ -238,7 +252,6 @@ fun HypnoStreamApp(
             onPlayNext = { viewModel.playNextChannel() },
             onPlayPrevious = { viewModel.playPreviousChannel() },
             onSelectChannel = { viewModel.playStream(it) },
-            onEnterPip = onEnterPip,
             modifier = Modifier.fillMaxSize()
         )
     } else {
@@ -329,7 +342,7 @@ fun HypnoStreamApp(
             }
         }
 
-        if (isLandscape) {
+        if (useSideRailLayout) {
             Row(
                 modifier = Modifier
                     .fillMaxSize()
@@ -339,7 +352,7 @@ fun HypnoStreamApp(
                     containerColor = Slate900,
                     contentColor = PureWhite,
                     modifier = Modifier
-                        .width(76.dp)
+                        .width(if (isTablet) 84.dp else 76.dp)
                         .fillMaxHeight()
                         .border(BorderStroke(1.dp, Slate800))
                         .testTag("main_navigation_rail")
@@ -408,9 +421,10 @@ fun HypnoStreamApp(
 
                     if (playerUiState.currentItem != null) {
                         MiniPlayerBar(
+                            playerManager = viewModel.playerManager,
                             item = playerUiState.currentItem!!,
                             isPlaying = playerUiState.isPlaying,
-                            isCompact = true,
+                            isCompact = !isTablet,
                             onExpand = { viewModel.navigateTo(Screen.PLAYER) },
                             onTogglePlayPause = { viewModel.playerManager.togglePlayPause() },
                             onDismiss = { viewModel.dismissMiniPlayer() }
@@ -427,6 +441,7 @@ fun HypnoStreamApp(
                     Column(modifier = Modifier.navigationBarsPadding()) {
                         if (playerUiState.currentItem != null) {
                             MiniPlayerBar(
+                                playerManager = viewModel.playerManager,
                                 item = playerUiState.currentItem!!,
                                 isPlaying = playerUiState.isPlaying,
                                 isCompact = false,
@@ -506,8 +521,14 @@ fun HypnoStreamApp(
     }
 }
 
+/**
+ * Live Video Mini-Preview Bar:
+ * Renders a real-time 16:9 ExoPlayer video preview right on the Home screen and category browsers!
+ */
+@OptIn(UnstableApi::class)
 @Composable
 fun MiniPlayerBar(
+    playerManager: ExoPlayerManager,
     item: IptvItem,
     isPlaying: Boolean,
     isCompact: Boolean = false,
@@ -523,11 +544,15 @@ fun MiniPlayerBar(
     val isCloseBtnFocused by closeBtnInteraction.collectIsFocusedAsState()
 
     val currentLanguage = LocalAppLanguage.current
-    val nowPlayingText = if (currentLanguage == "ar") "يعرض الآن" else "Now Playing"
+    val isAr = currentLanguage == "ar"
+    val nowPlayingText = if (isAr) "يعرض الآن" else "Now Playing"
+
+    val previewWidth = if (isCompact) 104.dp else 120.dp
+    val previewHeight = if (isCompact) 58.dp else 68.dp
 
     Surface(
         color = if (isBarFocused) Slate800 else Slate900,
-        shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
+        shape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp),
         border = BorderStroke(
             width = if (isBarFocused) 2.dp else 1.dp,
             color = if (isBarFocused) AccentCyan else Slate700
@@ -539,9 +564,10 @@ fun MiniPlayerBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = if (isCompact) 8.dp else 10.dp),
+                .padding(horizontal = 12.dp, vertical = if (isCompact) 6.dp else 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Clickable Mini Video Preview + Channel Info (Tapping expands to Fullscreen)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -559,16 +585,67 @@ fun MiniPlayerBar(
                     }
                     .clickable(interactionSource = barInteraction, indication = null, onClick = onExpand)
             ) {
-                if (!item.logoUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = item.logoUrl,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(if (isCompact) 32.dp else 38.dp)
-                            .clip(RoundedCornerShape(8.dp))
+                // Live 16:9 Mini Video Screen
+                Box(
+                    modifier = Modifier
+                        .width(previewWidth)
+                        .height(previewHeight)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color.Black)
+                        .border(1.dp, AccentCyan.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+                ) {
+                    AndroidView(
+                        modifier = Modifier.fillMaxSize(),
+                        factory = { ctx ->
+                            PlayerView(ctx).apply {
+                                player = playerManager.player
+                                useController = false
+                                isFocusable = false
+                                isFocusableInTouchMode = false
+                                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                                layoutParams = FrameLayout.LayoutParams(
+                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                    ViewGroup.LayoutParams.MATCH_PARENT
+                                )
+                            }
+                        },
+                        update = { playerView ->
+                            if (playerView.player !== playerManager.player) {
+                                playerView.player = playerManager.player
+                            }
+                        }
                     )
-                    Spacer(modifier = Modifier.width(12.dp))
+
+                    // Tiny "LIVE" dot + Expand icon corner badge
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(4.dp)
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(if (isPlaying) AccentRed else Slate400)
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(3.dp)
+                            .size(16.dp)
+                            .clip(CircleShape)
+                            .background(Color(0x99000000)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Fullscreen,
+                            contentDescription = "Expand",
+                            tint = PureWhite,
+                            modifier = Modifier.size(12.dp)
+                        )
+                    }
                 }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = item.name,
@@ -583,13 +660,21 @@ fun MiniPlayerBar(
                         fontSize = 11.sp,
                         color = AccentCyan,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                    Text(
+                        text = if (isAr) "اضغط للتكبير ملء الشاشة" else "Tap video to expand fullscreen",
+                        fontSize = 9.sp,
+                        color = Slate400,
+                        maxLines = 1
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
+            // Separated Play/Pause and Close (X) Buttons
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp)
