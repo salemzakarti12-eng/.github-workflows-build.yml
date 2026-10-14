@@ -68,6 +68,7 @@ import com.example.model.SeriesDetails
 import com.example.model.SeriesEpisode
 import com.example.ui.locale.LocalAppLanguage
 import com.example.ui.locale.LocalAppStrings
+import com.example.ui.locale.LocalMiniPlayerActive
 import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.Slate300
@@ -133,9 +134,11 @@ fun SeriesDetailScreen(
         val seasons = details.seasons
         val activeSeason = seasons.getOrNull(selectedSeasonIndex) ?: seasons.first()
 
+        val isMiniPlayerActive = LocalMiniPlayerActive.current
+
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 32.dp)
+            contentPadding = PaddingValues(bottom = if (isMiniPlayerActive) 140.dp else 48.dp)
         ) {
             // Hero Banner Header
             item {

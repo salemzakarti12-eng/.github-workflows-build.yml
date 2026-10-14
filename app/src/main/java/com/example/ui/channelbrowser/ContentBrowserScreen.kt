@@ -96,6 +96,7 @@ import com.example.model.StreamFormat
 import com.example.ui.Screen
 import com.example.ui.locale.LocalAppLanguage
 import com.example.ui.locale.LocalAppStrings
+import com.example.ui.locale.LocalMiniPlayerActive
 import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.AccentRed
 import com.example.ui.theme.PureWhite
@@ -243,6 +244,9 @@ fun ContentBrowserScreen(
     // Live TV Landscape View Mode: true = Square Logo Grid, false = Full-Width 1-Column List
     var isLiveGridView by remember { mutableStateOf(true) }
 
+    val isMiniPlayerActive = LocalMiniPlayerActive.current
+    val contentBottomPadding = if (isMiniPlayerActive) 140.dp else 48.dp
+
     val handleItemClick = { item: IptvItem ->
         if (item.type == IptvType.SERIES) {
             onOpenSeries?.invoke(item) ?: onPlayItem(item)
@@ -314,7 +318,7 @@ fun ContentBrowserScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f),
-                            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 28.dp),
+                            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = contentBottomPadding),
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
@@ -345,7 +349,7 @@ fun ContentBrowserScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f),
-                            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 28.dp),
+                            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = contentBottomPadding),
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
@@ -375,7 +379,7 @@ fun ContentBrowserScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f),
-                            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 28.dp),
+                            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = contentBottomPadding),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             if (items.isEmpty()) {
@@ -436,7 +440,7 @@ fun ContentBrowserScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f),
-                        contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
+                        contentPadding = PaddingValues(top = 4.dp, bottom = contentBottomPadding),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
@@ -466,7 +470,7 @@ fun ContentBrowserScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f),
-                        contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
+                        contentPadding = PaddingValues(top = 4.dp, bottom = contentBottomPadding),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         if (items.isEmpty()) {
@@ -541,11 +545,14 @@ fun CategorySidebar(
 
         Spacer(modifier = Modifier.height(6.dp))
 
+        val isMiniPlayerActive = LocalMiniPlayerActive.current
+        val sidebarBottomPadding = if (isMiniPlayerActive) 100.dp else 28.dp
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
-            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+            contentPadding = PaddingValues(start = 6.dp, top = 2.dp, end = 6.dp, bottom = sidebarBottomPadding),
             verticalArrangement = Arrangement.spacedBy(3.dp)
         ) {
             item {

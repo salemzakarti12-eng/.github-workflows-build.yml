@@ -80,6 +80,7 @@ import com.example.parser.XtreamUrlDetector
 import com.example.ui.components.LanguageToggleButton
 import com.example.ui.locale.LocalAppLanguage
 import com.example.ui.locale.LocalAppStrings
+import com.example.ui.locale.LocalMiniPlayerActive
 import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.AccentEmerald
 import com.example.ui.theme.AccentRed
@@ -309,9 +310,16 @@ fun SourcesScreen(
             }
         }
 
+        val isMiniPlayerActive = LocalMiniPlayerActive.current
+
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                top = 16.dp,
+                bottom = if (isMiniPlayerActive) 140.dp else 48.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             when (selectedTab) {

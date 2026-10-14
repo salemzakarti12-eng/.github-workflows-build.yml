@@ -28,5 +28,6 @@ data class PlayerUiState(
     val isQuickChannelListOpen: Boolean = false,
     val audioTracks: List<TrackOption> = emptyList(),
     val subtitleTracks: List<TrackOption> = emptyList(),
-    val isSubtitleOff: Boolean = false
+    val isSubtitleOff: Boolean = false,
+    val reconnectAttempt: Int = 0
 )

@@ -84,6 +84,7 @@ import com.example.ui.channelbrowser.ContentBrowserScreen
 import com.example.ui.dashboard.DashboardScreen
 import com.example.ui.locale.LocalAppLanguage
 import com.example.ui.locale.LocalAppStrings
+import com.example.ui.locale.LocalMiniPlayerActive
 import com.example.ui.locale.getAppStrings
 import com.example.ui.player.VideoPlayerScreen
 import com.example.ui.series.SeriesDetailScreen
@@ -262,181 +263,206 @@ fun HypnoStreamApp(viewModel: MainViewModel = viewModel()) {
             }
         }
 
-        if (isLandscape) {
-            // Landscape layout: Compact side NavigationRail
-            Row(
+        val currentLanguage = LocalAppLanguage.current
+        val isAr = currentLanguage == "ar"
+        val layoutDirection = if (isAr) LayoutDirection.Rtl else LayoutDirection.Ltr
+
+        val navigationRailContent = @Composable {
+            NavigationRail(
+                containerColor = Slate900,
+                contentColor = PureWhite,
+                modifier = Modifier
+                    .width(72.dp)
+                    .fillMaxHeight()
+                    .border(androidx.compose.foundation.BorderStroke(1.dp, Slate800))
+                    .testTag("main_navigation_rail")
+            ) {
+                Spacer(modifier = Modifier.height(10.dp))
+                navItems.forEach { (screen, icon, label) ->
+                    val isSelected = currentScreen == screen || (screen == Screen.SERIES && currentScreen == Screen.SERIES_DETAIL)
+                    val navInteraction = remember { MutableInteractionSource() }
+                    val isNavFocused by navInteraction.collectIsFocusedAsState()
+
+                    NavigationRailItem(
+                        selected = isSelected,
+                        onClick = { viewModel.navigateTo(screen) },
+                        interactionSource = navInteraction,
+                        icon = {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = label,
+                                tint = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
+                                modifier = Modifier.size(if (isNavFocused) 24.dp else 20.dp)
+                            )
+                        },
+                        label = {
+                            Text(
+                                text = label,
+                                fontSize = 10.sp,
+                                fontWeight = if (isSelected || isNavFocused) FontWeight.Bold else FontWeight.SemiBold,
+                                color = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
+                                maxLines = 1
+                            )
+                        },
+                        colors = navigationRailItemColors(),
+                        modifier = Modifier
+                            .focusable(interactionSource = navInteraction)
+                            .border(
+                                width = if (isNavFocused) 2.dp else 0.dp,
+                                color = if (isNavFocused) AccentCyan else Color.Transparent,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .onPreviewKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyUp &&
+                                    (event.key == Key.DirectionCenter ||
+                                     event.key == Key.Enter ||
+                                     event.key == Key.NumPadEnter)
+                                ) {
+                                    viewModel.navigateTo(screen)
+                                    true
+                                } else false
+                            }
+                            .testTag("nav_rail_${label.lowercase().replace(" ", "_")}")
+                    )
+                }
+            }
+        }
+
+        val mainContentArea = @Composable {
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Slate950)
             ) {
-                NavigationRail(
-                    containerColor = Slate900,
-                    contentColor = PureWhite,
-                    modifier = Modifier
-                        .width(72.dp)
-                        .fillMaxHeight()
-                        .border(androidx.compose.foundation.BorderStroke(1.dp, Slate800))
-                        .testTag("main_navigation_rail")
-                ) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    navItems.forEach { (screen, icon, label) ->
-                        val isSelected = currentScreen == screen || (screen == Screen.SERIES && currentScreen == Screen.SERIES_DETAIL)
-                        val navInteraction = remember { MutableInteractionSource() }
-                        val isNavFocused by navInteraction.collectIsFocusedAsState()
-
-                        NavigationRailItem(
-                            selected = isSelected,
-                            onClick = { viewModel.navigateTo(screen) },
-                            interactionSource = navInteraction,
-                            icon = {
-                                Icon(
-                                    imageVector = icon,
-                                    contentDescription = label,
-                                    tint = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
-                                    modifier = Modifier.size(if (isNavFocused) 24.dp else 20.dp)
-                                )
-                            },
-                            label = {
-                                Text(
-                                    text = label,
-                                    fontSize = 10.sp,
-                                    fontWeight = if (isSelected || isNavFocused) FontWeight.Bold else FontWeight.SemiBold,
-                                    color = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
-                                    maxLines = 1
-                                )
-                            },
-                            colors = navigationRailItemColors(),
-                            modifier = Modifier
-                                .focusable(interactionSource = navInteraction)
-                                .border(
-                                    width = if (isNavFocused) 2.dp else 0.dp,
-                                    color = if (isNavFocused) AccentCyan else Color.Transparent,
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                                .onPreviewKeyEvent { event ->
-                                    if (event.type == KeyEventType.KeyUp &&
-                                        (event.key == Key.DirectionCenter ||
-                                         event.key == Key.Enter ||
-                                         event.key == Key.NumPadEnter)
-                                    ) {
-                                        viewModel.navigateTo(screen)
-                                        true
-                                    } else false
-                                }
-                                .testTag("nav_rail_${label.lowercase().replace(" ", "_")}")
-                        )
-                    }
-                }
-
-                Column(
+                Box(
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxHeight()
+                        .fillMaxWidth()
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                    ) {
-                        screenContent()
-                    }
+                    screenContent()
+                }
 
-                    if (playerUiState.currentItem != null) {
-                        MiniPlayerBar(
-                            item = playerUiState.currentItem!!,
-                            isPlaying = playerUiState.isPlaying,
-                            isCompact = true,
-                            onExpand = { viewModel.navigateTo(Screen.PLAYER) },
-                            onTogglePlayPause = { viewModel.playerManager.togglePlayPause() },
-                            onDismiss = { viewModel.dismissMiniPlayer() }
-                        )
+                if (playerUiState.currentItem != null) {
+                    MiniPlayerBar(
+                        item = playerUiState.currentItem!!,
+                        isPlaying = playerUiState.isPlaying,
+                        isCompact = true,
+                        onExpand = { viewModel.navigateTo(Screen.PLAYER) },
+                        onTogglePlayPause = { viewModel.playerManager.togglePlayPause() },
+                        onDismiss = { viewModel.dismissMiniPlayer() }
+                    )
+                }
+            }
+        }
+
+        if (isLandscape) {
+            // Landscape layout:
+            // When Arabic (ar) is active, LocalLayoutDirection is RTL.
+            // In Compose, Row lays out children from Start to End.
+            // In RTL, Start is the RIGHT edge of the screen, so the navigation rail is placed on the far right.
+            // In LTR, Start is the LEFT edge of the screen, so the navigation rail is placed on the far left.
+            CompositionLocalProvider(
+                LocalMiniPlayerActive provides (playerUiState.currentItem != null),
+                LocalLayoutDirection provides layoutDirection
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Slate950)
+                ) {
+                    navigationRailContent()
+                    Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                        mainContentArea()
                     }
                 }
             }
         } else {
             // Portrait layout: Standard Scaffold with bottom navigation bar and mini player
-            Scaffold(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Slate950),
-                bottomBar = {
-                    Column(modifier = Modifier.navigationBarsPadding()) {
-                        if (playerUiState.currentItem != null) {
-                            MiniPlayerBar(
-                                item = playerUiState.currentItem!!,
-                                isPlaying = playerUiState.isPlaying,
-                                isCompact = false,
-                                onExpand = { viewModel.navigateTo(Screen.PLAYER) },
-                                onTogglePlayPause = { viewModel.playerManager.togglePlayPause() },
-                                onDismiss = { viewModel.dismissMiniPlayer() }
-                            )
-                        }
-
-                        NavigationBar(
-                            containerColor = Slate900,
-                            contentColor = PureWhite,
-                            modifier = Modifier
-                                .height(68.dp)
-                                .border(androidx.compose.foundation.BorderStroke(1.dp, Slate800))
-                                .testTag("main_navigation_bar")
-                        ) {
-                            navItems.forEach { (screen, icon, label) ->
-                                val isSelected = currentScreen == screen || (screen == Screen.SERIES && currentScreen == Screen.SERIES_DETAIL)
-                                val navInteraction = remember { MutableInteractionSource() }
-                                val isNavFocused by navInteraction.collectIsFocusedAsState()
-
-                                NavigationBarItem(
-                                    selected = isSelected,
-                                    onClick = { viewModel.navigateTo(screen) },
-                                    interactionSource = navInteraction,
-                                    icon = {
-                                        Icon(
-                                            imageVector = icon,
-                                            contentDescription = label,
-                                            tint = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
-                                            modifier = Modifier.size(if (isNavFocused) 26.dp else 22.dp)
-                                        )
-                                    },
-                                    label = {
-                                        Text(
-                                            text = label,
-                                            fontSize = 11.sp,
-                                            fontWeight = if (isSelected || isNavFocused) FontWeight.Bold else FontWeight.SemiBold,
-                                            color = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400
-                                        )
-                                    },
-                                    colors = navigationBarItemColors(),
-                                    modifier = Modifier
-                                        .focusable(interactionSource = navInteraction)
-                                        .border(
-                                            width = if (isNavFocused) 2.dp else 0.dp,
-                                            color = if (isNavFocused) AccentCyan else Color.Transparent,
-                                            shape = RoundedCornerShape(12.dp)
-                                        )
-                                        .onPreviewKeyEvent { event ->
-                                            if (event.type == KeyEventType.KeyUp &&
-                                                (event.key == Key.DirectionCenter ||
-                                                 event.key == Key.Enter ||
-                                                 event.key == Key.NumPadEnter)
-                                            ) {
-                                                viewModel.navigateTo(screen)
-                                                true
-                                            } else false
-                                        }
-                                        .testTag("nav_item_${label.lowercase().replace(" ", "_")}")
+            CompositionLocalProvider(
+                LocalMiniPlayerActive provides (playerUiState.currentItem != null),
+                LocalLayoutDirection provides layoutDirection
+            ) {
+                Scaffold(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Slate950),
+                    bottomBar = {
+                        Column(modifier = Modifier.navigationBarsPadding()) {
+                            if (playerUiState.currentItem != null) {
+                                MiniPlayerBar(
+                                    item = playerUiState.currentItem!!,
+                                    isPlaying = playerUiState.isPlaying,
+                                    isCompact = false,
+                                    onExpand = { viewModel.navigateTo(Screen.PLAYER) },
+                                    onTogglePlayPause = { viewModel.playerManager.togglePlayPause() },
+                                    onDismiss = { viewModel.dismissMiniPlayer() }
                                 )
+                            }
+
+                            NavigationBar(
+                                containerColor = Slate900,
+                                contentColor = PureWhite,
+                                modifier = Modifier
+                                    .height(68.dp)
+                                    .border(androidx.compose.foundation.BorderStroke(1.dp, Slate800))
+                                    .testTag("main_navigation_bar")
+                            ) {
+                                navItems.forEach { (screen, icon, label) ->
+                                    val isSelected = currentScreen == screen || (screen == Screen.SERIES && currentScreen == Screen.SERIES_DETAIL)
+                                    val navInteraction = remember { MutableInteractionSource() }
+                                    val isNavFocused by navInteraction.collectIsFocusedAsState()
+
+                                    NavigationBarItem(
+                                        selected = isSelected,
+                                        onClick = { viewModel.navigateTo(screen) },
+                                        interactionSource = navInteraction,
+                                        icon = {
+                                            Icon(
+                                                imageVector = icon,
+                                                contentDescription = label,
+                                                tint = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
+                                                modifier = Modifier.size(if (isNavFocused) 26.dp else 22.dp)
+                                            )
+                                        },
+                                        label = {
+                                            Text(
+                                                text = label,
+                                                fontSize = 11.sp,
+                                                fontWeight = if (isSelected || isNavFocused) FontWeight.Bold else FontWeight.SemiBold,
+                                                color = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400
+                                            )
+                                        },
+                                        colors = navigationBarItemColors(),
+                                        modifier = Modifier
+                                            .focusable(interactionSource = navInteraction)
+                                            .border(
+                                                width = if (isNavFocused) 2.dp else 0.dp,
+                                                color = if (isNavFocused) AccentCyan else Color.Transparent,
+                                                shape = RoundedCornerShape(12.dp)
+                                            )
+                                            .onPreviewKeyEvent { event ->
+                                                if (event.type == KeyEventType.KeyUp &&
+                                                    (event.key == Key.DirectionCenter ||
+                                                     event.key == Key.Enter ||
+                                                     event.key == Key.NumPadEnter)
+                                                ) {
+                                                    viewModel.navigateTo(screen)
+                                                    true
+                                                } else false
+                                            }
+                                            .testTag("nav_item_${label.lowercase().replace(" ", "_")}")
+                                    )
+                                }
                             }
                         }
                     }
-                }
-            ) { innerPadding ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                        .statusBarsPadding()
-                ) {
-                    screenContent()
+                ) { innerPadding ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                    ) {
+                        screenContent()
+                    }
                 }
             }
         }

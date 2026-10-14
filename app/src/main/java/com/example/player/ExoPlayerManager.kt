@@ -51,6 +51,8 @@ class ExoPlayerManager(
 
     private var progressJob: Job? = null
     private var controlsHideJob: Job? = null
+    private var retryCount = 0
+    private var retryJob: Job? = null
 
     init {
         player.addListener(object : Player.Listener {
@@ -63,11 +65,14 @@ class ExoPlayerManager(
                         )
                     }
                     Player.STATE_READY -> {
+                        retryCount = 0
+                        retryJob?.cancel()
                         _uiState.value = _uiState.value.copy(
                             isBuffering = false,
                             isPlaying = player.isPlaying,
                             durationMs = player.duration.coerceAtLeast(0L),
-                            errorMessage = null
+                            errorMessage = null,
+                            reconnectAttempt = 0
                         )
                         updateTracksState(player.currentTracks)
                     }
@@ -96,6 +101,30 @@ class ExoPlayerManager(
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                val current = _uiState.value.currentItem
+                // Automatically attempt to reconnect up to 4 times with a 2-second delay
+                if (current != null && retryCount < 4) {
+                    retryCount++
+                    _uiState.value = _uiState.value.copy(
+                        isBuffering = true,
+                        isPlaying = false,
+                        errorMessage = null,
+                        reconnectAttempt = retryCount
+                    )
+                    retryJob?.cancel()
+                    retryJob = coroutineScope.launch {
+                        delay(2000)
+                        if (isActive && _uiState.value.currentItem?.id == current.id) {
+                            try {
+                                player.stop()
+                            } catch (_: Exception) {}
+                            executePlay(current)
+                        }
+                    }
+                    return
+                }
+
+                // Only if all 4 reconnection attempts fail, display the error overlay
                 val errorDetails = when (error.errorCode) {
                     PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
                     PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
@@ -105,13 +134,14 @@ class ExoPlayerManager(
                     PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
                     PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED ->
                         "Invalid stream format (.m3u8/.ts playlist error)."
-                    else -> error.localizedMessage ?: "Playback error occurred"
+                    else -> error.localizedMessage ?: "Stream not working / Playback error occurred"
                 }
 
                 _uiState.value = _uiState.value.copy(
                     isBuffering = false,
                     isPlaying = false,
-                    errorMessage = errorDetails
+                    errorMessage = errorDetails,
+                    reconnectAttempt = 0
                 )
             }
 
@@ -122,11 +152,18 @@ class ExoPlayerManager(
     }
 
     fun playItem(item: IptvItem) {
+        retryCount = 0
+        retryJob?.cancel()
+        executePlay(item)
+    }
+
+    private fun executePlay(item: IptvItem) {
         _uiState.value = _uiState.value.copy(
             currentItem = item,
             isBuffering = true,
             errorMessage = null,
-            isControlsVisible = true
+            isControlsVisible = true,
+            reconnectAttempt = retryCount
         )
 
         try {
@@ -154,10 +191,26 @@ class ExoPlayerManager(
 
             scheduleControlsAutoHide()
         } catch (e: Exception) {
-            _uiState.value = _uiState.value.copy(
-                isBuffering = false,
-                errorMessage = "Failed to load stream: ${e.localizedMessage}"
-            )
+            if (retryCount < 4) {
+                retryCount++
+                _uiState.value = _uiState.value.copy(
+                    isBuffering = true,
+                    reconnectAttempt = retryCount
+                )
+                retryJob?.cancel()
+                retryJob = coroutineScope.launch {
+                    delay(2000)
+                    if (isActive && _uiState.value.currentItem?.id == item.id) {
+                        executePlay(item)
+                    }
+                }
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    isBuffering = false,
+                    errorMessage = "Failed to load stream: ${e.localizedMessage}",
+                    reconnectAttempt = 0
+                )
+            }
         }
     }
 
@@ -345,6 +398,8 @@ class ExoPlayerManager(
     fun stop() {
         progressJob?.cancel()
         controlsHideJob?.cancel()
+        retryJob?.cancel()
+        retryCount = 0
         player.stop()
         player.clearMediaItems()
         _uiState.value = PlayerUiState()
@@ -353,6 +408,8 @@ class ExoPlayerManager(
     fun release() {
         progressJob?.cancel()
         controlsHideJob?.cancel()
+        retryJob?.cancel()
+        retryCount = 0
         player.release()
     }
 }

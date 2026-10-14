@@ -386,7 +386,12 @@ fun VideoPlayerScreen(
                     )
                     Spacer(modifier = Modifier.height(14.dp))
                     Text(
-                        text = if (isAr) "جاري تحميل البث..." else "Buffering Stream...",
+                        text = if (uiState.reconnectAttempt > 0) {
+                            if (isAr) "إعادة الاتصال بالبث... (${uiState.reconnectAttempt} من 4)"
+                            else "Reconnecting stream... (${uiState.reconnectAttempt} of 4)"
+                        } else {
+                            if (isAr) "جاري تحميل البث..." else "Buffering Stream..."
+                        },
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = PureWhite

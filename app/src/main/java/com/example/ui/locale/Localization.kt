@@ -311,6 +311,7 @@ fun getAppStrings(language: String): AppStrings {
 
 val LocalAppLanguage = staticCompositionLocalOf { "en" }
 val LocalAppStrings = staticCompositionLocalOf { EnglishStrings }
+val LocalMiniPlayerActive = staticCompositionLocalOf { false }
 
 object AppLanguageManager {
     const val PREF_KEY_LANGUAGE = "app_language"

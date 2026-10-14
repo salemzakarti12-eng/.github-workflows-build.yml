@@ -379,26 +379,48 @@ class IptvRepository(context: Context) {
     }
 
     private fun downloadM3uStream(url: String): List<IptvItem> {
-        val req = Request.Builder()
-            .url(url)
-            .header("User-Agent", "IPTVSmartersPlayer")
-            .header("Accept", "*/*")
-            .build()
+        var attempts = 0
+        var lastException: Exception? = null
 
-        val resp = httpClient.newCall(req).execute()
-        if (!resp.isSuccessful) {
-            throw Exception("HTTP ${resp.code}: Failed to download playlist")
-        }
+        while (attempts < 4) {
+            attempts++
+            try {
+                val req = Request.Builder()
+                    .url(url)
+                    .header("User-Agent", "IPTVSmartersPlayer")
+                    .header("Accept", "*/*")
+                    .build()
 
-        val body = resp.body ?: throw Exception("Empty playlist stream")
-        val bufferedReader = body.byteStream().bufferedReader(Charsets.UTF_8)
-        return M3uParser.parseStream(bufferedReader) { progress ->
-            _statusMessage.value = if (isAr) {
-                "جاري تحميل القنوات... تم العثور على %,d".format(progress.totalCount)
-            } else {
-                "Loading streams... %,d found".format(progress.totalCount)
+                val resp = httpClient.newCall(req).execute()
+                if (!resp.isSuccessful) {
+                    resp.close()
+                    throw Exception("HTTP ${resp.code}: Failed to download playlist")
+                }
+
+                val body = resp.body ?: throw Exception("Empty playlist stream")
+                val bufferedReader = body.byteStream().bufferedReader(Charsets.UTF_8)
+                return M3uParser.parseStream(bufferedReader) { progress ->
+                    _statusMessage.value = if (isAr) {
+                        "جاري تحميل القنوات... تم العثور على %,d".format(progress.totalCount)
+                    } else {
+                        "Loading streams... %,d found".format(progress.totalCount)
+                    }
+                }
+            } catch (e: Exception) {
+                lastException = e
+                if (attempts < 4) {
+                    _statusMessage.value = if (isAr) {
+                        "إعادة محاولة الاتصال ($attempts من 4)..."
+                    } else {
+                        "Retrying connection ($attempts of 4)..."
+                    }
+                    try {
+                        Thread.sleep(2000)
+                    } catch (_: InterruptedException) {}
+                }
             }
         }
+        throw lastException ?: Exception("Failed to load stream after 4 attempts")
     }
 
     suspend fun addOrUpdateXtreamSource(

@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
@@ -66,12 +67,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import com.example.model.IptvItem
 import com.example.model.IptvSource
 import com.example.ui.Screen
 import com.example.ui.components.LanguageToggleButton
 import com.example.ui.components.tvFocusable
+import com.example.ui.locale.LocalAppLanguage
 import com.example.ui.locale.LocalAppStrings
+import com.example.ui.locale.LocalMiniPlayerActive
 import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.AccentEmerald
 import com.example.ui.theme.MoviesGradient
@@ -102,17 +108,21 @@ fun DashboardScreen(
     modifier: Modifier = Modifier
 ) {
     val strings = LocalAppStrings.current
+    val isAr = LocalAppLanguage.current == "ar"
+    val isMiniPlayerActive = LocalMiniPlayerActive.current
+    val layoutDirection = if (isAr) LayoutDirection.Rtl else LayoutDirection.Ltr
 
-    BoxWithConstraints(modifier = modifier.fillMaxSize().background(Slate950)) {
-        val isTv = com.example.util.LocalIsTelevision.current
-        val isWideScreen = maxWidth >= 600.dp || isTv
+    CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
+        BoxWithConstraints(modifier = modifier.fillMaxSize().background(Slate950)) {
+            val isTv = com.example.util.LocalIsTelevision.current
+            val isWideScreen = maxWidth >= 600.dp || isTv
 
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .testTag("dashboard_screen"),
-            contentPadding = PaddingValues(bottom = 36.dp)
-        ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag("dashboard_screen"),
+                contentPadding = PaddingValues(bottom = if (isMiniPlayerActive) 160.dp else 80.dp)
+            ) {
             // Top App Bar / Provider Status Header
             item {
                 DashboardHeader(
@@ -268,8 +278,13 @@ fun DashboardScreen(
                     )
                 }
             }
+
+            item {
+                Spacer(modifier = Modifier.height(if (isMiniPlayerActive) 48.dp else 24.dp))
+            }
         }
     }
+}
 }
 
 @Composable
@@ -372,6 +387,7 @@ fun SourceInfoBanner(
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val strings = LocalAppStrings.current
+    val isAr = LocalAppLanguage.current == "ar"
 
     Surface(
         modifier = Modifier
@@ -444,7 +460,7 @@ fun SourceInfoBanner(
                     color = AccentCyan
                 )
                 Icon(
-                    imageVector = Icons.Default.ChevronRight,
+                    imageVector = if (isAr) Icons.Default.ChevronLeft else Icons.Default.ChevronRight,
                     contentDescription = null,
                     tint = AccentCyan,
                     modifier = Modifier.size(16.dp)
@@ -469,6 +485,7 @@ fun HypnotixGradientCard(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
+    val isAr = LocalAppLanguage.current == "ar"
 
     val scale by animateFloatAsState(
         targetValue = if (isFocused) 1.05f else 1f,
@@ -602,7 +619,7 @@ fun HypnotixGradientCard(
                         modifier = Modifier.weight(1f)
                     )
                     Icon(
-                        imageVector = Icons.Default.ChevronRight,
+                        imageVector = if (isAr) Icons.Default.ChevronLeft else Icons.Default.ChevronRight,
                         contentDescription = "Open",
                         tint = PureWhite,
                         modifier = Modifier.size(18.dp)
