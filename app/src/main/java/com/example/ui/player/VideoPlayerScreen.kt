@@ -1,5 +1,8 @@
 package com.example.ui.player
 
+import android.app.Activity
+import android.content.Context
+import android.media.AudioManager
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
@@ -13,6 +16,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -35,8 +39,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material.icons.filled.BrightnessHigh
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.ErrorOutline
@@ -50,6 +56,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Slider
@@ -60,13 +67,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
@@ -74,9 +82,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -92,6 +101,7 @@ import com.example.model.IptvItem
 import com.example.model.IptvType
 import com.example.model.PlayerUiState
 import com.example.player.ExoPlayerManager
+import com.example.ui.locale.LocalAppLanguage
 import com.example.ui.locale.LocalAppStrings
 import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.AccentRed
@@ -104,6 +114,8 @@ import com.example.ui.theme.Slate850
 import com.example.ui.theme.Slate900
 import com.example.ui.theme.Slate950
 import java.util.Locale
+import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -118,6 +130,34 @@ fun VideoPlayerScreen(
     modifier: Modifier = Modifier
 ) {
     val strings = LocalAppStrings.current
+    val isAr = LocalAppLanguage.current == "ar"
+    val context = LocalContext.current
+    val activity = context as? Activity
+    val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+
+    // Invisible Gesture States (Left = Volume, Right = Brightness)
+    var isGestureActive by remember { mutableStateOf(false) }
+    var gestureType by remember { mutableStateOf("") } // "volume" or "brightness"
+    var gesturePercent by remember { mutableIntStateOf(0) }
+    var gestureHideTrigger by remember { mutableIntStateOf(0) }
+
+    var volumeFraction by remember {
+        val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+        val cur = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+        mutableFloatStateOf(cur.toFloat() / max.toFloat())
+    }
+
+    var brightnessFraction by remember {
+        val winAttr = activity?.window?.attributes?.screenBrightness ?: -1f
+        mutableFloatStateOf(if (winAttr in 0.01f..1.0f) winAttr else 0.5f)
+    }
+
+    LaunchedEffect(gestureHideTrigger) {
+        if (gestureHideTrigger > 0) {
+            delay(850)
+            isGestureActive = false
+        }
+    }
 
     // Back Handler: pressing Back returns to channel list
     BackHandler {
@@ -152,22 +192,18 @@ fun VideoPlayerScreen(
                     when (event.key) {
                         Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
                             if (!uiState.isControlsVisible) {
-                                // Bring up HUD playback controls
                                 playerManager.showControlsTemporarily()
                             } else {
-                                // Toggle Play/Pause when HUD is already shown
                                 playerManager.togglePlayPause()
                             }
                             true
                         }
                         Key.DirectionUp -> {
-                            // Switch to previous channel
                             onPlayPrevious()
                             playerManager.showControlsTemporarily()
                             true
                         }
                         Key.DirectionDown -> {
-                            // Switch to next channel
                             onPlayNext()
                             playerManager.showControlsTemporarily()
                             true
@@ -184,6 +220,54 @@ fun VideoPlayerScreen(
                     }
                 } else false
             }
+            .pointerInput(Unit) {
+                var isLeftZone = true
+                detectVerticalDragGestures(
+                    onDragStart = { offset ->
+                        // Left 50% of screen = Volume | Right 50% of screen = Brightness
+                        isLeftZone = offset.x < (size.width / 2f)
+                        val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+                        val curVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                        volumeFraction = curVol.toFloat() / maxVol.toFloat()
+
+                        val curBright = activity?.window?.attributes?.screenBrightness ?: -1f
+                        if (curBright in 0.01f..1.0f) {
+                            brightnessFraction = curBright
+                        }
+                    },
+                    onVerticalDrag = { change, dragAmount ->
+                        change.consume()
+                        val heightPx = size.height.coerceAtLeast(1).toFloat()
+                        val delta = -dragAmount / (heightPx * 0.75f)
+
+                        if (isLeftZone) {
+                            volumeFraction = (volumeFraction + delta).coerceIn(0f, 1f)
+                            val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+                            val targetVol = (volumeFraction * maxVol).roundToInt().coerceIn(0, maxVol)
+                            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
+                            gestureType = "volume"
+                            gesturePercent = (volumeFraction * 100).roundToInt()
+                            isGestureActive = true
+                        } else {
+                            brightnessFraction = (brightnessFraction + delta).coerceIn(0.01f, 1f)
+                            activity?.window?.let { win ->
+                                val params = win.attributes
+                                params.screenBrightness = brightnessFraction
+                                win.attributes = params
+                            }
+                            gestureType = "brightness"
+                            gesturePercent = (brightnessFraction * 100).roundToInt()
+                            isGestureActive = true
+                        }
+                    },
+                    onDragEnd = {
+                        gestureHideTrigger++
+                    },
+                    onDragCancel = {
+                        gestureHideTrigger++
+                    }
+                )
+            }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
@@ -192,7 +276,7 @@ fun VideoPlayerScreen(
             }
             .testTag("video_player_screen")
     ) {
-        // Player Video Frame: Preserves proper 16:9 aspect ratio or fits responsive dimensions
+        // Player Video Frame
         val playerModifier = when (uiState.aspectRatioMode) {
             AspectRatioMode.SIXTEEN_BY_NINE -> Modifier.fillMaxWidth().aspectRatio(16f / 9f).align(Alignment.Center)
             AspectRatioMode.FOUR_BY_THREE -> Modifier.fillMaxWidth().aspectRatio(4f / 3f).align(Alignment.Center)
@@ -205,8 +289,8 @@ fun VideoPlayerScreen(
         ) {
             AndroidView(
                 modifier = playerModifier,
-                factory = { context ->
-                    PlayerView(context).apply {
+                factory = { ctx ->
+                    PlayerView(ctx).apply {
                         player = playerManager.player
                         useController = false
                         layoutParams = FrameLayout.LayoutParams(
@@ -231,6 +315,55 @@ fun VideoPlayerScreen(
             )
         }
 
+        // Temporary Gesture HUD Overlay (Invisible unless actively swiping Left/Right)
+        AnimatedVisibility(
+            visible = isGestureActive,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.Center)
+        ) {
+            Surface(
+                color = Color(0xD90F172A),
+                shape = RoundedCornerShape(18.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, AccentCyan)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(horizontal = 24.dp, vertical = 18.dp)
+                        .width(150.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = if (gestureType == "volume") Icons.AutoMirrored.Filled.VolumeUp else Icons.Default.BrightnessHigh,
+                        contentDescription = null,
+                        tint = AccentCyan,
+                        modifier = Modifier.size(34.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = if (gestureType == "volume") {
+                            if (isAr) "الصوت $gesturePercent%" else "Volume $gesturePercent%"
+                        } else {
+                            if (isAr) "السطوع $gesturePercent%" else "Brightness $gesturePercent%"
+                        },
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PureWhite
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    LinearProgressIndicator(
+                        progress = { (gesturePercent / 100f).coerceIn(0f, 1f) },
+                        color = AccentCyan,
+                        trackColor = Slate700,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                    )
+                }
+            }
+        }
+
         // Buffering Indicator Overlay
         if (uiState.isBuffering) {
             Box(
@@ -253,7 +386,7 @@ fun VideoPlayerScreen(
                     )
                     Spacer(modifier = Modifier.height(14.dp))
                     Text(
-                        text = "Buffering Stream...",
+                        text = if (isAr) "جاري تحميل البث..." else "Buffering Stream...",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = PureWhite
@@ -299,7 +432,7 @@ fun VideoPlayerScreen(
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "Playback Error",
+                            text = if (isAr) "خطأ في التشغيل" else "Playback Error",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = PureWhite
@@ -328,7 +461,12 @@ fun VideoPlayerScreen(
                                 ) {
                                     Icon(Icons.Default.Refresh, null, tint = Slate950, modifier = Modifier.size(18.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Retry Stream", color = Slate950, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Text(
+                                        text = if (isAr) "إعادة المحاولة" else "Retry Stream",
+                                        color = Slate950,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp
+                                    )
                                 }
                             }
 
@@ -340,7 +478,7 @@ fun VideoPlayerScreen(
                                     .clickable { onBack() }
                             ) {
                                 Text(
-                                    text = "Return",
+                                    text = if (isAr) "رجوع" else "Return",
                                     color = PureWhite,
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 13.sp,
@@ -451,7 +589,7 @@ fun VideoPlayerScreen(
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
-                                            text = "LIVE",
+                                            text = if (isAr) "مباشر" else "LIVE",
                                             fontSize = 9.sp,
                                             fontWeight = FontWeight.Black,
                                             color = PureWhite
@@ -460,7 +598,7 @@ fun VideoPlayerScreen(
                                 }
 
                                 Text(
-                                    text = currentItem?.group ?: "General",
+                                    text = currentItem?.group ?: "",
                                     fontSize = 11.sp,
                                     color = Slate300
                                 )
@@ -561,7 +699,7 @@ fun VideoPlayerScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = strings.audio,
+                                    text = if (isAr) "الصوت" else strings.audio,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isAudioFocused) Slate950 else PureWhite
@@ -610,7 +748,7 @@ fun VideoPlayerScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = strings.subtitles,
+                                    text = if (isAr) "الترجمة" else strings.subtitles,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isSubFocused) Slate950 else PureWhite
@@ -811,7 +949,7 @@ fun VideoPlayerScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = currentItem?.currentProgram ?: "Live Broadcast Stream",
+                                text = currentItem?.currentProgram ?: if (isAr) "بث مباشر" else "Live Broadcast Stream",
                                 fontSize = 14.sp,
                                 color = PureWhite,
                                 fontWeight = FontWeight.SemiBold,
@@ -820,7 +958,7 @@ fun VideoPlayerScreen(
                                 modifier = Modifier.weight(1f)
                             )
                             Text(
-                                text = "TV Remote: Up / Down switches channel  •  OK toggles HUD",
+                                text = if (isAr) "اسحب يساراً للصوت • يميناً للسطوع" else "Swipe Left: Volume • Right: Brightness",
                                 fontSize = 11.sp,
                                 color = Slate400
                             )
@@ -830,7 +968,7 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Quick Channel Switcher Drawer (Slide-in from right)
+        // Quick Channel Switcher Drawer (Slide-in from side)
         AnimatedVisibility(
             visible = uiState.isQuickChannelListOpen,
             enter = slideInHorizontally(initialOffsetX = { it }),
@@ -854,7 +992,7 @@ fun VideoPlayerScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Channel List",
+                            text = if (isAr) "قائمة القنوات" else "Channel List",
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
                             color = PureWhite
@@ -958,14 +1096,18 @@ fun VideoPlayerScreen(
             containerColor = Slate900,
             title = {
                 Text(
-                    text = strings.selectAudioTrack,
+                    text = if (isAr) "اختر المسار الصوتي" else strings.selectAudioTrack,
                     fontWeight = FontWeight.Bold,
                     color = PureWhite
                 )
             },
             text = {
                 if (uiState.audioTracks.isEmpty()) {
-                    Text("No alternate audio tracks available.", color = Slate400, fontSize = 14.sp)
+                    Text(
+                        text = if (isAr) "لا توجد مسارات صوتية إضافية متاحة." else "No alternate audio tracks available.",
+                        color = Slate400,
+                        fontSize = 14.sp
+                    )
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxWidth(),
@@ -1027,7 +1169,7 @@ fun VideoPlayerScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showAudioDialog = false }) {
-                    Text(strings.close, color = AccentCyan, fontWeight = FontWeight.Bold)
+                    Text(if (isAr) "إغلاق" else strings.close, color = AccentCyan, fontWeight = FontWeight.Bold)
                 }
             }
         )
@@ -1039,7 +1181,7 @@ fun VideoPlayerScreen(
             containerColor = Slate900,
             title = {
                 Text(
-                    text = strings.selectSubtitleTrack,
+                    text = if (isAr) "اختر لغة الترجمة" else strings.selectSubtitleTrack,
                     fontWeight = FontWeight.Bold,
                     color = PureWhite
                 )
@@ -1093,7 +1235,7 @@ fun VideoPlayerScreen(
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                text = strings.off,
+                                text = if (isAr) "إيقاف الترجمة" else strings.off,
                                 color = if (uiState.isSubtitleOff) AccentCyan else PureWhite,
                                 fontSize = 14.sp,
                                 fontWeight = if (uiState.isSubtitleOff) FontWeight.Bold else FontWeight.Normal
@@ -1104,7 +1246,7 @@ fun VideoPlayerScreen(
                     if (uiState.subtitleTracks.isEmpty()) {
                         item {
                             Text(
-                                text = "No embedded subtitle streams detected.",
+                                text = if (isAr) "لا توجد ترجمة مدمجة في هذا الفيديو." else "No embedded subtitle streams detected.",
                                 color = Slate400,
                                 fontSize = 13.sp,
                                 modifier = Modifier.padding(start = 12.dp, top = 6.dp)
@@ -1167,7 +1309,7 @@ fun VideoPlayerScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showSubtitleDialog = false }) {
-                    Text(strings.close, color = AccentCyan, fontWeight = FontWeight.Bold)
+                    Text(if (isAr) "إغلاق" else strings.close, color = AccentCyan, fontWeight = FontWeight.Bold)
                 }
             }
         )
