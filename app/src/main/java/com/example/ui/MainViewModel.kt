@@ -47,7 +47,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedCategory = MutableStateFlow("All")
     val selectedCategory: StateFlow<String> = _selectedCategory.asStateFlow()
 
-    private val _displayLimit = MutableStateFlow(100)
+    private val _displayLimit = MutableStateFlow(120)
     val displayLimit: StateFlow<Int> = _displayLimit.asStateFlow()
 
     val sources: StateFlow<List<IptvSource>> = repository.sources
@@ -100,13 +100,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // Trigger flow whenever any playlist count or favorite changes
+    private val _dataRefreshTrigger = combine(
+        repository.totalLiveCount,
+        repository.totalMoviesCount,
+        repository.totalSeriesCount,
+        repository.favorites
+    ) { live, mov, ser, favs ->
+        live + mov + ser + favs.size
+    }
+
     // Memory-protected paginated & filtered channels for active screen and category
     val currentFilteredItems: StateFlow<List<IptvItem>> = combine(
         _currentScreen,
         _selectedCategory,
         _searchQuery,
         _displayLimit,
-        repository.totalLiveCount // triggers refresh when new playlist loaded
+        _dataRefreshTrigger
     ) { screen, category, query, limit, _ ->
         val type = when (screen) {
             Screen.LIVE_CHANNELS -> IptvType.LIVE_TV
@@ -129,7 +139,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _currentScreen.value = screen
             _searchQuery.value = ""
             _selectedCategory.value = "All"
-            _displayLimit.value = 100
+            _displayLimit.value = 120
         }
     }
 
@@ -153,16 +163,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
-        _displayLimit.value = 100
+        _displayLimit.value = 120
     }
 
     fun setSelectedCategory(cat: String) {
         _selectedCategory.value = cat
-        _displayLimit.value = 100
+        _displayLimit.value = 120
     }
 
     fun loadMoreItems() {
-        _displayLimit.value += 100
+        _displayLimit.value += 120
     }
 
     fun playStream(item: IptvItem) {
@@ -185,8 +195,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun playEpisode(episode: SeriesEpisode) {
         val series = _selectedSeries.value
-        val seriesTitle = series?.seriesTitle ?: series?.name ?: "TV Series"
-        val group = series?.group ?: "Series"
+        val isAr = currentLanguage.value == "ar"
+        val seriesTitle = series?.seriesTitle ?: series?.name ?: if (isAr) "مسلسل" else "TV Series"
+        val group = series?.group ?: if (isAr) "المسلسلات" else "Series"
         val item = episode.toIptvItem(seriesTitle, group)
         playStream(item)
     }
@@ -230,10 +241,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun connectXtream(serverUrl: String, user: String, pass: String, name: String) {
         viewModelScope.launch {
             repository.addOrUpdateXtreamSource(
-                name = name,
-                serverUrl = serverUrl,
-                username = user,
-                password = pass
+                name = name.trim(),
+                serverUrl = serverUrl.trim(),
+                username = user.trim(),
+                password = pass.trim()
             )
         }
     }
@@ -241,8 +252,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun loadM3u(url: String, content: String, name: String) {
         viewModelScope.launch {
             repository.addOrUpdateM3uSource(
-                name = name,
-                m3uUrl = url,
+                name = name.trim(),
+                m3uUrl = url.trim(),
                 rawContent = content
             )
         }
