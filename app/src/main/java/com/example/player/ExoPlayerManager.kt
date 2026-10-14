@@ -133,18 +133,22 @@ class ExoPlayerManager(
             val uri = Uri.parse(item.streamUrl.trim())
             val format = item.detectFormat()
 
-            val mediaSource = if (format == StreamFormat.HLS || item.streamUrl.contains(".m3u8", ignoreCase = true)) {
-                HlsMediaSource.Factory(httpDataSourceFactory)
+            val mediaItem = MediaItem.Builder()
+                .setUri(uri)
+                .setMediaId(item.id)
+                .build()
+
+            // Instant Channel Zapping (Zero Pause / No Lag):
+            // Hot-swap stream seamlessly in the background without auto-pausing or black screen freezes
+            if (format == StreamFormat.HLS || item.streamUrl.contains(".m3u8", ignoreCase = true)) {
+                val mediaSource = HlsMediaSource.Factory(httpDataSourceFactory)
                     .setAllowChunklessPreparation(true)
-                    .createMediaSource(MediaItem.fromUri(uri))
+                    .createMediaSource(mediaItem)
+                player.setMediaSource(mediaSource, /* resetPosition = */ true)
             } else {
-                DefaultMediaSourceFactory(httpDataSourceFactory)
-                    .createMediaSource(MediaItem.fromUri(uri))
+                player.setMediaItem(mediaItem, /* resetPosition = */ true)
             }
 
-            player.stop()
-            player.clearMediaItems()
-            player.setMediaSource(mediaSource)
             player.prepare()
             player.playWhenReady = true
 

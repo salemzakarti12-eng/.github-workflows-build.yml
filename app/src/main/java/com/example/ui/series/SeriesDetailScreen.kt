@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.model.SeriesDetails
 import com.example.model.SeriesEpisode
+import com.example.ui.locale.LocalAppLanguage
 import com.example.ui.locale.LocalAppStrings
 import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.PureWhite
@@ -86,6 +87,7 @@ fun SeriesDetailScreen(
     modifier: Modifier = Modifier
 ) {
     val strings = LocalAppStrings.current
+    val isAr = LocalAppLanguage.current == "ar"
     var selectedSeasonIndex by remember { mutableIntStateOf(0) }
 
     val backInteraction = remember { MutableInteractionSource() }
@@ -297,7 +299,7 @@ fun SeriesDetailScreen(
             item {
                 Column(modifier = Modifier.padding(top = 14.dp, bottom = 10.dp)) {
                     Text(
-                        text = "Seasons (${seasons.size})",
+                        text = if (isAr) "المواسم (${seasons.size})" else "Seasons (${seasons.size})",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = PureWhite,
@@ -342,7 +344,7 @@ fun SeriesDetailScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = season.name,
+                                        text = if (isAr) "الموسم ${season.seasonNumber}" else season.name,
                                         fontSize = 13.sp,
                                         fontWeight = if (isSelected || isFocused) FontWeight.Bold else FontWeight.Medium,
                                         color = if (isSelected || isFocused) Slate950 else PureWhite
@@ -371,7 +373,7 @@ fun SeriesDetailScreen(
             // Episode List for Selected Season
             item {
                 Text(
-                    text = "${activeSeason.name} Episodes (${activeSeason.episodes.size})",
+                    text = if (isAr) "حلقات الموسم ${activeSeason.seasonNumber} (${activeSeason.episodes.size})" else "${activeSeason.name} Episodes (${activeSeason.episodes.size})",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = PureWhite,
@@ -451,8 +453,9 @@ fun EpisodeItemCard(
                         .background(Color(0x99000000))
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
+                    val isAr = LocalAppLanguage.current == "ar"
                     Text(
-                        text = "EP %d".format(episode.episodeNumber),
+                        text = if (isAr) "حلقة %d".format(episode.episodeNumber) else "EP %d".format(episode.episodeNumber),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = PureWhite
@@ -501,9 +504,10 @@ fun EpisodeItemCard(
                     .background(if (isFocused) PureWhite else AccentCyan),
                 contentAlignment = Alignment.Center
             ) {
+                val isAr = LocalAppLanguage.current == "ar"
                 Icon(
                     imageVector = Icons.Default.PlayArrow,
-                    contentDescription = "Play Episode",
+                    contentDescription = if (isAr) "تشغيل الحلقة" else "Play Episode",
                     tint = Slate950,
                     modifier = Modifier.size(20.dp)
                 )

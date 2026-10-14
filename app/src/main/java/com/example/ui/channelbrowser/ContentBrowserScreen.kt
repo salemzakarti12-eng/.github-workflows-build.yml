@@ -680,7 +680,7 @@ fun LiveTvGridCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .aspectRatio(1.15f)
+            .aspectRatio(1f)
             .scale(scale)
             .shadow(
                 elevation = if (isFocused) 10.dp else 2.dp,
