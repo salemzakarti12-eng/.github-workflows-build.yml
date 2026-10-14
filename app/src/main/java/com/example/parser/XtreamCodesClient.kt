@@ -29,43 +29,96 @@ data class XtreamAuthResult(
 class XtreamCodesClient(
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(25, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
         .followRedirects(true)
+        .followSslRedirects(true)
         .build()
 ) {
+    companion object {
+        const val USER_AGENT = "IPTVSmartersPlayer"
+    }
 
     suspend fun authenticateAndLoad(
         serverUrl: String,
         username: String,
         password: String
     ): XtreamAuthResult = withContext(Dispatchers.IO) {
-        val base = serverUrl.trim().removeSuffix("/")
-        val authUrl = "$base/player_api.php?username=$username&password=$password"
+        val cleanUser = username.trim()
+        val cleanPass = password.trim()
+        var rawBase = serverUrl.trim().removeSuffix("/")
+        if (!rawBase.startsWith("http://", ignoreCase = true) && !rawBase.startsWith("https://", ignoreCase = true)) {
+            rawBase = "http://$rawBase"
+        }
+
+        // Try both with :80 and without :80 if applicable
+        val candidates = buildList {
+            add(rawBase)
+            if (rawBase.endsWith(":80")) {
+                add(rawBase.removeSuffix(":80"))
+            } else if (!rawBase.matches(Regex(""".*:\d+$""")) && rawBase.startsWith("http://", ignoreCase = true)) {
+                add("$rawBase:80")
+            }
+        }.distinct()
+
+        var lastError: String? = null
+
+        for (base in candidates) {
+            val result = attemptXtreamLogin(base, cleanUser, cleanPass)
+            if (result.isSuccess) {
+                return@withContext result
+            }
+            lastError = result.serverMessage
+        }
+
+        XtreamAuthResult(
+            isSuccess = false,
+            serverMessage = lastError ?: "Authentication failed on Xtream Codes server."
+        )
+    }
+
+    private fun attemptXtreamLogin(
+        base: String,
+        cleanUser: String,
+        cleanPass: String
+    ): XtreamAuthResult {
+        val authUrl = "$base/player_api.php?username=$cleanUser&password=$cleanPass"
 
         try {
             val req = Request.Builder()
                 .url(authUrl)
-                .header("User-Agent", "HypnoStream-IPTV/1.0")
+                .header("User-Agent", USER_AGENT)
                 .build()
 
             val response = client.newCall(req).execute()
             if (!response.isSuccessful) {
-                // Try fallback to get.php m3u_plus
-                return@withContext tryM3uFallback(base, username, password)
+                return tryM3uFallback(base, cleanUser, cleanPass)
             }
 
             val body = response.body?.string().orEmpty()
             if (body.isEmpty() || !body.startsWith("{")) {
-                return@withContext tryM3uFallback(base, username, password)
+                return tryM3uFallback(base, cleanUser, cleanPass)
             }
 
             val json = JSONObject(body)
-            val userInfo = json.optJSONObject("user_info")
-            val auth = userInfo?.optInt("auth", 0) ?: 0
-            val status = userInfo?.optString("status", "Unknown") ?: "Unknown"
+            val userInfo = json.optJSONObject("user_info") ?: json
+            val authInt = userInfo.optInt("auth", -1)
+            val authStr = userInfo.optString("auth", "")
+            val authBool = userInfo.optBoolean("auth", false)
+            val status = userInfo.optString("status", "").ifBlank { json.optString("status", "Unknown") }
 
-            if (userInfo == null || (auth != 1 && !status.equals("Active", ignoreCase = true))) {
-                return@withContext XtreamAuthResult(
+            val isAuthValid = (authInt == 1) ||
+                    (authStr == "1") ||
+                    authBool ||
+                    status.equals("Active", ignoreCase = true) ||
+                    json.optInt("auth", -1) == 1 ||
+                    json.optString("auth", "") == "1"
+
+            if (!isAuthValid) {
+                // Try fallback to get.php before declaring invalid credentials
+                val fallback = tryM3uFallback(base, cleanUser, cleanPass)
+                if (fallback.isSuccess) return fallback
+
+                return XtreamAuthResult(
                     isSuccess = false,
                     serverMessage = "Invalid credentials or account inactive ($status)"
                 )
@@ -78,45 +131,42 @@ class XtreamCodesClient(
             } else "Unlimited"
 
             // Now load live categories & streams
-            val liveCategories = loadCategories(base, username, password, "get_live_categories")
-            val vodCategories = loadCategories(base, username, password, "get_vod_categories")
-            val seriesCategories = loadCategories(base, username, password, "get_series_categories")
+            val liveCategories = loadCategories(base, cleanUser, cleanPass, "get_live_categories")
+            val vodCategories = loadCategories(base, cleanUser, cleanPass, "get_vod_categories")
+            val seriesCategories = loadCategories(base, cleanUser, cleanPass, "get_series_categories")
 
             val allItems = mutableListOf<IptvItem>()
-            allItems.addAll(loadLiveStreams(base, username, password, liveCategories))
-            allItems.addAll(loadVodStreams(base, username, password, vodCategories))
-            allItems.addAll(loadSeries(base, username, password, seriesCategories))
+            allItems.addAll(loadLiveStreams(base, cleanUser, cleanPass, liveCategories))
+            allItems.addAll(loadVodStreams(base, cleanUser, cleanPass, vodCategories))
+            allItems.addAll(loadSeries(base, cleanUser, cleanPass, seriesCategories))
 
             // If empty, attempt fallback to m3u_plus
             if (allItems.isEmpty()) {
-                val fallback = tryM3uFallback(base, username, password)
+                val fallback = tryM3uFallback(base, cleanUser, cleanPass)
                 if (fallback.isSuccess && fallback.items.isNotEmpty()) {
-                    return@withContext fallback.copy(
-                        username = username,
+                    return fallback.copy(
+                        username = cleanUser,
                         status = status,
                         expirationDate = expDate
                     )
                 }
             }
 
-            XtreamAuthResult(
+            return XtreamAuthResult(
                 isSuccess = true,
-                username = username,
+                username = cleanUser,
                 status = status,
                 expirationDate = expDate,
                 serverMessage = "Connected successfully. Loaded ${allItems.size} items.",
                 items = allItems
             )
         } catch (e: Exception) {
-            // Check if fallback succeeds
-            try {
-                val fallback = tryM3uFallback(base, username, password)
-                if (fallback.isSuccess && fallback.items.isNotEmpty()) {
-                    return@withContext fallback
-                }
-            } catch (_: Exception) {}
+            val fallback = tryM3uFallback(base, cleanUser, cleanPass)
+            if (fallback.isSuccess && fallback.items.isNotEmpty()) {
+                return fallback
+            }
 
-            XtreamAuthResult(
+            return XtreamAuthResult(
                 isSuccess = false,
                 serverMessage = "Connection failed: ${e.localizedMessage ?: "Unknown error"}"
             )
@@ -132,7 +182,7 @@ class XtreamCodesClient(
         val map = mutableMapOf<String, String>()
         try {
             val url = "$base/player_api.php?username=$user&password=$pass&action=$action"
-            val req = Request.Builder().url(url).header("User-Agent", "HypnoStream-IPTV/1.0").build()
+            val req = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
             val resp = client.newCall(req).execute()
             val text = resp.body?.string().orEmpty()
             if (text.startsWith("[")) {
@@ -159,7 +209,7 @@ class XtreamCodesClient(
         val list = mutableListOf<IptvItem>()
         try {
             val url = "$base/player_api.php?username=$user&password=$pass&action=get_live_streams"
-            val req = Request.Builder().url(url).header("User-Agent", "HypnoStream-IPTV/1.0").build()
+            val req = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
             val resp = client.newCall(req).execute()
             val text = resp.body?.string().orEmpty()
             if (text.startsWith("[")) {
@@ -203,7 +253,7 @@ class XtreamCodesClient(
         val list = mutableListOf<IptvItem>()
         try {
             val url = "$base/player_api.php?username=$user&password=$pass&action=get_vod_streams"
-            val req = Request.Builder().url(url).header("User-Agent", "HypnoStream-IPTV/1.0").build()
+            val req = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
             val resp = client.newCall(req).execute()
             val text = resp.body?.string().orEmpty()
             if (text.startsWith("[")) {
@@ -248,7 +298,7 @@ class XtreamCodesClient(
         val list = mutableListOf<IptvItem>()
         try {
             val url = "$base/player_api.php?username=$user&password=$pass&action=get_series"
-            val req = Request.Builder().url(url).header("User-Agent", "HypnoStream-IPTV/1.0").build()
+            val req = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
             val resp = client.newCall(req).execute()
             val text = resp.body?.string().orEmpty()
             if (text.startsWith("[")) {
@@ -287,21 +337,30 @@ class XtreamCodesClient(
 
     private fun tryM3uFallback(base: String, user: String, pass: String): XtreamAuthResult {
         val m3uUrl = "$base/get.php?username=$user&password=$pass&type=m3u_plus&output=ts"
-        val req = Request.Builder().url(m3uUrl).header("User-Agent", "HypnoStream-IPTV/1.0").build()
-        val resp = client.newCall(req).execute()
-        if (resp.isSuccessful) {
-            val content = resp.body?.string().orEmpty()
-            if (content.contains("#EXTM3U", ignoreCase = true)) {
-                val parsed = M3uParser.parse(content)
-                return XtreamAuthResult(
-                    isSuccess = true,
-                    username = user,
-                    status = "Active",
-                    serverMessage = "Loaded via M3U Plus fallback (${parsed.size} items)",
-                    items = parsed
-                )
+        try {
+            val req = Request.Builder()
+                .url(m3uUrl)
+                .header("User-Agent", USER_AGENT)
+                .build()
+            val resp = client.newCall(req).execute()
+            if (resp.isSuccessful) {
+                val body = resp.body
+                if (body != null) {
+                    val reader = body.charStream().buffered()
+                    val parsed = M3uParser.parseStream(reader)
+                    if (parsed.isNotEmpty()) {
+                        return XtreamAuthResult(
+                            isSuccess = true,
+                            username = user,
+                            status = "Active",
+                            serverMessage = "Connected successfully via M3U Plus fallback (${parsed.size} items)",
+                            items = parsed
+                        )
+                    }
+                }
             }
-        }
+        } catch (_: Exception) {}
+
         return XtreamAuthResult(
             isSuccess = false,
             serverMessage = "Authentication failed on Xtream Codes server."
@@ -317,7 +376,7 @@ class XtreamCodesClient(
         val base = serverUrl.trim().removeSuffix("/")
         val url = "$base/player_api.php?username=$username&password=$password&action=get_series_info&series_id=$seriesId"
         try {
-            val req = Request.Builder().url(url).header("User-Agent", "HypnoStream-IPTV/1.0").build()
+            val req = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
             val resp = client.newCall(req).execute()
             val text = resp.body?.string().orEmpty()
             if (!text.startsWith("{")) return@withContext null
