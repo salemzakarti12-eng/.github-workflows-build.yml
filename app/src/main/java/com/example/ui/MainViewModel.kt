@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -40,7 +41,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _screenHistory = mutableListOf<Screen>()
 
-    // Search, category, and pagination controls
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
@@ -85,7 +85,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isSeriesLoading = MutableStateFlow(false)
     val isSeriesLoading: StateFlow<Boolean> = _isSeriesLoading.asStateFlow()
 
-    // Categories list for current screen
+    // Flattened list of all episodes for the currently opened TV Series (used in the Player Episode Drawer!)
+    val currentSeriesEpisodes: StateFlow<List<IptvItem>> = combine(
+        _seriesDetails,
+        _selectedSeries,
+        currentLanguage
+    ) { details, series, lang ->
+        if (details == null) {
+            emptyList()
+        } else {
+            val isAr = lang == "ar"
+            val seriesTitle = details.title.ifBlank { series?.seriesTitle ?: series?.name ?: if (isAr) "مسلسل" else "TV Series" }
+            details.seasons.flatMap { season ->
+                val seasonLabel = if (isAr) "الموسم ${season.seasonNumber}" else "Season ${season.seasonNumber}"
+                season.episodes.map { ep ->
+                    ep.toIptvItem(seriesTitle = seriesTitle, group = seasonLabel)
+                }
+            }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val currentCategories: StateFlow<List<CategoryInfo>> = combine(
         _currentScreen,
         repository.liveCategories,
@@ -100,7 +119,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Trigger flow whenever any playlist count or favorite changes
     private val _dataRefreshTrigger = combine(
         repository.totalLiveCount,
         repository.totalMoviesCount,
@@ -110,7 +128,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         live + mov + ser + favs.size
     }
 
-    // Memory-protected paginated & filtered channels for active screen and category
     val currentFilteredItems: StateFlow<List<IptvItem>> = combine(
         _currentScreen,
         _selectedCategory,
@@ -196,8 +213,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun playEpisode(episode: SeriesEpisode) {
         val series = _selectedSeries.value
         val isAr = currentLanguage.value == "ar"
-        val seriesTitle = series?.seriesTitle ?: series?.name ?: if (isAr) "مسلسل" else "TV Series"
-        val group = series?.group ?: if (isAr) "المسلسلات" else "Series"
+        val seriesTitle = _seriesDetails.value?.title ?: series?.seriesTitle ?: series?.name ?: if (isAr) "مسلسل" else "TV Series"
+        val group = if (isAr) "الموسم ${episode.seasonNumber}" else "Season ${episode.seasonNumber}"
         val item = episode.toIptvItem(seriesTitle, group)
         playStream(item)
     }
@@ -208,30 +225,50 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun playNextChannel() {
         val current = playerUiState.value.currentItem ?: return
-        val list = when (current.type) {
-            IptvType.LIVE_TV -> repository.getAllLiveChannels()
-            IptvType.MOVIE -> repository.getAllMovies()
-            IptvType.SERIES -> repository.getAllSeries()
+        when (current.type) {
+            IptvType.LIVE_TV -> {
+                val list = repository.getAllLiveChannels()
+                if (list.isEmpty()) return
+                val currentIndex = list.indexOfFirst { it.id == current.id }
+                val nextIndex = if (currentIndex in 0 until list.lastIndex) currentIndex + 1 else 0
+                playStream(list[nextIndex])
+            }
+            IptvType.SERIES -> {
+                val eps = currentSeriesEpisodes.value
+                if (eps.isEmpty()) return
+                val currentIndex = eps.indexOfFirst { it.id == current.id || it.streamUrl == current.streamUrl }
+                val nextIndex = if (currentIndex in 0 until eps.lastIndex) currentIndex + 1 else 0
+                playStream(eps[nextIndex])
+            }
+            IptvType.MOVIE -> {
+                // In Movies, Next button fast-forwards 10 seconds instead of switching movies
+                playerManager.seekTo(playerUiState.value.currentPositionMs + 10_000L)
+            }
         }
-        if (list.isEmpty()) return
-
-        val currentIndex = list.indexOfFirst { it.id == current.id }
-        val nextIndex = if (currentIndex in 0 until list.lastIndex) currentIndex + 1 else 0
-        playStream(list[nextIndex])
     }
 
     fun playPreviousChannel() {
         val current = playerUiState.value.currentItem ?: return
-        val list = when (current.type) {
-            IptvType.LIVE_TV -> repository.getAllLiveChannels()
-            IptvType.MOVIE -> repository.getAllMovies()
-            IptvType.SERIES -> repository.getAllSeries()
+        when (current.type) {
+            IptvType.LIVE_TV -> {
+                val list = repository.getAllLiveChannels()
+                if (list.isEmpty()) return
+                val currentIndex = list.indexOfFirst { it.id == current.id }
+                val prevIndex = if (currentIndex > 0) currentIndex - 1 else list.lastIndex
+                playStream(list[prevIndex])
+            }
+            IptvType.SERIES -> {
+                val eps = currentSeriesEpisodes.value
+                if (eps.isEmpty()) return
+                val currentIndex = eps.indexOfFirst { it.id == current.id || it.streamUrl == current.streamUrl }
+                val prevIndex = if (currentIndex > 0) currentIndex - 1 else eps.lastIndex
+                playStream(eps[prevIndex])
+            }
+            IptvType.MOVIE -> {
+                // In Movies, Previous button rewinds 10 seconds instead of switching movies
+                playerManager.seekTo(playerUiState.value.currentPositionMs - 10_000L)
+            }
         }
-        if (list.isEmpty()) return
-
-        val currentIndex = list.indexOfFirst { it.id == current.id }
-        val prevIndex = if (currentIndex > 0) currentIndex - 1 else list.lastIndex
-        playStream(list[prevIndex])
     }
 
     fun toggleFavorite(item: IptvItem) {
