@@ -44,7 +44,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Tab
@@ -78,6 +77,9 @@ import androidx.compose.ui.unit.sp
 import com.example.model.IptvSource
 import com.example.model.SourceType
 import com.example.parser.XtreamUrlDetector
+import com.example.ui.components.LanguageToggleButton
+import com.example.ui.locale.LocalAppLanguage
+import com.example.ui.locale.LocalAppStrings
 import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.AccentEmerald
 import com.example.ui.theme.AccentRed
@@ -87,8 +89,6 @@ import com.example.ui.theme.Slate400
 import com.example.ui.theme.Slate700
 import com.example.ui.theme.Slate800
 import com.example.ui.theme.Slate850
-import com.example.ui.components.LanguageToggleButton
-import com.example.ui.locale.LocalAppStrings
 import com.example.ui.theme.Slate900
 import com.example.ui.theme.Slate950
 
@@ -108,6 +108,7 @@ fun SourcesScreen(
     modifier: Modifier = Modifier
 ) {
     val strings = LocalAppStrings.current
+    val isAr = LocalAppLanguage.current == "ar"
 
     // Dual Login Tabs: 0 = M3U URL, 1 = Xtream Codes API, 2 = Saved Providers
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -116,7 +117,6 @@ fun SourcesScreen(
     var m3uSourceName by remember { mutableStateOf("") }
     var m3uUrl by remember { mutableStateOf("") }
     var m3uRawContent by remember { mutableStateOf("") }
-    var isRawContentMode by remember { mutableStateOf(false) }
 
     // Xtream Codes inputs
     var xtreamSourceName by remember { mutableStateOf("") }
@@ -129,6 +129,11 @@ fun SourcesScreen(
     val detectedXtream = remember(m3uUrl) {
         XtreamUrlDetector.detect(m3uUrl)
     }
+
+    val isErrorStatus = statusMessage?.contains("Error", true) == true ||
+            statusMessage?.contains("failed", true) == true ||
+            statusMessage?.contains("فشل", true) == true ||
+            statusMessage?.contains("خطأ", true) == true
 
     Column(
         modifier = modifier
@@ -178,13 +183,13 @@ fun SourcesScreen(
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = strings.sourcesAndProviders,
+                    text = if (isAr) "المصادر وقوائم التشغيل" else strings.sourcesAndProviders,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = PureWhite
                 )
                 Text(
-                    text = strings.managePlaylists,
+                    text = if (isAr) "إعداد بيانات اشتراك IPTV وروابط M3U و Xtream" else strings.managePlaylists,
                     fontSize = 11.sp,
                     color = Slate400
                 )
@@ -216,7 +221,7 @@ fun SourcesScreen(
                 interactionSource = tab0Interaction,
                 text = {
                     Text(
-                        strings.m3uTab,
+                        text = if (isAr) "رابط M3U" else strings.m3uTab,
                         fontWeight = if (selectedTab == 0 || isTab0Focused) FontWeight.Bold else FontWeight.Normal,
                         color = if (selectedTab == 0 || isTab0Focused) AccentCyan else Slate400,
                         fontSize = 13.sp
@@ -236,7 +241,7 @@ fun SourcesScreen(
                 interactionSource = tab1Interaction,
                 text = {
                     Text(
-                        strings.xtreamTab,
+                        text = if (isAr) "إكستريم (Xtream)" else strings.xtreamTab,
                         fontWeight = if (selectedTab == 1 || isTab1Focused) FontWeight.Bold else FontWeight.Normal,
                         color = if (selectedTab == 1 || isTab1Focused) AccentCyan else Slate400,
                         fontSize = 13.sp
@@ -256,7 +261,7 @@ fun SourcesScreen(
                 interactionSource = tab2Interaction,
                 text = {
                     Text(
-                        "${strings.savedTab} (${sources.size})",
+                        text = if (isAr) "المحفوظة (${sources.size})" else "${strings.savedTab} (${sources.size})",
                         fontWeight = if (selectedTab == 2 || isTab2Focused) FontWeight.Bold else FontWeight.Normal,
                         color = if (selectedTab == 2 || isTab2Focused) AccentCyan else Slate400,
                         fontSize = 13.sp
@@ -278,7 +283,7 @@ fun SourcesScreen(
                 shape = RoundedCornerShape(12.dp),
                 border = androidx.compose.foundation.BorderStroke(
                     1.dp,
-                    if (isLoading) AccentCyan else if (statusMessage?.contains("Error", true) == true) AccentRed else Slate700
+                    if (isLoading) AccentCyan else if (isErrorStatus) AccentRed else Slate700
                 )
             ) {
                 Row(
@@ -294,10 +299,10 @@ fun SourcesScreen(
                         Spacer(modifier = Modifier.width(12.dp))
                     }
                     Text(
-                        text = statusMessage ?: "Processing...",
+                        text = statusMessage ?: if (isAr) "جاري المعالجة..." else "Processing...",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = if (statusMessage?.contains("Error", true) == true) AccentRed else PureWhite,
+                        color = if (isErrorStatus) AccentRed else PureWhite,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -314,13 +319,17 @@ fun SourcesScreen(
                     // TAB 0: M3U URL LOGIN
                     item {
                         Text(
-                            text = "Add M3U Playlist Link",
+                            text = if (isAr) "إضافة رابط قائمة تشغيل M3U" else "Add M3U Playlist Link",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = PureWhite
                         )
                         Text(
-                            text = "Streamline 50,000+ channel playlists using high-speed streaming reader.",
+                            text = if (isAr) {
+                                "قراءة فائقة السرعة لقوائم التشغيل الضخمة (+50,000 قناة وفيلم) دون تجميد الشاشة."
+                            } else {
+                                "Streamline 50,000+ channel playlists using high-speed streaming reader."
+                            },
                             fontSize = 12.sp,
                             color = Slate400,
                             modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)
@@ -331,8 +340,8 @@ fun SourcesScreen(
                         OutlinedTextField(
                             value = m3uSourceName,
                             onValueChange = { m3uSourceName = it },
-                            label = { Text("Playlist Name (Optional)") },
-                            placeholder = { Text("My IPTV Playlist") },
+                            label = { Text(if (isAr) "اسم القائمة (اختياري)" else "Playlist Name (Optional)") },
+                            placeholder = { Text(if (isAr) "مثال: اشتراكي الأساسي" else "My IPTV Playlist") },
                             singleLine = true,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -352,7 +361,7 @@ fun SourcesScreen(
                         OutlinedTextField(
                             value = m3uUrl,
                             onValueChange = { m3uUrl = it },
-                            label = { Text("M3U / M3U8 Playlist URL") },
+                            label = { Text(if (isAr) "رابط قائمة M3U / M3U8" else "M3U / M3U8 Playlist URL") },
                             leadingIcon = { Icon(Icons.Default.Link, null, tint = AccentCyan) },
                             placeholder = { Text("http://provider.tv:8080/get.php?username=...&password=...") },
                             singleLine = true,
@@ -393,13 +402,17 @@ fun SourcesScreen(
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Column {
                                         Text(
-                                            text = "Smart Auto-Detection Active",
+                                            text = if (isAr) "تم اكتشاف بيانات Xtream تلقائياً" else "Smart Auto-Detection Active",
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 13.sp,
                                             color = AccentEmerald
                                         )
                                         Text(
-                                            text = "Xtream Codes API detected (${detectedXtream.username}). Loads instantaneously via API without downloading massive 100MB files!",
+                                            text = if (isAr) {
+                                                "تم التعرف على حساب (${detectedXtream.username}) وسيتم التحميل السريع مباشرة!"
+                                            } else {
+                                                "Xtream Codes API detected (${detectedXtream.username}). Loads instantaneously via API!"
+                                            },
                                             fontSize = 11.sp,
                                             color = Slate300
                                         )
@@ -415,7 +428,7 @@ fun SourcesScreen(
 
                         Button(
                             onClick = {
-                                onLoadM3u(m3uUrl, m3uRawContent, m3uSourceName)
+                                onLoadM3u(m3uUrl.trim(), m3uRawContent, m3uSourceName.trim())
                             },
                             interactionSource = m3uBtnInteraction,
                             enabled = !isLoading && (m3uUrl.isNotBlank() || m3uRawContent.isNotBlank()),
@@ -432,7 +445,7 @@ fun SourcesScreen(
                                     if (event.type == KeyEventType.KeyUp &&
                                         (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
                                     ) {
-                                        onLoadM3u(m3uUrl, m3uRawContent, m3uSourceName)
+                                        onLoadM3u(m3uUrl.trim(), m3uRawContent, m3uSourceName.trim())
                                         true
                                     } else false
                                 }
@@ -446,11 +459,11 @@ fun SourcesScreen(
                             if (isLoading) {
                                 CircularProgressIndicator(color = Slate950, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Parsing Streams...", fontWeight = FontWeight.Bold)
+                                Text(if (isAr) "جاري تحميل القنوات..." else "Parsing Streams...", fontWeight = FontWeight.Bold)
                             } else {
                                 Icon(Icons.Default.Storage, null)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Load M3U Playlist", fontWeight = FontWeight.Bold)
+                                Text(if (isAr) "تحميل قائمة M3U" else "Load M3U Playlist", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -464,13 +477,17 @@ fun SourcesScreen(
                     // TAB 1: XTREAM CODES API LOGIN
                     item {
                         Text(
-                            text = "Connect via Xtream Codes API",
+                            text = if (isAr) "تسجيل الدخول عبر Xtream Codes API" else "Connect via Xtream Codes API",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = PureWhite
                         )
                         Text(
-                            text = "Instant API category loading for providers using Xtream Codes.",
+                            text = if (isAr) {
+                                "أدخل رابط السيرفر واسم المستخدم وكلمة المرور لتحميل القنوات والأفلام والمسلسلات فوراً."
+                            } else {
+                                "Instant API category loading for providers using Xtream Codes."
+                            },
                             fontSize = 12.sp,
                             color = Slate400,
                             modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)
@@ -481,8 +498,8 @@ fun SourcesScreen(
                         OutlinedTextField(
                             value = xtreamSourceName,
                             onValueChange = { xtreamSourceName = it },
-                            label = { Text("Playlist Name (Optional)") },
-                            placeholder = { Text("Premium Xtream Provider") },
+                            label = { Text(if (isAr) "اسم الاشتراك (اختياري)" else "Playlist Name (Optional)") },
+                            placeholder = { Text(if (isAr) "مثال: اشتراك المنزل" else "Premium Xtream Provider") },
                             singleLine = true,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -502,9 +519,9 @@ fun SourcesScreen(
                         OutlinedTextField(
                             value = serverUrl,
                             onValueChange = { serverUrl = it },
-                            label = { Text("Server URL (e.g. http://server.com:8080)") },
+                            label = { Text(if (isAr) "رابط السيرفر (مثال: http://server.com:80)" else "Server URL (e.g. http://server.com:8080)") },
                             leadingIcon = { Icon(Icons.Default.Link, null, tint = AccentCyan) },
-                            placeholder = { Text("http://example.com:8080") },
+                            placeholder = { Text("http://smar55cob.site:80") },
                             singleLine = true,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -524,7 +541,7 @@ fun SourcesScreen(
                         OutlinedTextField(
                             value = username,
                             onValueChange = { username = it },
-                            label = { Text("Username") },
+                            label = { Text(if (isAr) "اسم المستخدم (Username)" else "Username") },
                             leadingIcon = { Icon(Icons.Default.Person, null, tint = AccentCyan) },
                             singleLine = true,
                             modifier = Modifier
@@ -545,7 +562,7 @@ fun SourcesScreen(
                         OutlinedTextField(
                             value = password,
                             onValueChange = { password = it },
-                            label = { Text("Password") },
+                            label = { Text(if (isAr) "كلمة المرور (Password)" else "Password") },
                             leadingIcon = { Icon(Icons.Default.Lock, null, tint = AccentCyan) },
                             trailingIcon = {
                                 IconButton(onClick = { passwordVisible = !passwordVisible }) {
@@ -579,7 +596,7 @@ fun SourcesScreen(
 
                         Button(
                             onClick = {
-                                onConnectXtream(serverUrl, username, password, xtreamSourceName)
+                                onConnectXtream(serverUrl.trim(), username.trim(), password.trim(), xtreamSourceName.trim())
                             },
                             interactionSource = xtreamBtnInteraction,
                             enabled = !isLoading && serverUrl.isNotBlank() && username.isNotBlank() && password.isNotBlank(),
@@ -596,7 +613,7 @@ fun SourcesScreen(
                                     if (event.type == KeyEventType.KeyUp &&
                                         (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
                                     ) {
-                                        onConnectXtream(serverUrl, username, password, xtreamSourceName)
+                                        onConnectXtream(serverUrl.trim(), username.trim(), password.trim(), xtreamSourceName.trim())
                                         true
                                     } else false
                                 }
@@ -610,11 +627,11 @@ fun SourcesScreen(
                             if (isLoading) {
                                 CircularProgressIndicator(color = Slate950, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Connecting to API...", fontWeight = FontWeight.Bold)
+                                Text(if (isAr) "جاري الاتصال بالسيرفر..." else "Connecting to API...", fontWeight = FontWeight.Bold)
                             } else {
                                 Icon(Icons.Default.Sensors, null)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Connect Xtream Codes", fontWeight = FontWeight.Bold)
+                                Text(if (isAr) "اتصال وتحميل الاشتراك" else "Connect Xtream Codes", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -628,13 +645,13 @@ fun SourcesScreen(
                     // TAB 2: SAVED SOURCES
                     item {
                         Text(
-                            text = "Saved IPTV Providers",
+                            text = if (isAr) "الاشتراكات المحفوظة" else "Saved IPTV Providers",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = PureWhite
                         )
                         Text(
-                            text = "Switch active providers or remove outdated playlists.",
+                            text = if (isAr) "التبديل بين اشتراكاتك المحفوظة أو حذف القوائم القديمة." else "Switch active providers or remove outdated playlists.",
                             fontSize = 12.sp,
                             color = Slate400,
                             modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
@@ -695,7 +712,7 @@ fun SourcesScreen(
                                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                                             ) {
                                                 Text(
-                                                    text = "ACTIVE",
+                                                    text = if (isAr) "نشط" else "ACTIVE",
                                                     fontSize = 9.sp,
                                                     fontWeight = FontWeight.Black,
                                                     color = AccentEmerald
@@ -706,10 +723,10 @@ fun SourcesScreen(
 
                                     Text(
                                         text = when (source.type) {
-                                            SourceType.XTREAM_CODES -> "Xtream Codes API: ${source.serverUrl}"
-                                            SourceType.M3U_URL -> "M3U Link: ${source.m3uUrl.take(30)}..."
-                                            SourceType.M3U_TEXT -> "Raw M3U Playlist"
-                                            SourceType.DEMO -> "Bundled Verified Public Streams"
+                                            SourceType.XTREAM_CODES -> "Xtream API: ${source.serverUrl}"
+                                            SourceType.M3U_URL -> "M3U: ${source.m3uUrl.take(30)}..."
+                                            SourceType.M3U_TEXT -> if (isAr) "ملف M3U نصي" else "Raw M3U Playlist"
+                                            SourceType.DEMO -> if (isAr) "قنوات تجريبية مجانية" else "Bundled Verified Public Streams"
                                         },
                                         fontSize = 11.sp,
                                         color = Slate400,
@@ -719,9 +736,15 @@ fun SourcesScreen(
                                     )
 
                                     Text(
-                                        text = "%,d Live TV  •  %,d Movies  •  %,d Series".format(
-                                            source.channelCount, source.movieCount, source.seriesCount
-                                        ),
+                                        text = if (isAr) {
+                                            "%,d قناة مباشر  •  %,d فيلم  •  %,d مسلسل".format(
+                                                source.channelCount, source.movieCount, source.seriesCount
+                                            )
+                                        } else {
+                                            "%,d Live TV  •  %,d Movies  •  %,d Series".format(
+                                                source.channelCount, source.movieCount, source.seriesCount
+                                            )
+                                        },
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = AccentCyan,
@@ -737,7 +760,7 @@ fun SourcesScreen(
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.Delete,
-                                                contentDescription = "Delete",
+                                                contentDescription = if (isAr) "حذف" else "Delete",
                                                 tint = Slate400,
                                                 modifier = Modifier.size(20.dp)
                                             )
@@ -751,7 +774,7 @@ fun SourcesScreen(
                                             shape = RoundedCornerShape(10.dp),
                                             modifier = Modifier.padding(start = 4.dp)
                                         ) {
-                                            Text("Activate", fontSize = 12.sp)
+                                            Text(if (isAr) "تفعيل" else "Activate", fontSize = 12.sp)
                                         }
                                     } else {
                                         Icon(
@@ -779,6 +802,7 @@ fun SourcesScreen(
 fun DemoStreamsBanner(onLoadDemo: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
+    val isAr = LocalAppLanguage.current == "ar"
 
     Card(
         modifier = Modifier
@@ -801,13 +825,17 @@ fun DemoStreamsBanner(onLoadDemo: () -> Unit) {
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Test With Demo Streams",
+                    text = if (isAr) "تجربة القنوات المجانية" else "Test With Demo Streams",
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                     color = PureWhite
                 )
                 Text(
-                    text = "Instant access to NASA TV HD, Euronews, Red Bull Sports, VOD movies & episodic series.",
+                    text = if (isAr) {
+                        "تشغيل فوري لقنوات بث مباشر وأفلام ومسلسلات تجريبية مجانية."
+                    } else {
+                        "Instant access to NASA TV HD, Euronews, Red Bull Sports, VOD movies & episodic series."
+                    },
                     fontSize = 11.sp,
                     color = Slate300,
                     modifier = Modifier.padding(top = 2.dp)
@@ -838,7 +866,7 @@ fun DemoStreamsBanner(onLoadDemo: () -> Unit) {
             ) {
                 Icon(Icons.Default.PlayCircleOutline, null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Load Demo", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(if (isAr) "تشغيل التجريبي" else "Load Demo", fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
