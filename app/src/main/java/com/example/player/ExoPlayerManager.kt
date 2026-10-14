@@ -39,8 +39,8 @@ class ExoPlayerManager(
     private val httpDataSourceFactory = DefaultHttpDataSource.Factory()
         .setUserAgent("IPTVSmartersPlayer")
         .setAllowCrossProtocolRedirects(true)
-        .setConnectTimeoutMs(20000)
-        .setReadTimeoutMs(30000)
+        .setConnectTimeoutMs(15000)
+        .setReadTimeoutMs(25000)
 
     val player: ExoPlayer = ExoPlayer.Builder(context)
         .setMediaSourceFactory(DefaultMediaSourceFactory(httpDataSourceFactory))
@@ -51,8 +51,9 @@ class ExoPlayerManager(
 
     private var progressJob: Job? = null
     private var controlsHideJob: Job? = null
+    private var reconnectJob: Job? = null
     private var retryCount = 0
-    private var retryJob: Job? = null
+    private val maxRetries = 4
 
     init {
         player.addListener(object : Player.Listener {
@@ -66,13 +67,12 @@ class ExoPlayerManager(
                     }
                     Player.STATE_READY -> {
                         retryCount = 0
-                        retryJob?.cancel()
+                        reconnectJob?.cancel()
                         _uiState.value = _uiState.value.copy(
                             isBuffering = false,
                             isPlaying = player.isPlaying,
                             durationMs = player.duration.coerceAtLeast(0L),
-                            errorMessage = null,
-                            reconnectAttempt = 0
+                            errorMessage = null
                         )
                         updateTracksState(player.currentTracks)
                     }
@@ -101,47 +101,40 @@ class ExoPlayerManager(
             }
 
             override fun onPlayerError(error: PlaybackException) {
-                val current = _uiState.value.currentItem
-                // Automatically attempt to reconnect up to 4 times with a 2-second delay
-                if (current != null && retryCount < 4) {
+                // Automatic 4x Reconnection before showing error!
+                if (retryCount < maxRetries) {
                     retryCount++
                     _uiState.value = _uiState.value.copy(
                         isBuffering = true,
-                        isPlaying = false,
-                        errorMessage = null,
-                        reconnectAttempt = retryCount
+                        errorMessage = null
                     )
-                    retryJob?.cancel()
-                    retryJob = coroutineScope.launch {
-                        delay(2000)
-                        if (isActive && _uiState.value.currentItem?.id == current.id) {
-                            try {
-                                player.stop()
-                            } catch (_: Exception) {}
-                            executePlay(current)
+                    reconnectJob?.cancel()
+                    reconnectJob = coroutineScope.launch(Dispatchers.Main) {
+                        delay(2000L)
+                        val item = _uiState.value.currentItem
+                        if (item != null) {
+                            loadStreamInternal(item)
                         }
                     }
                     return
                 }
 
-                // Only if all 4 reconnection attempts fail, display the error overlay
                 val errorDetails = when (error.errorCode) {
                     PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
                     PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
-                        "Network connection failed. Check your internet connection or server status."
+                        "Stream failed after $maxRetries reconnection attempts (Connection timeout)."
                     PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ->
-                        "Stream server returned an HTTP error (stream might be offline or geo-restricted)."
+                        "Stream offline after $maxRetries attempts (Server returned HTTP error)."
                     PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
                     PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED ->
-                        "Invalid stream format (.m3u8/.ts playlist error)."
-                    else -> error.localizedMessage ?: "Stream not working / Playback error occurred"
+                        "Stream format unsupported or broken after $maxRetries attempts."
+                    else -> "Stream is not working after $maxRetries reconnection attempts."
                 }
 
                 _uiState.value = _uiState.value.copy(
                     isBuffering = false,
                     isPlaying = false,
-                    errorMessage = errorDetails,
-                    reconnectAttempt = 0
+                    errorMessage = errorDetails
                 )
             }
 
@@ -153,64 +146,42 @@ class ExoPlayerManager(
 
     fun playItem(item: IptvItem) {
         retryCount = 0
-        retryJob?.cancel()
-        executePlay(item)
-    }
-
-    private fun executePlay(item: IptvItem) {
+        reconnectJob?.cancel()
+        // Keep current controls visibility state if already in player so Next/Prev doesn't reset focus!
         _uiState.value = _uiState.value.copy(
             currentItem = item,
             isBuffering = true,
-            errorMessage = null,
-            isControlsVisible = true,
-            reconnectAttempt = retryCount
+            isPlaying = true,
+            errorMessage = null
         )
+        loadStreamInternal(item)
+    }
 
+    private fun loadStreamInternal(item: IptvItem) {
         try {
             val uri = Uri.parse(item.streamUrl.trim())
             val format = item.detectFormat()
 
-            val mediaItem = MediaItem.Builder()
-                .setUri(uri)
-                .setMediaId(item.id)
-                .build()
-
-            // Instant Channel Zapping (Zero Pause / No Lag):
-            // Hot-swap stream seamlessly in the background without auto-pausing or black screen freezes
-            if (format == StreamFormat.HLS || item.streamUrl.contains(".m3u8", ignoreCase = true)) {
-                val mediaSource = HlsMediaSource.Factory(httpDataSourceFactory)
+            val mediaSource = if (format == StreamFormat.HLS || item.streamUrl.contains(".m3u8", ignoreCase = true)) {
+                HlsMediaSource.Factory(httpDataSourceFactory)
                     .setAllowChunklessPreparation(true)
-                    .createMediaSource(mediaItem)
-                player.setMediaSource(mediaSource, /* resetPosition = */ true)
+                    .createMediaSource(MediaItem.fromUri(uri))
             } else {
-                player.setMediaItem(mediaItem, /* resetPosition = */ true)
+                DefaultMediaSourceFactory(httpDataSourceFactory)
+                    .createMediaSource(MediaItem.fromUri(uri))
             }
 
+            // Seamless hot-swap without calling player.stop() so it never drops into a paused state
+            player.setMediaSource(mediaSource, true)
             player.prepare()
             player.playWhenReady = true
 
             scheduleControlsAutoHide()
         } catch (e: Exception) {
-            if (retryCount < 4) {
-                retryCount++
-                _uiState.value = _uiState.value.copy(
-                    isBuffering = true,
-                    reconnectAttempt = retryCount
-                )
-                retryJob?.cancel()
-                retryJob = coroutineScope.launch {
-                    delay(2000)
-                    if (isActive && _uiState.value.currentItem?.id == item.id) {
-                        executePlay(item)
-                    }
-                }
-            } else {
-                _uiState.value = _uiState.value.copy(
-                    isBuffering = false,
-                    errorMessage = "Failed to load stream: ${e.localizedMessage}",
-                    reconnectAttempt = 0
-                )
-            }
+            _uiState.value = _uiState.value.copy(
+                isBuffering = false,
+                errorMessage = "Failed to load stream: ${e.localizedMessage}"
+            )
         }
     }
 
@@ -287,6 +258,7 @@ class ExoPlayerManager(
     }
 
     fun retryPlayback() {
+        retryCount = 0
         _uiState.value.currentItem?.let { playItem(it) }
     }
 
@@ -396,20 +368,18 @@ class ExoPlayerManager(
     }
 
     fun stop() {
+        reconnectJob?.cancel()
         progressJob?.cancel()
         controlsHideJob?.cancel()
-        retryJob?.cancel()
-        retryCount = 0
         player.stop()
         player.clearMediaItems()
         _uiState.value = PlayerUiState()
     }
 
     fun release() {
+        reconnectJob?.cancel()
         progressJob?.cancel()
         controlsHideJob?.cancel()
-        retryJob?.cancel()
-        retryCount = 0
         player.release()
     }
 }
