@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -33,6 +34,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ViewList
@@ -55,8 +57,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -71,6 +71,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -80,9 +81,11 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -105,6 +108,89 @@ import com.example.ui.theme.Slate850
 import com.example.ui.theme.Slate900
 import com.example.ui.theme.Slate950
 import java.util.Locale
+
+/**
+ * Custom Non-Clipping Search Box that centers Arabic and English text vertically
+ * without getting cut off by Material3 OutlinedTextField internal padding.
+ */
+@Composable
+fun CompactSearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    accentColor: Color,
+    modifier: Modifier = Modifier,
+    height: Dp = 42.dp
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        singleLine = true,
+        interactionSource = interactionSource,
+        textStyle = TextStyle(
+            color = PureWhite,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium
+        ),
+        cursorBrush = SolidColor(accentColor),
+        modifier = modifier.height(height),
+        decorationBox = { innerTextField ->
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Slate900)
+                    .border(
+                        width = if (isFocused) 1.5.dp else 1.dp,
+                        color = if (isFocused) accentColor else Slate700,
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                    .padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = null,
+                    tint = if (isFocused) accentColor else Slate400,
+                    modifier = Modifier.size(17.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    if (value.isEmpty()) {
+                        Text(
+                            text = placeholder,
+                            color = Slate400,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    innerTextField()
+                }
+                if (value.isNotEmpty()) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    IconButton(
+                        onClick = { onValueChange("") },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Clear,
+                            contentDescription = "Clear",
+                            tint = Slate400,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+                }
+            }
+        }
+    )
+}
 
 @Composable
 fun ContentBrowserScreen(
@@ -154,7 +240,7 @@ fun ContentBrowserScreen(
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val isVOD = screen == Screen.MOVIES || screen == Screen.SERIES
 
-    // Live TV Landscape View Mode: true = Square Logo Grid (like IPTV Smarters), false = Full-Width 1-Column List
+    // Live TV Landscape View Mode: true = Square Logo Grid, false = Full-Width 1-Column List
     var isLiveGridView by remember { mutableStateOf(true) }
 
     val handleItemClick = { item: IptvItem ->
@@ -169,6 +255,7 @@ fun ContentBrowserScreen(
         modifier = modifier
             .fillMaxSize()
             .background(Slate950)
+            .statusBarsPadding()
             .testTag("content_browser_screen")
     ) {
         val isTv = com.example.util.LocalIsTelevision.current
@@ -177,7 +264,9 @@ fun ContentBrowserScreen(
         if (isWideScreen) {
             // Master-Detail Split Layout in Landscape / Tablet / TV
             Row(
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = 4.dp)
             ) {
                 // Dedicated Vertical Category Sidebar (230.dp width)
                 CategorySidebar(
@@ -203,7 +292,7 @@ fun ContentBrowserScreen(
                         .weight(1f)
                         .fillMaxHeight()
                 ) {
-                    // Unified Compact Top Row (48.dp height)
+                    // Unified Top Row with plenty of breathing room so nothing clips
                     CompactLandscapeHeader(
                         title = title,
                         icon = icon,
@@ -215,12 +304,11 @@ fun ContentBrowserScreen(
                         isGridView = isLiveGridView,
                         onToggleViewMode = { isLiveGridView = !isLiveGridView },
                         onBack = onBack,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                     )
 
                     // Content Area
                     if (isVOD) {
-                        // Vertical Movie & Series Poster Cards (aspectRatio 2:3)
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(minSize = 130.dp),
                             modifier = Modifier
@@ -252,7 +340,6 @@ fun ContentBrowserScreen(
                             }
                         }
                     } else if (isLiveGridView) {
-                        // Live TV Square Channel Logo Grid (IPTV Smarters Style - No squished badges!)
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(minSize = 135.dp),
                             modifier = Modifier
@@ -284,7 +371,6 @@ fun ContentBrowserScreen(
                             }
                         }
                     } else {
-                        // Live TV Full-Width Single-Column List View
                         LazyColumn(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -334,7 +420,6 @@ fun ContentBrowserScreen(
                     onBack = onBack
                 )
 
-                // Category Chips Row in Portrait
                 CategoryChipsRow(
                     categories = categories,
                     selectedCategory = selectedCategory,
@@ -438,62 +523,23 @@ fun CategorySidebar(
             .width(230.dp)
             .fillMaxHeight()
             .background(Slate950)
-            .padding(vertical = 8.dp)
+            .padding(vertical = 6.dp)
             .testTag("category_sidebar")
     ) {
-        OutlinedTextField(
+        // Non-clipping category search bar
+        CompactSearchField(
             value = searchCategoryQuery,
             onValueChange = { searchCategoryQuery = it },
-            placeholder = {
-                Text(
-                    text = if (isAr) "البحث في الأقسام..." else strings.searchInCategories,
-                    fontSize = 11.sp,
-                    color = Slate400,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = null,
-                    tint = Slate400,
-                    modifier = Modifier.size(15.dp)
-                )
-            },
-            trailingIcon = {
-                if (searchCategoryQuery.isNotEmpty()) {
-                    IconButton(
-                        onClick = { searchCategoryQuery = "" },
-                        modifier = Modifier.size(24.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Clear,
-                            contentDescription = "Clear",
-                            tint = Slate400,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                }
-            },
-            singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = AccentCyan,
-                unfocusedBorderColor = Slate800,
-                focusedContainerColor = Slate900,
-                unfocusedContainerColor = Slate900,
-                focusedTextColor = PureWhite,
-                unfocusedTextColor = PureWhite
-            ),
-            shape = RoundedCornerShape(10.dp),
+            placeholder = if (isAr) "البحث في الأقسام..." else strings.searchInCategories,
+            accentColor = AccentCyan,
+            height = 40.dp,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp)
-                .height(46.dp)
+                .padding(horizontal = 8.dp)
                 .testTag("search_categories_input")
         )
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         LazyColumn(
             modifier = Modifier
@@ -614,9 +660,6 @@ fun SidebarCategoryRow(
     }
 }
 
-/**
- * Clean IPTV Smarters Style Live TV Card for Landscape Grid View
- */
 @Composable
 fun LiveTvGridCard(
     item: IptvItem,
@@ -669,7 +712,6 @@ fun LiveTvGridCard(
                 .fillMaxSize()
                 .padding(8.dp)
         ) {
-            // Top-right favorite heart icon
             IconButton(
                 onClick = onToggleFavorite,
                 modifier = Modifier
@@ -685,7 +727,6 @@ fun LiveTvGridCard(
                 )
             }
 
-            // Centered Channel Logo + 2-Line Channel Name below
             Column(
                 modifier = Modifier.fillMaxSize(),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -927,8 +968,7 @@ fun CompactLandscapeHeader(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(48.dp)
-            .padding(vertical = 2.dp),
+            .height(48.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(
@@ -981,43 +1021,18 @@ fun CompactLandscapeHeader(
             maxLines = 1
         )
 
-        Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.width(12.dp))
 
-        OutlinedTextField(
+        // Non-clipping compact search field
+        CompactSearchField(
             value = searchQuery,
             onValueChange = onSearchChange,
+            placeholder = if (isAr) "ابحث في $title..." else "Search $title...",
+            accentColor = accentColor,
+            height = 40.dp,
             modifier = Modifier
                 .weight(1f)
-                .height(44.dp)
-                .testTag("input_search_channels"),
-            placeholder = {
-                Text(
-                    text = if (isAr) "ابحث في $title..." else "Search $title...",
-                    color = Slate400,
-                    fontSize = 11.sp,
-                    maxLines = 1
-                )
-            },
-            leadingIcon = {
-                Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = Slate400, modifier = Modifier.size(15.dp))
-            },
-            trailingIcon = {
-                if (searchQuery.isNotEmpty()) {
-                    IconButton(onClick = { onSearchChange("") }, modifier = Modifier.size(22.dp)) {
-                        Icon(imageVector = Icons.Default.Clear, contentDescription = "Clear", tint = Slate400, modifier = Modifier.size(14.dp))
-                    }
-                }
-            },
-            singleLine = true,
-            shape = RoundedCornerShape(10.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Slate900,
-                unfocusedContainerColor = Slate900,
-                focusedBorderColor = accentColor,
-                unfocusedBorderColor = Slate800,
-                focusedTextColor = PureWhite,
-                unfocusedTextColor = PureWhite
-            )
+                .testTag("input_search_channels")
         )
 
         if (showViewToggle) {
@@ -1133,40 +1148,16 @@ fun PortraitHeader(
             }
         }
 
-        OutlinedTextField(
+        CompactSearchField(
             value = searchQuery,
             onValueChange = onSearchChange,
+            placeholder = if (isAr) "ابحث باسم القناة أو الفيلم أو القسم..." else "Search by stream name or category...",
+            accentColor = accentColor,
+            height = 44.dp,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 4.dp)
-                .testTag("input_search_channels"),
-            placeholder = {
-                Text(
-                    text = if (isAr) "ابحث باسم القناة أو الفيلم أو القسم..." else "Search by stream name or category...",
-                    color = Slate400,
-                    fontSize = 12.sp
-                )
-            },
-            leadingIcon = {
-                Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = Slate400)
-            },
-            trailingIcon = {
-                if (searchQuery.isNotEmpty()) {
-                    IconButton(onClick = { onSearchChange("") }) {
-                        Icon(imageVector = Icons.Default.Clear, contentDescription = "Clear", tint = Slate400)
-                    }
-                }
-            },
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Slate900,
-                unfocusedContainerColor = Slate900,
-                focusedBorderColor = accentColor,
-                unfocusedBorderColor = Slate800,
-                focusedTextColor = PureWhite,
-                unfocusedTextColor = PureWhite
-            )
+                .testTag("input_search_channels")
         )
     }
 }
