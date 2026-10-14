@@ -141,13 +141,54 @@ fun VideoPlayerScreen(
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
 
     val currentItem = uiState.currentItem
-    val isMovie = currentItem?.type == IptvType.MOVIE
-    val isSeries = currentItem?.type == IptvType.SERIES
-    val isLiveTv = currentItem?.type == IptvType.LIVE_TV
-    val hasDrawerList = !isMovie && allChannels.isNotEmpty()
 
-    // Ensure drawer is closed if playing a Movie
-    LaunchedEffect(isMovie) {
+    // Strict detection for Series vs Movie vs Live TV (checks both IptvType AND category/title patterns)
+    val isSeries = remember(currentItem) {
+        currentItem?.type == IptvType.SERIES ||
+        currentItem?.seasonNumber != null ||
+        currentItem?.episodeNumber != null ||
+        currentItem?.group?.contains("Series", ignoreCase = true) == true ||
+        currentItem?.group?.contains("الموسم", ignoreCase = true) == true ||
+        currentItem?.group?.contains("Season", ignoreCase = true) == true ||
+        currentItem?.group?.contains("مسلسل", ignoreCase = true) == true ||
+        currentItem?.name?.contains(Regex("""S\d{1,2}E\d{1,3}""", RegexOption.IGNORE_CASE)) == true ||
+        currentItem?.streamUrl?.contains("/series/", ignoreCase = true) == true
+    }
+
+    val isMovie = remember(currentItem, isSeries) {
+        !isSeries && (
+            currentItem?.type == IptvType.MOVIE ||
+            currentItem?.group?.contains("Movie", ignoreCase = true) == true ||
+            currentItem?.group?.contains("Film", ignoreCase = true) == true ||
+            currentItem?.group?.contains("VOD", ignoreCase = true) == true ||
+            currentItem?.group?.contains("أفلام", ignoreCase = true) == true ||
+            currentItem?.streamUrl?.contains("/movie/", ignoreCase = true) == true
+        )
+    }
+
+    val isLiveTv = !isMovie && !isSeries
+
+    // Filter out any live channels if we are in Series mode, and completely disable drawer in Movies!
+    val drawerItems = remember(isMovie, isSeries, allChannels) {
+        when {
+            isMovie -> emptyList()
+            isSeries -> allChannels.filter {
+                it.type == IptvType.SERIES ||
+                it.seasonNumber != null ||
+                it.episodeNumber != null ||
+                it.group.contains("Season", ignoreCase = true) ||
+                it.group.contains("الموسم", ignoreCase = true) ||
+                it.name.contains(Regex("""S\d{1,2}E\d{1,3}""", RegexOption.IGNORE_CASE)) ||
+                it.streamUrl.contains("/series/", ignoreCase = true)
+            }
+            else -> allChannels
+        }
+    }
+
+    val hasDrawerList = !isMovie && drawerItems.isNotEmpty()
+
+    // Force-close drawer immediately when playing a Movie
+    LaunchedEffect(isMovie, currentItem?.id) {
         if (isMovie && uiState.isQuickChannelListOpen) {
             playerManager.closeQuickChannelList()
         }
@@ -778,7 +819,7 @@ fun VideoPlayerScreen(
                             }
                         }
 
-                        // Show Channel List / Episodes Drawer Button ONLY for Live TV and Series (Hidden in Movies!)
+                        // Show Drawer Button ONLY for Live TV ("Channels") and Series ("Episodes") — NEVER for Movies!
                         if (hasDrawerList) {
                             val drawerBtnInteraction = remember { MutableInteractionSource() }
                             val isDrawerFocused by drawerBtnInteraction.collectIsFocusedAsState()
@@ -1018,7 +1059,7 @@ fun VideoPlayerScreen(
                                 modifier = Modifier.weight(1f)
                             )
                             Text(
-                                text = if (isAr) "سهم للأعلى: الصوت والترجمة • يمين/يسار: تغيير القناة" else "Up: Audio/Subtitles • Left/Right: Prev/Next",
+                                text = if (isAr) "سهم للأعلى: الصوت والترجمة • يمين/يسار: التالي/السابق" else "Up: Audio/Subtitles • Left/Right: Prev/Next",
                                 fontSize = 11.sp,
                                 color = Slate400
                             )
@@ -1028,7 +1069,7 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Side Drawer: Shows "Episodes" for TV Series and "Channel List" for Live TV (Disabled in Movies!)
+        // Side Drawer: Strictly shows "Episodes" for TV Series and "Channel List" for Live TV (Completely Disabled in Movies!)
         AnimatedVisibility(
             visible = uiState.isQuickChannelListOpen && hasDrawerList,
             enter = slideInHorizontally(initialOffsetX = { it }),
@@ -1074,7 +1115,7 @@ fun VideoPlayerScreen(
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(allChannels, key = { it.id }) { item ->
+                        items(drawerItems, key = { it.id }) { item ->
                             val isCurrent = item.id == currentItem?.id || item.streamUrl == currentItem?.streamUrl
                             val itemInteraction = remember { MutableInteractionSource() }
                             val isItemFocused by itemInteraction.collectIsFocusedAsState()
