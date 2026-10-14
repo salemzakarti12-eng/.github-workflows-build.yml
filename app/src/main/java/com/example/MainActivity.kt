@@ -1,7 +1,10 @@
 package com.example
 
+import android.app.PictureInPictureParams
 import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
+import android.util.Rational
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -54,6 +57,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -84,6 +88,7 @@ import com.example.ui.channelbrowser.ContentBrowserScreen
 import com.example.ui.dashboard.DashboardScreen
 import com.example.ui.locale.LocalAppLanguage
 import com.example.ui.locale.LocalAppStrings
+import com.example.ui.locale.LocalIsInPipMode
 import com.example.ui.locale.getAppStrings
 import com.example.ui.player.VideoPlayerScreen
 import com.example.ui.series.SeriesDetailScreen
@@ -100,6 +105,43 @@ import com.example.util.DeviceUtils
 import com.example.util.LocalIsTelevision
 
 class MainActivity : ComponentActivity() {
+    private var mainViewModel: MainViewModel? = null
+    private var isInPipMode by mutableStateOf(false)
+
+    fun enterPipMode() {
+        if (DeviceUtils.isTelevision(this)) return
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val params = PictureInPictureParams.Builder()
+                    .setAspectRatio(Rational(16, 9))
+                    .build()
+                enterPictureInPictureMode(params)
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                @Suppress("DEPRECATION")
+                enterPictureInPictureMode()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        val isTv = DeviceUtils.isTelevision(this)
+        val vm = mainViewModel ?: return
+        if (!isTv && vm.currentScreen.value == Screen.PLAYER && vm.playerUiState.value.isPlaying) {
+            enterPipMode()
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        isInPipMode = isInPictureInPictureMode
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         DeviceUtils.configureDeviceOrientation(this)
@@ -107,6 +149,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val isTelevision = remember { DeviceUtils.isTelevision(this@MainActivity) }
             val viewModel: MainViewModel = viewModel()
+            mainViewModel = viewModel
             val currentLanguage by viewModel.currentLanguage.collectAsState()
             val layoutDirection = if (currentLanguage == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr
             val strings = remember(currentLanguage) { getAppStrings(currentLanguage) }
@@ -115,12 +158,14 @@ class MainActivity : ComponentActivity() {
                 LocalIsTelevision provides isTelevision,
                 LocalAppLanguage provides currentLanguage,
                 LocalAppStrings provides strings,
-                LocalLayoutDirection provides layoutDirection
+                LocalLayoutDirection provides layoutDirection,
+                LocalIsInPipMode provides isInPipMode
             ) {
                 MyApplicationTheme {
                     HypnoStreamApp(
                         viewModel = viewModel,
-                        onFinishApp = { finish() }
+                        onFinishApp = { finish() },
+                        onEnterPip = { enterPipMode() }
                     )
                 }
             }
@@ -131,7 +176,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun HypnoStreamApp(
     viewModel: MainViewModel = viewModel(),
-    onFinishApp: () -> Unit = {}
+    onFinishApp: () -> Unit = {},
+    onEnterPip: () -> Unit = {}
 ) {
     val currentScreen by viewModel.currentScreen.collectAsState()
     val activeSource by viewModel.activeSource.collectAsState()
@@ -192,6 +238,7 @@ fun HypnoStreamApp(
             onPlayNext = { viewModel.playNextChannel() },
             onPlayPrevious = { viewModel.playPreviousChannel() },
             onSelectChannel = { viewModel.playStream(it) },
+            onEnterPip = onEnterPip,
             modifier = Modifier.fillMaxSize()
         )
     } else {

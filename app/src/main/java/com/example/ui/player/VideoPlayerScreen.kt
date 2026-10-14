@@ -3,6 +3,7 @@ package com.example.ui.player
 import android.app.Activity
 import android.content.Context
 import android.media.AudioManager
+import android.os.Build
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
@@ -51,6 +52,7 @@ import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SkipNext
@@ -101,6 +103,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
+import com.example.MainActivity
 import com.example.model.AspectRatioMode
 import com.example.model.IptvItem
 import com.example.model.IptvType
@@ -108,6 +111,7 @@ import com.example.model.PlayerUiState
 import com.example.player.ExoPlayerManager
 import com.example.ui.locale.LocalAppLanguage
 import com.example.ui.locale.LocalAppStrings
+import com.example.ui.locale.LocalIsInPipMode
 import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.AccentRed
 import com.example.ui.theme.PureWhite
@@ -118,6 +122,7 @@ import com.example.ui.theme.Slate800
 import com.example.ui.theme.Slate850
 import com.example.ui.theme.Slate900
 import com.example.ui.theme.Slate950
+import com.example.util.LocalIsTelevision
 import java.util.Locale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
@@ -132,12 +137,15 @@ fun VideoPlayerScreen(
     onPlayNext: () -> Unit,
     onPlayPrevious: () -> Unit,
     onSelectChannel: (IptvItem) -> Unit,
+    onEnterPip: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val strings = LocalAppStrings.current
     val isAr = LocalAppLanguage.current == "ar"
+    val isTelevision = LocalIsTelevision.current
     val context = LocalContext.current
     val activity = context as? Activity
+    val isInPipMode = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && activity?.isInPictureInPictureMode == true) || LocalIsInPipMode.current
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
 
     val currentItem = uiState.currentItem
@@ -218,7 +226,16 @@ fun VideoPlayerScreen(
         }
     }
 
-    BackHandler {
+    // Auto-dismiss dialogs and quick channel list when entering PiP mode
+    LaunchedEffect(isInPipMode) {
+        if (isInPipMode) {
+            if (uiState.isQuickChannelListOpen) {
+                playerManager.closeQuickChannelList()
+            }
+        }
+    }
+
+    BackHandler(enabled = !isInPipMode) {
         if (uiState.isQuickChannelListOpen) {
             playerManager.closeQuickChannelList()
         } else if (uiState.isControlsVisible) {
@@ -338,7 +355,9 @@ fun VideoPlayerScreen(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) {
-                playerManager.toggleControlsVisibility()
+                if (!isInPipMode) {
+                    playerManager.toggleControlsVisibility()
+                }
             }
             .testTag("video_player_screen")
     ) {
@@ -384,7 +403,7 @@ fun VideoPlayerScreen(
 
         // Temporary Gesture HUD Overlay
         AnimatedVisibility(
-            visible = isGestureActive,
+            visible = !isInPipMode && isGestureActive,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.Center)
@@ -432,7 +451,7 @@ fun VideoPlayerScreen(
         }
 
         // Buffering Indicator Overlay
-        if (uiState.isBuffering) {
+        if (!isInPipMode && uiState.isBuffering) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -462,7 +481,7 @@ fun VideoPlayerScreen(
         }
 
         // Playback Error Overlay
-        if (uiState.errorMessage != null) {
+        if (!isInPipMode && uiState.errorMessage != null) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -549,7 +568,7 @@ fun VideoPlayerScreen(
 
         // Fullscreen Playback HUD
         AnimatedVisibility(
-            visible = uiState.isControlsVisible && uiState.errorMessage == null,
+            visible = !isInPipMode && uiState.isControlsVisible && uiState.errorMessage == null,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.fillMaxSize()
@@ -819,6 +838,58 @@ fun VideoPlayerScreen(
                             }
                         }
 
+                        // Picture-in-Picture (PiP) Button (Phones & Tablets only - disabled on Android TV)
+                        if (!isTelevision) {
+                            val pipInteraction = remember { MutableInteractionSource() }
+                            val isPipFocused by pipInteraction.collectIsFocusedAsState()
+
+                            Surface(
+                                color = if (isPipFocused) AccentCyan else Color(0x66000000),
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(
+                                    width = if (isPipFocused) 3.dp else 1.dp,
+                                    color = if (isPipFocused) PureWhite else Slate700
+                                ),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .focusProperties { down = playPauseFocusRequester }
+                                    .focusable(interactionSource = pipInteraction)
+                                    .onPreviewKeyEvent { event ->
+                                        if (event.type == KeyEventType.KeyUp &&
+                                            (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                        ) {
+                                            onEnterPip()
+                                            (activity as? MainActivity)?.enterPipMode()
+                                            true
+                                        } else false
+                                    }
+                                    .clickable(interactionSource = pipInteraction, indication = null) {
+                                        onEnterPip()
+                                        (activity as? MainActivity)?.enterPipMode()
+                                    }
+                                    .testTag("btn_player_pip")
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PictureInPictureAlt,
+                                        contentDescription = if (isAr) "نافذة عائمة" else "PiP",
+                                        tint = if (isPipFocused) Slate950 else AccentCyan,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = if (isAr) "نافذة عائمة" else "PiP",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isPipFocused) Slate950 else PureWhite
+                                    )
+                                }
+                            }
+                        }
+
                         // Show Drawer Button ONLY for Live TV ("Channels") and Series ("Episodes") — NEVER for Movies!
                         if (hasDrawerList) {
                             val drawerBtnInteraction = remember { MutableInteractionSource() }
@@ -1071,7 +1142,7 @@ fun VideoPlayerScreen(
 
         // Side Drawer: Strictly shows "Episodes" for TV Series and "Channel List" for Live TV (Completely Disabled in Movies!)
         AnimatedVisibility(
-            visible = uiState.isQuickChannelListOpen && hasDrawerList,
+            visible = !isInPipMode && uiState.isQuickChannelListOpen && hasDrawerList,
             enter = slideInHorizontally(initialOffsetX = { it }),
             exit = slideOutHorizontally(targetOffsetX = { it }),
             modifier = Modifier
@@ -1196,7 +1267,7 @@ fun VideoPlayerScreen(
         }
     }
 
-    if (showAudioDialog) {
+    if (!isInPipMode && showAudioDialog) {
         AlertDialog(
             onDismissRequest = { showAudioDialog = false },
             containerColor = Slate900,
@@ -1281,7 +1352,7 @@ fun VideoPlayerScreen(
         )
     }
 
-    if (showSubtitleDialog) {
+    if (!isInPipMode && showSubtitleDialog) {
         AlertDialog(
             onDismissRequest = { showSubtitleDialog = false },
             containerColor = Slate900,
