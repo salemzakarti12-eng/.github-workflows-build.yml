@@ -67,9 +67,11 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -80,6 +82,9 @@ import com.example.ui.MainViewModel
 import com.example.ui.Screen
 import com.example.ui.channelbrowser.ContentBrowserScreen
 import com.example.ui.dashboard.DashboardScreen
+import com.example.ui.locale.LocalAppLanguage
+import com.example.ui.locale.LocalAppStrings
+import com.example.ui.locale.getAppStrings
 import com.example.ui.player.VideoPlayerScreen
 import com.example.ui.series.SeriesDetailScreen
 import com.example.ui.sources.SourcesScreen
@@ -94,11 +99,6 @@ import com.example.ui.theme.Slate800
 import com.example.ui.theme.Slate850
 import com.example.ui.theme.Slate900
 import com.example.ui.theme.Slate950
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.LayoutDirection
-import com.example.ui.locale.LocalAppLanguage
-import com.example.ui.locale.LocalAppStrings
-import com.example.ui.locale.getAppStrings
 import com.example.util.DeviceUtils
 import com.example.util.LocalIsTelevision
 
@@ -263,7 +263,7 @@ fun HypnoStreamApp(viewModel: MainViewModel = viewModel()) {
         }
 
         if (isLandscape) {
-            // Landscape layout: Compact left NavigationRail to avoid content crush
+            // Landscape layout: Compact side NavigationRail
             Row(
                 modifier = Modifier
                     .fillMaxSize()
@@ -454,6 +454,8 @@ fun MiniPlayerBar(
 ) {
     val barInteraction = remember { MutableInteractionSource() }
     val isBarFocused by barInteraction.collectIsFocusedAsState()
+    val currentLanguage = LocalAppLanguage.current
+    val nowPlayingText = if (currentLanguage == "ar") "يعرض الآن" else "Now Playing"
 
     Surface(
         color = if (isBarFocused) Slate800 else Slate850,
@@ -509,7 +511,7 @@ fun MiniPlayerBar(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "Now Playing • ${item.group}",
+                        text = "$nowPlayingText • ${item.group}",
                         fontSize = 10.sp,
                         color = AccentCyan,
                         maxLines = 1
