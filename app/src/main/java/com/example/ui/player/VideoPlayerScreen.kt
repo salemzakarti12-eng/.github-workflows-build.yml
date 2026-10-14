@@ -12,6 +12,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -76,13 +77,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
@@ -138,7 +139,7 @@ fun VideoPlayerScreen(
 
     // Invisible Gesture States (Left = Volume, Right = Brightness)
     var isGestureActive by remember { mutableStateOf(false) }
-    var gestureType by remember { mutableStateOf("") } // "volume" or "brightness"
+    var gestureType by remember { mutableStateOf("") }
     var gesturePercent by remember { mutableIntStateOf(0) }
     var gestureHideTrigger by remember { mutableIntStateOf(0) }
 
@@ -160,27 +161,46 @@ fun VideoPlayerScreen(
         }
     }
 
-    // Back Handler: pressing Back returns to channel list
     BackHandler {
         if (uiState.isQuickChannelListOpen) {
             playerManager.closeQuickChannelList()
+        } else if (uiState.isControlsVisible) {
+            playerManager.toggleControlsVisibility()
         } else {
             onBack()
         }
     }
 
     val currentItem = uiState.currentItem
+
+    // Dedicated FocusRequesters so TV Remote Up/Down/Left/Right navigation works predictably
     val playPauseFocusRequester = remember { FocusRequester() }
+    val prevFocusRequester = remember { FocusRequester() }
+    val nextFocusRequester = remember { FocusRequester() }
+    val audioFocusRequester = remember { FocusRequester() }
+    val subFocusRequester = remember { FocusRequester() }
+    val aspectFocusRequester = remember { FocusRequester() }
+    val backFocusRequester = remember { FocusRequester() }
+
+    // Track which button was last used so clicking Next/Prev doesn't jump focus back to Pause!
+    var lastFocusedControl by remember { mutableStateOf("play") }
+
     var showAudioDialog by remember { mutableStateOf(false) }
     var showSubtitleDialog by remember { mutableStateOf(false) }
 
-    // Request initial focus on Play/Pause when controls appear
+    // Only focus Play/Pause when HUD first opens from hidden state
+    var wasControlsVisible by remember { mutableStateOf(false) }
     LaunchedEffect(uiState.isControlsVisible) {
-        if (uiState.isControlsVisible) {
+        if (uiState.isControlsVisible && !wasControlsVisible) {
             try {
-                playPauseFocusRequester.requestFocus()
+                when (lastFocusedControl) {
+                    "next" -> nextFocusRequester.requestFocus()
+                    "prev" -> prevFocusRequester.requestFocus()
+                    else -> playPauseFocusRequester.requestFocus()
+                }
             } catch (_: Exception) {}
         }
+        wasControlsVisible = uiState.isControlsVisible
     }
 
     Box(
@@ -188,63 +208,45 @@ fun VideoPlayerScreen(
             .fillMaxSize()
             .background(Color.Black)
             .focusable()
-            .onKeyEvent { event ->
-                if (event.type == KeyEventType.KeyUp) {
-                    when (event.key) {
-                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
-                            if (!uiState.isControlsVisible) {
+            .onPreviewKeyEvent { event ->
+                // Any key press resets the 5-second auto-hide timer when HUD is open
+                if (uiState.isControlsVisible && event.type == KeyEventType.KeyDown) {
+                    playerManager.scheduleControlsAutoHide()
+                }
+
+                // CRITICAL TV FIX: Only intercept Up/Down/OK at the root level when the HUD controls are HIDDEN!
+                // When HUD controls are visible, let D-pad Up/Down/Left/Right move freely to Audio, Subtitles, Fit, Next, Prev!
+                if (!uiState.isControlsVisible && !uiState.isQuickChannelListOpen && !showAudioDialog && !showSubtitleDialog) {
+                    if (event.type == KeyEventType.KeyUp) {
+                        when (event.key) {
+                            Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+                                lastFocusedControl = "play"
                                 playerManager.showControlsTemporarily()
                                 true
-                            } else {
-                                // Allow focused child button to consume Enter
-                                false
                             }
-                        }
-                        Key.DirectionUp -> {
-                            // Only switch channel if controls/dialogs are NOT visible
-                            if (!uiState.isControlsVisible && !showAudioDialog && !showSubtitleDialog && !uiState.isQuickChannelListOpen) {
+                            Key.DirectionUp, Key.ChannelUp -> {
                                 onPlayPrevious()
                                 true
-                            } else {
-                                false
                             }
-                        }
-                        Key.DirectionDown -> {
-                            // Only switch channel if controls/dialogs are NOT visible
-                            if (!uiState.isControlsVisible && !showAudioDialog && !showSubtitleDialog && !uiState.isQuickChannelListOpen) {
+                            Key.DirectionDown, Key.ChannelDown -> {
                                 onPlayNext()
                                 true
-                            } else {
-                                false
                             }
-                        }
-                        Key.Back -> {
-                            if (uiState.isQuickChannelListOpen) {
-                                playerManager.closeQuickChannelList()
-                                true
-                            } else if (showAudioDialog) {
-                                showAudioDialog = false
-                                true
-                            } else if (showSubtitleDialog) {
-                                showSubtitleDialog = false
-                                true
-                            } else if (uiState.isControlsVisible) {
-                                playerManager.toggleControlsVisibility()
-                                true
-                            } else {
+                            Key.Back, Key.Escape -> {
                                 onBack()
                                 true
                             }
+                            else -> false
                         }
-                        else -> false
-                    }
-                } else false
+                    } else false
+                } else {
+                    false
+                }
             }
             .pointerInput(Unit) {
                 var isLeftZone = true
                 detectVerticalDragGestures(
                     onDragStart = { offset ->
-                        // Left 50% of screen = Volume | Right 50% of screen = Brightness
                         isLeftZone = offset.x < (size.width / 2f)
                         val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
                         val curVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
@@ -280,12 +282,8 @@ fun VideoPlayerScreen(
                             isGestureActive = true
                         }
                     },
-                    onDragEnd = {
-                        gestureHideTrigger++
-                    },
-                    onDragCancel = {
-                        gestureHideTrigger++
-                    }
+                    onDragEnd = { gestureHideTrigger++ },
+                    onDragCancel = { gestureHideTrigger++ }
                 )
             }
             .clickable(
@@ -296,7 +294,6 @@ fun VideoPlayerScreen(
             }
             .testTag("video_player_screen")
     ) {
-        // Player Video Frame
         val playerModifier = when (uiState.aspectRatioMode) {
             AspectRatioMode.SIXTEEN_BY_NINE -> Modifier.fillMaxWidth().aspectRatio(16f / 9f).align(Alignment.Center)
             AspectRatioMode.FOUR_BY_THREE -> Modifier.fillMaxWidth().aspectRatio(4f / 3f).align(Alignment.Center)
@@ -313,6 +310,8 @@ fun VideoPlayerScreen(
                     PlayerView(ctx).apply {
                         player = playerManager.player
                         useController = false
+                        isFocusable = false
+                        isFocusableInTouchMode = false
                         layoutParams = FrameLayout.LayoutParams(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT
@@ -335,7 +334,7 @@ fun VideoPlayerScreen(
             )
         }
 
-        // Temporary Gesture HUD Overlay (Invisible unless actively swiping Left/Right)
+        // Temporary Gesture HUD Overlay
         AnimatedVisibility(
             visible = isGestureActive,
             enter = fadeIn(),
@@ -345,7 +344,7 @@ fun VideoPlayerScreen(
             Surface(
                 color = Color(0xD90F172A),
                 shape = RoundedCornerShape(18.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, AccentCyan)
+                border = BorderStroke(1.dp, AccentCyan)
             ) {
                 Column(
                     modifier = Modifier
@@ -384,48 +383,32 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Buffering Indicator Overlay
+        // Buffering Indicator Overlay (Positioned at top-center or subtle so it never blocks Next/Prev buttons)
         if (uiState.isBuffering) {
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0x66000000)),
-                contentAlignment = Alignment.Center
+                    .align(Alignment.TopCenter)
+                    .padding(top = 84.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xD90F172A))
+                    .border(1.dp, Slate700, RoundedCornerShape(14.dp))
+                    .padding(horizontal = 20.dp, vertical = 10.dp)
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xCC0F172A))
-                        .padding(24.dp)
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(
                         color = AccentCyan,
-                        strokeWidth = 3.dp,
-                        modifier = Modifier.size(52.dp)
+                        strokeWidth = 2.5.dp,
+                        modifier = Modifier.size(22.dp)
                     )
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = if (uiState.reconnectAttempt > 0) {
-                            if (isAr) "إعادة الاتصال بالبث... (${uiState.reconnectAttempt} من 4)"
-                            else "Reconnecting stream... (${uiState.reconnectAttempt} of 4)"
-                        } else {
-                            if (isAr) "جاري تحميل البث..." else "Buffering Stream..."
-                        },
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = PureWhite
+                        text = if (isAr) "جاري تحميل البث... ${currentItem?.name.orEmpty()}" else "Buffering... ${currentItem?.name.orEmpty()}",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = PureWhite,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    currentItem?.let { item ->
-                        Text(
-                            text = item.name,
-                            fontSize = 12.sp,
-                            color = Slate300,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
                 }
             }
         }
@@ -442,7 +425,7 @@ fun VideoPlayerScreen(
                 Surface(
                     color = Slate900,
                     shape = RoundedCornerShape(20.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, AccentRed),
+                    border = BorderStroke(1.dp, AccentRed),
                     modifier = Modifier.fillMaxWidth(0.9f)
                 ) {
                     Column(
@@ -457,7 +440,7 @@ fun VideoPlayerScreen(
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = if (isAr) "خطأ في التشغيل" else "Playback Error",
+                            text = if (isAr) "البث غير متاح حالياً" else "Stream Unavailable",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = PureWhite
@@ -516,7 +499,7 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Fullscreen Playback HUD (auto-hides after 5 seconds of inactivity)
+        // Fullscreen Playback HUD
         AnimatedVisibility(
             visible = uiState.isControlsVisible && uiState.errorMessage == null,
             enter = fadeIn(),
@@ -536,7 +519,7 @@ fun VideoPlayerScreen(
                         )
                     )
             ) {
-                // Top Control Bar
+                // Top Control Bar (Back, Title, Fit, Audio, Subtitles, Channel Drawer)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -557,6 +540,8 @@ fun VideoPlayerScreen(
                             interactionSource = backBtnInteraction,
                             modifier = Modifier
                                 .size(48.dp)
+                                .focusRequester(backFocusRequester)
+                                .focusProperties { down = playPauseFocusRequester }
                                 .clip(CircleShape)
                                 .background(if (isBackBtnFocused) AccentCyan else Color(0x66000000))
                                 .border(
@@ -631,7 +616,7 @@ fun VideoPlayerScreen(
                         }
                     }
 
-                    // Top Action Buttons with TV Focus Support
+                    // Top Action Buttons (Fit, Audio, Subtitles, Drawer) with explicit TV focus routing
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -639,26 +624,28 @@ fun VideoPlayerScreen(
                         val aspectInteraction = remember { MutableInteractionSource() }
                         val isAspectFocused by aspectInteraction.collectIsFocusedAsState()
 
-                        // Aspect Ratio button
                         Surface(
                             color = if (isAspectFocused) AccentCyan else Color(0x66000000),
                             shape = RoundedCornerShape(12.dp),
-                            border = androidx.compose.foundation.BorderStroke(
+                            border = BorderStroke(
                                 width = if (isAspectFocused) 3.dp else 1.dp,
                                 color = if (isAspectFocused) PureWhite else Slate700
                             ),
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
-                                .clickable(interactionSource = aspectInteraction, indication = null) {
-                                    playerManager.cycleAspectRatio()
-                                }
-                                .onKeyEvent { event ->
+                                .focusRequester(aspectFocusRequester)
+                                .focusProperties { down = playPauseFocusRequester }
+                                .focusable(interactionSource = aspectInteraction)
+                                .onPreviewKeyEvent { event ->
                                     if (event.type == KeyEventType.KeyUp &&
                                         (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
                                     ) {
                                         playerManager.cycleAspectRatio()
                                         true
                                     } else false
+                                }
+                                .clickable(interactionSource = aspectInteraction, indication = null) {
+                                    playerManager.cycleAspectRatio()
                                 }
                                 .testTag("btn_aspect_ratio")
                         ) {
@@ -689,17 +676,16 @@ fun VideoPlayerScreen(
                         Surface(
                             color = if (isAudioFocused) AccentCyan else Color(0x66000000),
                             shape = RoundedCornerShape(12.dp),
-                            border = androidx.compose.foundation.BorderStroke(
+                            border = BorderStroke(
                                 width = if (isAudioFocused) 3.dp else 1.dp,
                                 color = if (isAudioFocused) PureWhite else Slate700
                             ),
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
-                                .clickable(interactionSource = audioInteraction, indication = null) {
-                                    playerManager.updateTracksState()
-                                    showAudioDialog = true
-                                }
-                                .onKeyEvent { event ->
+                                .focusRequester(audioFocusRequester)
+                                .focusProperties { down = playPauseFocusRequester }
+                                .focusable(interactionSource = audioInteraction)
+                                .onPreviewKeyEvent { event ->
                                     if (event.type == KeyEventType.KeyUp &&
                                         (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
                                     ) {
@@ -707,6 +693,10 @@ fun VideoPlayerScreen(
                                         showAudioDialog = true
                                         true
                                     } else false
+                                }
+                                .clickable(interactionSource = audioInteraction, indication = null) {
+                                    playerManager.updateTracksState()
+                                    showAudioDialog = true
                                 }
                                 .testTag("btn_player_audio")
                         ) {
@@ -737,17 +727,16 @@ fun VideoPlayerScreen(
                         Surface(
                             color = if (isSubFocused) AccentCyan else Color(0x66000000),
                             shape = RoundedCornerShape(12.dp),
-                            border = androidx.compose.foundation.BorderStroke(
+                            border = BorderStroke(
                                 width = if (isSubFocused) 3.dp else 1.dp,
                                 color = if (isSubFocused) PureWhite else Slate700
                             ),
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
-                                .clickable(interactionSource = subInteraction, indication = null) {
-                                    playerManager.updateTracksState()
-                                    showSubtitleDialog = true
-                                }
-                                .onKeyEvent { event ->
+                                .focusRequester(subFocusRequester)
+                                .focusProperties { down = playPauseFocusRequester }
+                                .focusable(interactionSource = subInteraction)
+                                .onPreviewKeyEvent { event ->
                                     if (event.type == KeyEventType.KeyUp &&
                                         (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
                                     ) {
@@ -755,6 +744,10 @@ fun VideoPlayerScreen(
                                         showSubtitleDialog = true
                                         true
                                     } else false
+                                }
+                                .clickable(interactionSource = subInteraction, indication = null) {
+                                    playerManager.updateTracksState()
+                                    showSubtitleDialog = true
                                 }
                                 .testTag("btn_player_subtitles")
                         ) {
@@ -781,12 +774,12 @@ fun VideoPlayerScreen(
                         val drawerBtnInteraction = remember { MutableInteractionSource() }
                         val isDrawerFocused by drawerBtnInteraction.collectIsFocusedAsState()
 
-                        // Channel Switcher Drawer toggle
                         IconButton(
                             onClick = { playerManager.toggleQuickChannelList() },
                             interactionSource = drawerBtnInteraction,
                             modifier = Modifier
                                 .size(48.dp)
+                                .focusProperties { down = playPauseFocusRequester }
                                 .clip(CircleShape)
                                 .background(if (isDrawerFocused) AccentCyan else Color(0x66000000))
                                 .border(
@@ -814,7 +807,8 @@ fun VideoPlayerScreen(
                     }
                 }
 
-                // Center Play / Next / Previous Controls with TV Focus
+                // Center Play / Next / Previous Controls
+                // Pressing Up on any of these 3 buttons moves TV focus directly to the Audio / Subtitle bar!
                 Row(
                     modifier = Modifier.align(Alignment.Center),
                     verticalAlignment = Alignment.CenterVertically,
@@ -823,12 +817,18 @@ fun VideoPlayerScreen(
                     val prevInteraction = remember { MutableInteractionSource() }
                     val isPrevFocused by prevInteraction.collectIsFocusedAsState()
 
-                    // Previous Channel
+                    // Previous Channel Button (Keeps focus on itself when clicked!)
                     IconButton(
-                        onClick = onPlayPrevious,
+                        onClick = {
+                            lastFocusedControl = "prev"
+                            onPlayPrevious()
+                            playerManager.scheduleControlsAutoHide()
+                        },
                         interactionSource = prevInteraction,
                         modifier = Modifier
                             .size(56.dp)
+                            .focusRequester(prevFocusRequester)
+                            .focusProperties { up = audioFocusRequester }
                             .clip(CircleShape)
                             .background(if (isPrevFocused) AccentCyan else Color(0x66000000))
                             .border(
@@ -836,6 +836,17 @@ fun VideoPlayerScreen(
                                 color = if (isPrevFocused) PureWhite else Slate700,
                                 shape = CircleShape
                             )
+                            .focusable(interactionSource = prevInteraction)
+                            .onPreviewKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyUp &&
+                                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                ) {
+                                    lastFocusedControl = "prev"
+                                    onPlayPrevious()
+                                    playerManager.scheduleControlsAutoHide()
+                                    true
+                                } else false
+                            }
                             .testTag("btn_player_prev")
                     ) {
                         Icon(
@@ -849,13 +860,17 @@ fun VideoPlayerScreen(
                     val playInteraction = remember { MutableInteractionSource() }
                     val isPlayFocused by playInteraction.collectIsFocusedAsState()
 
-                    // Main Play/Pause
+                    // Main Play/Pause Button (Pressing UP goes straight to Audio button!)
                     IconButton(
-                        onClick = { playerManager.togglePlayPause() },
+                        onClick = {
+                            lastFocusedControl = "play"
+                            playerManager.togglePlayPause()
+                        },
                         interactionSource = playInteraction,
                         modifier = Modifier
                             .size(76.dp)
                             .focusRequester(playPauseFocusRequester)
+                            .focusProperties { up = audioFocusRequester }
                             .clip(CircleShape)
                             .background(if (isPlayFocused) PureWhite else AccentCyan)
                             .border(
@@ -863,6 +878,16 @@ fun VideoPlayerScreen(
                                 color = PureWhite,
                                 shape = CircleShape
                             )
+                            .focusable(interactionSource = playInteraction)
+                            .onPreviewKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyUp &&
+                                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                ) {
+                                    lastFocusedControl = "play"
+                                    playerManager.togglePlayPause()
+                                    true
+                                } else false
+                            }
                             .testTag("btn_player_play_pause")
                     ) {
                         Icon(
@@ -876,12 +901,18 @@ fun VideoPlayerScreen(
                     val nextInteraction = remember { MutableInteractionSource() }
                     val isNextFocused by nextInteraction.collectIsFocusedAsState()
 
-                    // Next Channel
+                    // Next Channel Button (Keeps focus on itself when clicked so it never pauses!)
                     IconButton(
-                        onClick = onPlayNext,
+                        onClick = {
+                            lastFocusedControl = "next"
+                            onPlayNext()
+                            playerManager.scheduleControlsAutoHide()
+                        },
                         interactionSource = nextInteraction,
                         modifier = Modifier
                             .size(56.dp)
+                            .focusRequester(nextFocusRequester)
+                            .focusProperties { up = subFocusRequester }
                             .clip(CircleShape)
                             .background(if (isNextFocused) AccentCyan else Color(0x66000000))
                             .border(
@@ -889,6 +920,17 @@ fun VideoPlayerScreen(
                                 color = if (isNextFocused) PureWhite else Slate700,
                                 shape = CircleShape
                             )
+                            .focusable(interactionSource = nextInteraction)
+                            .onPreviewKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyUp &&
+                                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                ) {
+                                    lastFocusedControl = "next"
+                                    onPlayNext()
+                                    playerManager.scheduleControlsAutoHide()
+                                    true
+                                } else false
+                            }
                             .testTag("btn_player_next")
                     ) {
                         Icon(
@@ -900,7 +942,7 @@ fun VideoPlayerScreen(
                     }
                 }
 
-                // Bottom HUD: Current time, progress seekbar or channel info
+                // Bottom HUD: Seekbar for Movies/Series or Info for Live TV
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -953,7 +995,7 @@ fun VideoPlayerScreen(
                                 modifier = Modifier.weight(1f)
                             )
                             Text(
-                                text = if (isAr) "اسحب يساراً للصوت • يميناً للسطوع" else "Swipe Left: Volume • Right: Brightness",
+                                text = if (isAr) "سهم للأعلى: الصوت والترجمة • يمين/يسار: تغيير القناة" else "Up: Audio/Subtitles • Left/Right: Prev/Next",
                                 fontSize = 11.sp,
                                 color = Slate400
                             )
@@ -963,7 +1005,7 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Quick Channel Switcher Drawer (Slide-in from side)
+        // Quick Channel Switcher Drawer
         AnimatedVisibility(
             visible = uiState.isQuickChannelListOpen,
             enter = slideInHorizontally(initialOffsetX = { it }),
@@ -975,7 +1017,7 @@ fun VideoPlayerScreen(
         ) {
             Surface(
                 color = Slate900,
-                border = androidx.compose.foundation.BorderStroke(1.dp, Slate800),
+                border = BorderStroke(1.dp, Slate800),
                 modifier = Modifier.fillMaxSize()
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
