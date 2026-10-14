@@ -1,37 +1,22 @@
 package com.example.ui.theme
 
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
-// Dark Slate Theme Colors
-val Slate950 = Color(0xFF070B14)
-val Slate900 = Color(0xFF0F172A)
-val Slate850 = Color(0xFF131D31)
-val Slate800 = Color(0xFF1E293B)
-val Slate700 = Color(0xFF334155)
-val Slate600 = Color(0xFF475569)
-val Slate400 = Color(0xFF94A3B8)
-val Slate300 = Color(0xFFCBD5E1)
-val Slate100 = Color(0xFFF1F5F9)
+// Pure Black Background & Deep Charcoal Surfaces
+val Slate950 = Color(0xFF000000) // Main app background -> Pure Black
+val Slate900 = Color(0xFF0A0A0C) // Cards, Navigation Rail & Sidebars -> Near-Black
+val Slate850 = Color(0xFF121216) // Elevated surfaces & Search inputs
+val Slate800 = Color(0xFF1C1C22) // Borders & Dividers
+val Slate700 = Color(0xFF2A2A35) // Subtle borders & Inactive tracks
+val Slate600 = Color(0xFF475569) // Placeholder icons
+val Slate500 = Color(0xFF64748B)
+val Slate400 = Color(0xFF94A3B8) // Secondary text
+val Slate300 = Color(0xFFCBD5E1) // Subtitle text
+
+// Brand & Accent Colors (Unchanged)
 val PureWhite = Color(0xFFFFFFFF)
-
-// Accent Colors
 val AccentCyan = Color(0xFF38BDF8)
-val AccentEmerald = Color(0xFF10B981)
-val AccentAmber = Color(0xFFF59E0B)
 val AccentRed = Color(0xFFEF4444)
-
-// Hypnotix 3 Card Gradients
-val TvChannelsGradient = Brush.linearGradient(
-    colors = listOf(Color(0xFFE11D48), Color(0xFFEA580C)) // Red to Orange
-)
-val MoviesGradient = Brush.linearGradient(
-    colors = listOf(Color(0xFF8B5CF6), Color(0xFF2563EB)) // Purple to Blue
-)
-val SeriesGradient = Brush.linearGradient(
-    colors = listOf(Color(0xFF06B6D4), Color(0xFF1E3A8A)) // Cyan to Navy
-)
-
-// Glow & Card Overlays
-val CardGlassBorder = Color(0x33FFFFFF)
-val CardOverlayDark = Color(0x66000000)
+val AccentEmerald = Color(0xFF10B981)
+val AccentPurple = Color(0xFF8B5CF6)
+val AccentAmber = Color(0xFFF59E0B)
