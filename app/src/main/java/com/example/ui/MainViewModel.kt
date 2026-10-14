@@ -17,7 +17,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -85,23 +84,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isSeriesLoading = MutableStateFlow(false)
     val isSeriesLoading: StateFlow<Boolean> = _isSeriesLoading.asStateFlow()
 
-    // Flattened list of all episodes for the currently opened TV Series (used in the Player Episode Drawer!)
+    // Flattened list of all episodes for the currently opened TV Series (explicitly tagged as IptvType.SERIES)
     val currentSeriesEpisodes: StateFlow<List<IptvItem>> = combine(
         _seriesDetails,
         _selectedSeries,
         currentLanguage
     ) { details, series, lang ->
-        if (details == null) {
-            emptyList()
-        } else {
-            val isAr = lang == "ar"
+        val isAr = lang == "ar"
+        if (details != null && details.seasons.isNotEmpty()) {
             val seriesTitle = details.title.ifBlank { series?.seriesTitle ?: series?.name ?: if (isAr) "مسلسل" else "TV Series" }
             details.seasons.flatMap { season ->
                 val seasonLabel = if (isAr) "الموسم ${season.seasonNumber}" else "Season ${season.seasonNumber}"
                 season.episodes.map { ep ->
-                    ep.toIptvItem(seriesTitle = seriesTitle, group = seasonLabel)
+                    ep.toIptvItem(seriesTitle = seriesTitle, group = seasonLabel).copy(
+                        type = IptvType.SERIES,
+                        seasonNumber = ep.seasonNumber,
+                        episodeNumber = ep.episodeNumber
+                    )
                 }
             }
+        } else if (series != null) {
+            val targetTitle = (series.seriesTitle ?: series.name)
+                .substringBefore(" - S")
+                .substringBefore(" S0")
+                .substringBefore(" S1")
+                .trim()
+            repository.getAllSeries().filter {
+                it.seriesTitle?.equals(targetTitle, ignoreCase = true) == true ||
+                it.name.contains(targetTitle, ignoreCase = true)
+            }.map { it.copy(type = IptvType.SERIES) }
+        } else {
+            emptyList()
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -193,18 +206,49 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun playStream(item: IptvItem) {
-        repository.recordRecentlyWatched(item)
-        playerManager.playItem(item)
+        // Ensure accurate IptvType based on screen and group/URL so Movies & Series NEVER get treated as Live TV!
+        val resolvedType = when {
+            item.type == IptvType.MOVIE || item.type == IptvType.SERIES -> item.type
+            _currentScreen.value == Screen.MOVIES -> IptvType.MOVIE
+            _currentScreen.value == Screen.SERIES || _currentScreen.value == Screen.SERIES_DETAIL -> IptvType.SERIES
+            item.group.contains("Series", ignoreCase = true) ||
+            item.group.contains("مسلسل", ignoreCase = true) ||
+            item.name.contains(Regex("""S\d{1,2}E\d{1,3}""", RegexOption.IGNORE_CASE)) -> IptvType.SERIES
+            item.group.contains("Movie", ignoreCase = true) ||
+            item.group.contains("Film", ignoreCase = true) ||
+            item.group.contains("VOD", ignoreCase = true) ||
+            item.group.contains("أفلام", ignoreCase = true) -> IptvType.MOVIE
+            else -> item.type
+        }
+
+        val normalizedItem = item.copy(type = resolvedType)
+
+        if (resolvedType == IptvType.MOVIE) {
+            playerManager.closeQuickChannelList()
+        }
+
+        // If user played a Series episode directly (e.g. from Recently Watched or M3U), ensure episodes list is populated
+        if (resolvedType == IptvType.SERIES && _seriesDetails.value == null) {
+            _selectedSeries.value = normalizedItem
+            viewModelScope.launch {
+                val result = repository.getSeriesDetails(normalizedItem)
+                _seriesDetails.value = result.getOrNull()
+            }
+        }
+
+        repository.recordRecentlyWatched(normalizedItem)
+        playerManager.playItem(normalizedItem)
         navigateTo(Screen.PLAYER)
     }
 
     fun openSeriesDetail(item: IptvItem) {
-        _selectedSeries.value = item
+        val seriesItem = item.copy(type = IptvType.SERIES)
+        _selectedSeries.value = seriesItem
         _seriesDetails.value = null
         _isSeriesLoading.value = true
         navigateTo(Screen.SERIES_DETAIL)
         viewModelScope.launch {
-            val result = repository.getSeriesDetails(item)
+            val result = repository.getSeriesDetails(seriesItem)
             _seriesDetails.value = result.getOrNull()
             _isSeriesLoading.value = false
         }
@@ -215,7 +259,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val isAr = currentLanguage.value == "ar"
         val seriesTitle = _seriesDetails.value?.title ?: series?.seriesTitle ?: series?.name ?: if (isAr) "مسلسل" else "TV Series"
         val group = if (isAr) "الموسم ${episode.seasonNumber}" else "Season ${episode.seasonNumber}"
-        val item = episode.toIptvItem(seriesTitle, group)
+        // Force type = IptvType.SERIES so the player knows this is a Series Episode, NOT a Live Channel!
+        val item = episode.toIptvItem(seriesTitle, group).copy(
+            type = IptvType.SERIES,
+            seasonNumber = episode.seasonNumber,
+            episodeNumber = episode.episodeNumber
+        )
         playStream(item)
     }
 
@@ -241,7 +290,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 playStream(eps[nextIndex])
             }
             IptvType.MOVIE -> {
-                // In Movies, Next button fast-forwards 10 seconds instead of switching movies
                 playerManager.seekTo(playerUiState.value.currentPositionMs + 10_000L)
             }
         }
@@ -265,7 +313,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 playStream(eps[prevIndex])
             }
             IptvType.MOVIE -> {
-                // In Movies, Previous button rewinds 10 seconds instead of switching movies
                 playerManager.seekTo(playerUiState.value.currentPositionMs - 10_000L)
             }
         }
