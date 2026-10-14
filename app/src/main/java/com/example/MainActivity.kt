@@ -94,7 +94,6 @@ import com.example.ui.theme.PureWhite
 import com.example.ui.theme.Slate400
 import com.example.ui.theme.Slate700
 import com.example.ui.theme.Slate800
-import com.example.ui.theme.Slate850
 import com.example.ui.theme.Slate900
 import com.example.ui.theme.Slate950
 import com.example.util.DeviceUtils
@@ -148,6 +147,7 @@ fun HypnoStreamApp(
     val selectedCategory by viewModel.selectedCategory.collectAsState()
     val playerUiState by viewModel.playerUiState.collectAsState()
     val seriesDetails by viewModel.seriesDetails.collectAsState()
+    val currentSeriesEpisodes by viewModel.currentSeriesEpisodes.collectAsState()
     val isSeriesLoading by viewModel.isSeriesLoading.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
@@ -162,7 +162,6 @@ fun HypnoStreamApp(
 
     var lastBackPressTime by remember { mutableLongStateOf(0L) }
 
-    // Double-Back to Exit Confirmation
     BackHandler {
         if (!viewModel.handleBackPress()) {
             val now = System.currentTimeMillis()
@@ -177,10 +176,18 @@ fun HypnoStreamApp(
     }
 
     if (currentScreen == Screen.PLAYER) {
+        val activeItem = playerUiState.currentItem
+        // Pass Live Channels for Live TV, Series Episodes for Series, and Empty List for Movies!
+        val sideDrawerItems = when (activeItem?.type) {
+            IptvType.LIVE_TV -> viewModel.repository.getAllLiveChannels()
+            IptvType.SERIES -> currentSeriesEpisodes
+            else -> emptyList()
+        }
+
         VideoPlayerScreen(
             playerManager = viewModel.playerManager,
             uiState = playerUiState,
-            allChannels = viewModel.repository.getAllLiveChannels(),
+            allChannels = sideDrawerItems,
             onBack = { viewModel.handleBackPress() },
             onPlayNext = { viewModel.playNextChannel() },
             onPlayPrevious = { viewModel.playPreviousChannel() },
@@ -339,7 +346,6 @@ fun HypnoStreamApp(
                     }
                 }
 
-                // Column lays out screenContent in weight(1f) and MiniPlayerBar strictly below it (never overlapping!)
                 Column(
                     modifier = Modifier
                         .weight(1f)
@@ -453,10 +459,6 @@ fun HypnoStreamApp(
     }
 }
 
-/**
- * Fixed MiniPlayerBar: Play/Pause and Close (X) buttons are cleanly separated by 14.dp
- * so they NEVER overlap on Phone, Tablet, or Android TV.
- */
 @Composable
 fun MiniPlayerBar(
     item: IptvItem,
@@ -493,7 +495,6 @@ fun MiniPlayerBar(
                 .padding(horizontal = 16.dp, vertical = if (isCompact) 8.dp else 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left/Start Clickable Area: Expands Fullscreen Player
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -542,12 +543,10 @@ fun MiniPlayerBar(
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            // Right/End Action Buttons: Distinctly separated with 14.dp space so they NEVER overlap!
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                // Play/Pause Circle Button
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
@@ -579,7 +578,6 @@ fun MiniPlayerBar(
                     )
                 }
 
-                // Close / Stop (X) Circle Button
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
