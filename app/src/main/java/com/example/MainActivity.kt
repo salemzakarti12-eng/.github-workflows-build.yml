@@ -1,6 +1,5 @@
 package com.example
 
-import android.app.Activity
 import android.content.res.Configuration
 import android.os.Bundle
 import android.widget.Toast
@@ -8,9 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -43,8 +40,6 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -89,16 +84,13 @@ import com.example.ui.channelbrowser.ContentBrowserScreen
 import com.example.ui.dashboard.DashboardScreen
 import com.example.ui.locale.LocalAppLanguage
 import com.example.ui.locale.LocalAppStrings
-import com.example.ui.locale.LocalMiniPlayerActive
 import com.example.ui.locale.getAppStrings
 import com.example.ui.player.VideoPlayerScreen
 import com.example.ui.series.SeriesDetailScreen
 import com.example.ui.sources.SourcesScreen
 import com.example.ui.theme.AccentCyan
-import com.example.ui.theme.AccentRed
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.PureWhite
-import com.example.ui.theme.Slate300
 import com.example.ui.theme.Slate400
 import com.example.ui.theme.Slate700
 import com.example.ui.theme.Slate800
@@ -127,7 +119,10 @@ class MainActivity : ComponentActivity() {
                 LocalLayoutDirection provides layoutDirection
             ) {
                 MyApplicationTheme {
-                    HypnoStreamApp(viewModel)
+                    HypnoStreamApp(
+                        viewModel = viewModel,
+                        onFinishApp = { finish() }
+                    )
                 }
             }
         }
@@ -135,7 +130,10 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun HypnoStreamApp(viewModel: MainViewModel = viewModel()) {
+fun HypnoStreamApp(
+    viewModel: MainViewModel = viewModel(),
+    onFinishApp: () -> Unit = {}
+) {
     val currentScreen by viewModel.currentScreen.collectAsState()
     val activeSource by viewModel.activeSource.collectAsState()
     val sources by viewModel.sources.collectAsState()
@@ -157,27 +155,24 @@ fun HypnoStreamApp(viewModel: MainViewModel = viewModel()) {
     val favoriteItems = recentlyWatched.filter { favorites.contains(it.id) }
 
     val configuration = LocalConfiguration.current
-    val isTv = com.example.util.LocalIsTelevision.current
-    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE || isTv || configuration.screenWidthDp >= 600
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val strings = LocalAppStrings.current
-
-    val currentLanguage = LocalAppLanguage.current
-    val isAr = currentLanguage == "ar"
+    val isAr = LocalAppLanguage.current == "ar"
     val context = LocalContext.current
-    var lastBackPressedTime by remember { mutableLongStateOf(0L) }
 
-    // System Back Handler: Double-press back within 2 seconds to exit app confirmation
+    var lastBackPressTime by remember { mutableLongStateOf(0L) }
+
+    // Double-Back to Exit Confirmation
     BackHandler {
-        if (viewModel.handleBackPress()) {
-            return@BackHandler
-        }
-        val currentTime = System.currentTimeMillis()
-        if (currentTime - lastBackPressedTime < 2000) {
-            (context as? Activity)?.finish()
-        } else {
-            lastBackPressedTime = currentTime
-            val exitMsg = if (isAr) "اضغط رجوع مرة أخرى للخروج" else "Press back again to exit"
-            Toast.makeText(context, exitMsg, Toast.LENGTH_SHORT).show()
+        if (!viewModel.handleBackPress()) {
+            val now = System.currentTimeMillis()
+            if (now - lastBackPressTime < 2000L) {
+                onFinishApp()
+            } else {
+                lastBackPressTime = now
+                val exitMsg = if (isAr) "اضغط رجوع مرة أخرى للخروج من التطبيق" else "Press back again to exit"
+                Toast.makeText(context, exitMsg, Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -194,11 +189,11 @@ fun HypnoStreamApp(viewModel: MainViewModel = viewModel()) {
         )
     } else {
         val navItems = listOf(
-            Triple(Screen.DASHBOARD, Icons.Default.Home, strings.home),
-            Triple(Screen.LIVE_CHANNELS, Icons.Default.LiveTv, strings.liveTv),
-            Triple(Screen.MOVIES, Icons.Default.Movie, strings.movies),
-            Triple(Screen.SERIES, Icons.Default.VideoLibrary, strings.series),
-            Triple(Screen.SOURCES, Icons.Default.Settings, strings.sources)
+            Triple(Screen.DASHBOARD, Icons.Default.Home, if (isAr) "الرئيسية" else strings.home),
+            Triple(Screen.LIVE_CHANNELS, Icons.Default.LiveTv, if (isAr) "البث المباشر" else strings.liveTv),
+            Triple(Screen.MOVIES, Icons.Default.Movie, if (isAr) "الأفلام" else strings.movies),
+            Triple(Screen.SERIES, Icons.Default.VideoLibrary, if (isAr) "المسلسلات" else strings.series),
+            Triple(Screen.SOURCES, Icons.Default.Settings, if (isAr) "المصادر" else strings.sources)
         )
 
         val screenContent: @Composable () -> Unit = {
@@ -276,217 +271,192 @@ fun HypnoStreamApp(viewModel: MainViewModel = viewModel()) {
                     )
                 }
 
-                Screen.PLAYER -> {
-                    // Handled fullscreen above
-                }
-            }
-        }
-
-        val layoutDirection = if (isAr) LayoutDirection.Rtl else LayoutDirection.Ltr
-
-        val navigationRailContent = @Composable {
-            NavigationRail(
-                containerColor = Slate900,
-                contentColor = PureWhite,
-                modifier = Modifier
-                    .width(72.dp)
-                    .fillMaxHeight()
-                    .border(androidx.compose.foundation.BorderStroke(1.dp, Slate800))
-                    .testTag("main_navigation_rail")
-            ) {
-                Spacer(modifier = Modifier.height(10.dp))
-                navItems.forEach { (screen, icon, label) ->
-                    val isSelected = currentScreen == screen || (screen == Screen.SERIES && currentScreen == Screen.SERIES_DETAIL)
-                    val navInteraction = remember { MutableInteractionSource() }
-                    val isNavFocused by navInteraction.collectIsFocusedAsState()
-
-                    NavigationRailItem(
-                        selected = isSelected,
-                        onClick = { viewModel.navigateTo(screen) },
-                        interactionSource = navInteraction,
-                        icon = {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = label,
-                                tint = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
-                                modifier = Modifier.size(if (isNavFocused) 24.dp else 20.dp)
-                            )
-                        },
-                        label = {
-                            Text(
-                                text = label,
-                                fontSize = 10.sp,
-                                fontWeight = if (isSelected || isNavFocused) FontWeight.Bold else FontWeight.SemiBold,
-                                color = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
-                                maxLines = 1
-                            )
-                        },
-                        colors = navigationRailItemColors(),
-                        modifier = Modifier
-                            .focusable(interactionSource = navInteraction)
-                            .border(
-                                width = if (isNavFocused) 2.dp else 0.dp,
-                                color = if (isNavFocused) AccentCyan else Color.Transparent,
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                            .onPreviewKeyEvent { event ->
-                                if (event.type == KeyEventType.KeyUp &&
-                                    (event.key == Key.DirectionCenter ||
-                                     event.key == Key.Enter ||
-                                     event.key == Key.NumPadEnter)
-                                ) {
-                                    viewModel.navigateTo(screen)
-                                    true
-                                } else false
-                            }
-                            .testTag("nav_rail_${label.lowercase().replace(" ", "_")}")
-                    )
-                }
-            }
-        }
-
-        val mainContentArea = @Composable {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .navigationBarsPadding()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                ) {
-                    screenContent()
-                }
-
-                if (playerUiState.currentItem != null) {
-                    MiniPlayerBar(
-                        item = playerUiState.currentItem!!,
-                        isPlaying = playerUiState.isPlaying,
-                        isCompact = true,
-                        onExpand = { viewModel.navigateTo(Screen.PLAYER) },
-                        onTogglePlayPause = { viewModel.playerManager.togglePlayPause() },
-                        onDismiss = { viewModel.dismissMiniPlayer() }
-                    )
-                }
+                Screen.PLAYER -> {}
             }
         }
 
         if (isLandscape) {
-            // Landscape layout:
-            // When Arabic (ar) is active, LocalLayoutDirection is RTL.
-            // In Compose, Row lays out children from Start to End.
-            // In RTL, Start is the RIGHT edge of the screen, so the navigation rail is placed on the far right.
-            // In LTR, Start is the LEFT edge of the screen, so the navigation rail is placed on the far left.
-            CompositionLocalProvider(
-                LocalMiniPlayerActive provides (playerUiState.currentItem != null),
-                LocalLayoutDirection provides layoutDirection
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Slate950)
             ) {
-                Row(
+                NavigationRail(
+                    containerColor = Slate900,
+                    contentColor = PureWhite,
                     modifier = Modifier
-                        .fillMaxSize()
-                        .background(Slate950)
+                        .width(76.dp)
+                        .fillMaxHeight()
+                        .border(BorderStroke(1.dp, Slate800))
+                        .testTag("main_navigation_rail")
                 ) {
-                    navigationRailContent()
-                    Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                        mainContentArea()
+                    Spacer(modifier = Modifier.height(10.dp))
+                    navItems.forEach { (screen, icon, label) ->
+                        val isSelected = currentScreen == screen || (screen == Screen.SERIES && currentScreen == Screen.SERIES_DETAIL)
+                        val navInteraction = remember { MutableInteractionSource() }
+                        val isNavFocused by navInteraction.collectIsFocusedAsState()
+
+                        NavigationRailItem(
+                            selected = isSelected,
+                            onClick = { viewModel.navigateTo(screen) },
+                            interactionSource = navInteraction,
+                            icon = {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = label,
+                                    tint = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
+                                    modifier = Modifier.size(if (isNavFocused) 24.dp else 20.dp)
+                                )
+                            },
+                            label = {
+                                Text(
+                                    text = label,
+                                    fontSize = 10.sp,
+                                    fontWeight = if (isSelected || isNavFocused) FontWeight.Bold else FontWeight.SemiBold,
+                                    color = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
+                                    maxLines = 1
+                                )
+                            },
+                            colors = navigationRailItemColors(),
+                            modifier = Modifier
+                                .focusable(interactionSource = navInteraction)
+                                .border(
+                                    width = if (isNavFocused) 2.dp else 0.dp,
+                                    color = if (isNavFocused) AccentCyan else Color.Transparent,
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .onPreviewKeyEvent { event ->
+                                    if (event.type == KeyEventType.KeyUp &&
+                                        (event.key == Key.DirectionCenter ||
+                                         event.key == Key.Enter ||
+                                         event.key == Key.NumPadEnter)
+                                    ) {
+                                        viewModel.navigateTo(screen)
+                                        true
+                                    } else false
+                                }
+                        )
+                    }
+                }
+
+                // Column lays out screenContent in weight(1f) and MiniPlayerBar strictly below it (never overlapping!)
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                    ) {
+                        screenContent()
+                    }
+
+                    if (playerUiState.currentItem != null) {
+                        MiniPlayerBar(
+                            item = playerUiState.currentItem!!,
+                            isPlaying = playerUiState.isPlaying,
+                            isCompact = true,
+                            onExpand = { viewModel.navigateTo(Screen.PLAYER) },
+                            onTogglePlayPause = { viewModel.playerManager.togglePlayPause() },
+                            onDismiss = { viewModel.dismissMiniPlayer() }
+                        )
                     }
                 }
             }
         } else {
-            // Portrait layout: Standard Scaffold with bottom navigation bar and mini player
-            CompositionLocalProvider(
-                LocalMiniPlayerActive provides (playerUiState.currentItem != null),
-                LocalLayoutDirection provides layoutDirection
-            ) {
-                Scaffold(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Slate950),
-                    bottomBar = {
-                        Column(modifier = Modifier.navigationBarsPadding()) {
-                            if (playerUiState.currentItem != null) {
-                                MiniPlayerBar(
-                                    item = playerUiState.currentItem!!,
-                                    isPlaying = playerUiState.isPlaying,
-                                    isCompact = false,
-                                    onExpand = { viewModel.navigateTo(Screen.PLAYER) },
-                                    onTogglePlayPause = { viewModel.playerManager.togglePlayPause() },
-                                    onDismiss = { viewModel.dismissMiniPlayer() }
+            Scaffold(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Slate950),
+                bottomBar = {
+                    Column(modifier = Modifier.navigationBarsPadding()) {
+                        if (playerUiState.currentItem != null) {
+                            MiniPlayerBar(
+                                item = playerUiState.currentItem!!,
+                                isPlaying = playerUiState.isPlaying,
+                                isCompact = false,
+                                onExpand = { viewModel.navigateTo(Screen.PLAYER) },
+                                onTogglePlayPause = { viewModel.playerManager.togglePlayPause() },
+                                onDismiss = { viewModel.dismissMiniPlayer() }
+                            )
+                        }
+
+                        NavigationBar(
+                            containerColor = Slate900,
+                            contentColor = PureWhite,
+                            modifier = Modifier
+                                .height(68.dp)
+                                .border(BorderStroke(1.dp, Slate800))
+                                .testTag("main_navigation_bar")
+                        ) {
+                            navItems.forEach { (screen, icon, label) ->
+                                val isSelected = currentScreen == screen || (screen == Screen.SERIES && currentScreen == Screen.SERIES_DETAIL)
+                                val navInteraction = remember { MutableInteractionSource() }
+                                val isNavFocused by navInteraction.collectIsFocusedAsState()
+
+                                NavigationBarItem(
+                                    selected = isSelected,
+                                    onClick = { viewModel.navigateTo(screen) },
+                                    interactionSource = navInteraction,
+                                    icon = {
+                                        Icon(
+                                            imageVector = icon,
+                                            contentDescription = label,
+                                            tint = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
+                                            modifier = Modifier.size(if (isNavFocused) 26.dp else 22.dp)
+                                        )
+                                    },
+                                    label = {
+                                        Text(
+                                            text = label,
+                                            fontSize = 11.sp,
+                                            fontWeight = if (isSelected || isNavFocused) FontWeight.Bold else FontWeight.SemiBold,
+                                            color = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400
+                                        )
+                                    },
+                                    colors = navigationBarItemColors(),
+                                    modifier = Modifier
+                                        .focusable(interactionSource = navInteraction)
+                                        .border(
+                                            width = if (isNavFocused) 2.dp else 0.dp,
+                                            color = if (isNavFocused) AccentCyan else Color.Transparent,
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
+                                        .onPreviewKeyEvent { event ->
+                                            if (event.type == KeyEventType.KeyUp &&
+                                                (event.key == Key.DirectionCenter ||
+                                                 event.key == Key.Enter ||
+                                                 event.key == Key.NumPadEnter)
+                                            ) {
+                                                viewModel.navigateTo(screen)
+                                                true
+                                            } else false
+                                        }
                                 )
-                            }
-
-                            NavigationBar(
-                                containerColor = Slate900,
-                                contentColor = PureWhite,
-                                modifier = Modifier
-                                    .height(68.dp)
-                                    .border(androidx.compose.foundation.BorderStroke(1.dp, Slate800))
-                                    .testTag("main_navigation_bar")
-                            ) {
-                                navItems.forEach { (screen, icon, label) ->
-                                    val isSelected = currentScreen == screen || (screen == Screen.SERIES && currentScreen == Screen.SERIES_DETAIL)
-                                    val navInteraction = remember { MutableInteractionSource() }
-                                    val isNavFocused by navInteraction.collectIsFocusedAsState()
-
-                                    NavigationBarItem(
-                                        selected = isSelected,
-                                        onClick = { viewModel.navigateTo(screen) },
-                                        interactionSource = navInteraction,
-                                        icon = {
-                                            Icon(
-                                                imageVector = icon,
-                                                contentDescription = label,
-                                                tint = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
-                                                modifier = Modifier.size(if (isNavFocused) 26.dp else 22.dp)
-                                            )
-                                        },
-                                        label = {
-                                            Text(
-                                                text = label,
-                                                fontSize = 11.sp,
-                                                fontWeight = if (isSelected || isNavFocused) FontWeight.Bold else FontWeight.SemiBold,
-                                                color = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400
-                                            )
-                                        },
-                                        colors = navigationBarItemColors(),
-                                        modifier = Modifier
-                                            .focusable(interactionSource = navInteraction)
-                                            .border(
-                                                width = if (isNavFocused) 2.dp else 0.dp,
-                                                color = if (isNavFocused) AccentCyan else Color.Transparent,
-                                                shape = RoundedCornerShape(12.dp)
-                                            )
-                                            .onPreviewKeyEvent { event ->
-                                                if (event.type == KeyEventType.KeyUp &&
-                                                    (event.key == Key.DirectionCenter ||
-                                                     event.key == Key.Enter ||
-                                                     event.key == Key.NumPadEnter)
-                                                ) {
-                                                    viewModel.navigateTo(screen)
-                                                    true
-                                                } else false
-                                            }
-                                            .testTag("nav_item_${label.lowercase().replace(" ", "_")}")
-                                    )
-                                }
                             }
                         }
                     }
-                ) { innerPadding ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding)
-                    ) {
-                        screenContent()
-                    }
+                }
+            ) { innerPadding ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .statusBarsPadding()
+                ) {
+                    screenContent()
                 }
             }
         }
     }
 }
 
+/**
+ * Fixed MiniPlayerBar: Play/Pause and Close (X) buttons are cleanly separated by 14.dp
+ * so they NEVER overlap on Phone, Tablet, or Android TV.
+ */
 @Composable
 fun MiniPlayerBar(
     item: IptvItem,
@@ -498,57 +468,63 @@ fun MiniPlayerBar(
 ) {
     val barInteraction = remember { MutableInteractionSource() }
     val isBarFocused by barInteraction.collectIsFocusedAsState()
+    val playBtnInteraction = remember { MutableInteractionSource() }
+    val isPlayBtnFocused by playBtnInteraction.collectIsFocusedAsState()
+    val closeBtnInteraction = remember { MutableInteractionSource() }
+    val isCloseBtnFocused by closeBtnInteraction.collectIsFocusedAsState()
+
     val currentLanguage = LocalAppLanguage.current
     val nowPlayingText = if (currentLanguage == "ar") "يعرض الآن" else "Now Playing"
 
     Surface(
-        color = if (isBarFocused) Slate800 else Slate850,
-        shape = if (isCompact) RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp) else RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp),
-        border = androidx.compose.foundation.BorderStroke(
+        color = if (isBarFocused) Slate800 else Slate900,
+        shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
+        border = BorderStroke(
             width = if (isBarFocused) 2.dp else 1.dp,
             color = if (isBarFocused) AccentCyan else Slate700
         ),
         modifier = Modifier
             .fillMaxWidth()
-            .focusable(interactionSource = barInteraction)
-            .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyUp &&
-                    (event.key == Key.DirectionCenter ||
-                     event.key == Key.Enter ||
-                     event.key == Key.NumPadEnter)
-                ) {
-                    onExpand()
-                    true
-                } else false
-            }
-            .clickable(interactionSource = barInteraction, indication = null, onClick = onExpand)
             .testTag("mini_player_bar")
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = if (isCompact) 4.dp else 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(horizontal = 16.dp, vertical = if (isCompact) 8.dp else 10.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            // Left/Start Clickable Area: Expands Fullscreen Player
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .focusable(interactionSource = barInteraction)
+                    .onPreviewKeyEvent { event ->
+                        if (event.type == KeyEventType.KeyUp &&
+                            (event.key == Key.DirectionCenter ||
+                             event.key == Key.Enter ||
+                             event.key == Key.NumPadEnter)
+                        ) {
+                            onExpand()
+                            true
+                        } else false
+                    }
+                    .clickable(interactionSource = barInteraction, indication = null, onClick = onExpand)
             ) {
-                if (!item.logoUrl.isNullOrBlank() && !isCompact) {
+                if (!item.logoUrl.isNullOrBlank()) {
                     AsyncImage(
                         model = item.logoUrl,
                         contentDescription = null,
                         modifier = Modifier
-                            .size(34.dp)
+                            .size(if (isCompact) 32.dp else 38.dp)
                             .clip(RoundedCornerShape(8.dp))
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
                 }
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = item.name,
-                        fontSize = if (isCompact) 12.sp else 13.sp,
+                        fontSize = if (isCompact) 13.sp else 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = PureWhite,
                         maxLines = 1,
@@ -556,46 +532,82 @@ fun MiniPlayerBar(
                     )
                     Text(
                         text = "$nowPlayingText • ${item.group}",
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         color = AccentCyan,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
 
+            Spacer(modifier = Modifier.width(16.dp))
+
+            // Right/End Action Buttons: Distinctly separated with 14.dp space so they NEVER overlap!
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                IconButton(
-                    onClick = onTogglePlayPause,
+                // Play/Pause Circle Button
+                Box(
+                    contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .size(if (isCompact) 32.dp else 36.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
-                        .background(AccentCyan)
+                        .background(if (isPlayBtnFocused) PureWhite else AccentCyan)
+                        .border(
+                            width = if (isPlayBtnFocused) 2.5.dp else 0.dp,
+                            color = PureWhite,
+                            shape = CircleShape
+                        )
+                        .focusable(interactionSource = playBtnInteraction)
+                        .onPreviewKeyEvent { event ->
+                            if (event.type == KeyEventType.KeyUp &&
+                                (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                            ) {
+                                onTogglePlayPause()
+                                true
+                            } else false
+                        }
+                        .clickable(interactionSource = playBtnInteraction, indication = null, onClick = onTogglePlayPause)
                         .testTag("btn_mini_player_play_pause")
                 ) {
                     Icon(
                         imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = if (isPlaying) "Pause" else "Play",
                         tint = Slate950,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
 
-                IconButton(
-                    onClick = onDismiss,
+                // Close / Stop (X) Circle Button
+                Box(
+                    contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .size(if (isCompact) 30.dp else 34.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
-                        .background(Slate800)
+                        .background(if (isCloseBtnFocused) AccentCyan else Slate800)
+                        .border(
+                            width = if (isCloseBtnFocused) 2.5.dp else 1.dp,
+                            color = if (isCloseBtnFocused) PureWhite else Slate700,
+                            shape = CircleShape
+                        )
+                        .focusable(interactionSource = closeBtnInteraction)
+                        .onPreviewKeyEvent { event ->
+                            if (event.type == KeyEventType.KeyUp &&
+                                (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                            ) {
+                                onDismiss()
+                                true
+                            } else false
+                        }
+                        .clickable(interactionSource = closeBtnInteraction, indication = null, onClick = onDismiss)
                         .testTag("btn_mini_player_dismiss")
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Close Mini Player",
-                        tint = Slate400,
-                        modifier = Modifier.size(16.dp)
+                        tint = if (isCloseBtnFocused) Slate950 else PureWhite,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
