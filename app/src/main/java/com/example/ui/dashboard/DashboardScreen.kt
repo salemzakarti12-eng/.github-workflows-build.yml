@@ -69,7 +69,9 @@ import coil.compose.AsyncImage
 import com.example.model.IptvItem
 import com.example.model.IptvSource
 import com.example.ui.Screen
+import com.example.ui.components.LanguageToggleButton
 import com.example.ui.components.tvFocusable
+import com.example.ui.locale.LocalAppStrings
 import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.AccentEmerald
 import com.example.ui.theme.MoviesGradient
@@ -77,12 +79,14 @@ import com.example.ui.theme.PureWhite
 import com.example.ui.theme.SeriesGradient
 import com.example.ui.theme.Slate300
 import com.example.ui.theme.Slate400
+import com.example.ui.theme.Slate600
 import com.example.ui.theme.Slate700
 import com.example.ui.theme.Slate800
 import com.example.ui.theme.Slate850
 import com.example.ui.theme.Slate900
 import com.example.ui.theme.Slate950
 import com.example.ui.theme.TvChannelsGradient
+import java.util.Locale
 
 @Composable
 fun DashboardScreen(
@@ -94,8 +98,11 @@ fun DashboardScreen(
     recentlyWatched: List<IptvItem>,
     onNavigate: (Screen) -> Unit,
     onPlayItem: (IptvItem) -> Unit,
+    onToggleLanguage: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalAppStrings.current
+
     BoxWithConstraints(modifier = modifier.fillMaxSize().background(Slate950)) {
         val isTv = com.example.util.LocalIsTelevision.current
         val isWideScreen = maxWidth >= 600.dp || isTv
@@ -110,7 +117,8 @@ fun DashboardScreen(
             item {
                 DashboardHeader(
                     activeSource = activeSource,
-                    onOpenSources = { onNavigate(Screen.SOURCES) }
+                    onOpenSources = { onNavigate(Screen.SOURCES) },
+                    onToggleLanguage = onToggleLanguage
                 )
             }
 
@@ -125,7 +133,7 @@ fun DashboardScreen(
             // Section Label
             item {
                 Text(
-                    text = "EXPLORE ENTERTAINMENT",
+                    text = strings.exploreEntertainment,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.2.sp,
@@ -146,37 +154,37 @@ fun DashboardScreen(
                         horizontalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         HypnotixGradientCard(
-                            title = "TV Channels",
-                            subtitle = "Live broadcasts & news",
-                            countText = "$liveCount Channels",
+                            title = strings.liveTv,
+                            subtitle = strings.liveTvSubtitle,
+                            countText = "%,d %s".format(Locale.US, liveCount, strings.channelsAvailable),
                             icon = Icons.Default.LiveTv,
                             gradient = TvChannelsGradient,
                             testTag = "card_tv_channels",
-                            badgeText = "LIVE TV",
+                            badgeText = strings.liveStreamingBadge,
                             isLandscapeCard = true,
                             onClick = { onNavigate(Screen.LIVE_CHANNELS) },
                             modifier = Modifier.weight(1f)
                         )
                         HypnotixGradientCard(
-                            title = "Movies",
-                            subtitle = "Cinema & blockbusters",
-                            countText = "$moviesCount VOD Titles",
+                            title = strings.movies,
+                            subtitle = strings.moviesSubtitle,
+                            countText = "%,d %s".format(Locale.US, moviesCount, strings.vodTitles),
                             icon = Icons.Default.Movie,
                             gradient = MoviesGradient,
                             testTag = "card_movies",
-                            badgeText = "CINEMA",
+                            badgeText = strings.cinemaVodBadge,
                             isLandscapeCard = true,
                             onClick = { onNavigate(Screen.MOVIES) },
                             modifier = Modifier.weight(1f)
                         )
                         HypnotixGradientCard(
-                            title = "Series",
-                            subtitle = "Binge shows & seasons",
-                            countText = "$seriesCount Shows Catalog",
+                            title = strings.series,
+                            subtitle = strings.seriesSubtitle,
+                            countText = "%,d %s".format(Locale.US, seriesCount, strings.showsCatalog),
                             icon = Icons.Default.VideoLibrary,
                             gradient = SeriesGradient,
                             testTag = "card_series",
-                            badgeText = "SERIES",
+                            badgeText = strings.episodicTvBadge,
                             isLandscapeCard = true,
                             onClick = { onNavigate(Screen.SERIES) },
                             modifier = Modifier.weight(1f)
@@ -186,13 +194,13 @@ fun DashboardScreen(
             } else {
                 item {
                     HypnotixGradientCard(
-                        title = "TV Channels",
-                        subtitle = "Live television broadcasts, sports & world news",
-                        countText = "$liveCount Channels Available",
+                        title = strings.liveTv,
+                        subtitle = strings.liveTvSubtitle,
+                        countText = "%,d %s".format(Locale.US, liveCount, strings.channelsAvailable),
                         icon = Icons.Default.LiveTv,
                         gradient = TvChannelsGradient,
                         testTag = "card_tv_channels",
-                        badgeText = "LIVE STREAMING",
+                        badgeText = strings.liveStreamingBadge,
                         isLandscapeCard = false,
                         onClick = { onNavigate(Screen.LIVE_CHANNELS) }
                     )
@@ -200,13 +208,13 @@ fun DashboardScreen(
 
                 item {
                     HypnotixGradientCard(
-                        title = "Movies",
-                        subtitle = "On-demand cinema, blockbusters & feature films",
-                        countText = "$moviesCount VOD Titles",
+                        title = strings.movies,
+                        subtitle = strings.moviesSubtitle,
+                        countText = "%,d %s".format(Locale.US, moviesCount, strings.vodTitles),
                         icon = Icons.Default.Movie,
                         gradient = MoviesGradient,
                         testTag = "card_movies",
-                        badgeText = "CINEMA & VOD",
+                        badgeText = strings.cinemaVodBadge,
                         isLandscapeCard = false,
                         onClick = { onNavigate(Screen.MOVIES) }
                     )
@@ -214,13 +222,13 @@ fun DashboardScreen(
 
                 item {
                     HypnotixGradientCard(
-                        title = "Series",
-                        subtitle = "Binge-watch episodic shows, seasons & episodes",
-                        countText = "$seriesCount Shows Catalog",
+                        title = strings.series,
+                        subtitle = strings.seriesSubtitle,
+                        countText = "%,d %s".format(Locale.US, seriesCount, strings.showsCatalog),
                         icon = Icons.Default.VideoLibrary,
                         gradient = SeriesGradient,
                         testTag = "card_series",
-                        badgeText = "EPISODIC TV",
+                        badgeText = strings.episodicTvBadge,
                         isLandscapeCard = false,
                         onClick = { onNavigate(Screen.SERIES) }
                     )
@@ -233,7 +241,7 @@ fun DashboardScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     SectionHeader(
                         icon = Icons.Default.Favorite,
-                        title = "Favorite Channels & Shows",
+                        title = strings.favoriteChannelsAndShows,
                         count = favorites.size,
                         accentColor = Color(0xFFEF4444)
                     )
@@ -250,7 +258,7 @@ fun DashboardScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     SectionHeader(
                         icon = Icons.Default.History,
-                        title = "Continue Watching",
+                        title = strings.continueWatching,
                         count = recentlyWatched.size,
                         accentColor = AccentCyan
                     )
@@ -267,10 +275,12 @@ fun DashboardScreen(
 @Composable
 fun DashboardHeader(
     activeSource: IptvSource?,
-    onOpenSources: () -> Unit
+    onOpenSources: () -> Unit,
+    onToggleLanguage: () -> Unit = {}
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
+    val strings = LocalAppStrings.current
 
     Row(
         modifier = Modifier
@@ -305,42 +315,51 @@ fun DashboardHeader(
                     color = PureWhite
                 )
                 Text(
-                    text = "Modern IPTV & VOD Player",
+                    text = strings.modernIptvPlayer,
                     style = MaterialTheme.typography.bodySmall,
                     color = Slate400
                 )
             }
         }
 
-        // Sources Settings Button with TV Focus Support
-        IconButton(
-            onClick = onOpenSources,
-            interactionSource = interactionSource,
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(if (isFocused) AccentCyan else Slate850)
-                .border(
-                    width = if (isFocused) 3.dp else 1.dp,
-                    color = if (isFocused) PureWhite else Slate700,
-                    shape = CircleShape
-                )
-                .focusable(interactionSource = interactionSource)
-                .onPreviewKeyEvent { event ->
-                    if (event.type == KeyEventType.KeyUp &&
-                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                    ) {
-                        onOpenSources()
-                        true
-                    } else false
-                }
-                .testTag("btn_sources_config")
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Icon(
-                imageVector = Icons.Default.Settings,
-                contentDescription = "Manage Sources",
-                tint = if (isFocused) Slate950 else AccentCyan
-            )
+            // Quick Language Toggle Button (🌐 EN / عربي)
+            LanguageToggleButton(onToggleLanguage = onToggleLanguage)
+
+            // Sources Settings Button with TV Focus Support
+            IconButton(
+                onClick = onOpenSources,
+                interactionSource = interactionSource,
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(if (isFocused) AccentCyan else Slate850)
+                    .border(
+                        width = if (isFocused) 3.dp else 1.dp,
+                        color = if (isFocused) PureWhite else Slate700,
+                        shape = CircleShape
+                    )
+                    .focusable(interactionSource = interactionSource)
+                    .onPreviewKeyEvent { event ->
+                        if (event.type == KeyEventType.KeyUp &&
+                            (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                        ) {
+                            onOpenSources()
+                            true
+                        } else false
+                    }
+                    .testTag("btn_sources_config")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = strings.settings,
+                    tint = if (isFocused) Slate950 else AccentCyan,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
         }
     }
 }
@@ -352,6 +371,7 @@ fun SourceInfoBanner(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
+    val strings = LocalAppStrings.current
 
     Surface(
         modifier = Modifier
@@ -392,12 +412,12 @@ fun SourceInfoBanner(
                     modifier = Modifier
                         .size(10.dp)
                         .clip(CircleShape)
-                        .background(AccentEmerald)
+                        .background(if (activeSource != null) AccentEmerald else Slate600)
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Column {
                     Text(
-                        text = activeSource?.name ?: "No IPTV Provider Connected",
+                        text = activeSource?.name ?: strings.disconnected,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 13.sp,
                         color = PureWhite,
@@ -405,7 +425,7 @@ fun SourceInfoBanner(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = activeSource?.statusText ?: "Tap or press OK to configure IPTV provider credentials",
+                        text = activeSource?.statusText ?: strings.noActiveSourceHint,
                         fontSize = 11.sp,
                         color = Slate400,
                         maxLines = 1,
@@ -418,7 +438,7 @@ fun SourceInfoBanner(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Change",
+                    text = if (activeSource != null) strings.switchSource else strings.configure,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = AccentCyan

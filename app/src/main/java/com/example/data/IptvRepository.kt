@@ -92,6 +92,20 @@ class IptvRepository(context: Context) {
     private val _statusMessage = MutableStateFlow<String?>(null)
     val statusMessage: StateFlow<String?> = _statusMessage.asStateFlow()
 
+    private val _appLanguage = MutableStateFlow(prefs.getString("app_language", "en") ?: "en")
+    val appLanguage: StateFlow<String> = _appLanguage.asStateFlow()
+
+    fun setAppLanguage(lang: String) {
+        val normalized = if (lang.equals("ar", ignoreCase = true)) "ar" else "en"
+        _appLanguage.value = normalized
+        prefs.edit().putString("app_language", normalized).apply()
+    }
+
+    fun toggleAppLanguage() {
+        val next = if (_appLanguage.value == "ar") "en" else "ar"
+        setAppLanguage(next)
+    }
+
     init {
         loadPersistedState()
     }

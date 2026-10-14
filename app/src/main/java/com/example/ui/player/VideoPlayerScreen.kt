@@ -92,6 +92,7 @@ import com.example.model.IptvItem
 import com.example.model.IptvType
 import com.example.model.PlayerUiState
 import com.example.player.ExoPlayerManager
+import com.example.ui.locale.LocalAppStrings
 import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.AccentRed
 import com.example.ui.theme.PureWhite
@@ -116,6 +117,8 @@ fun VideoPlayerScreen(
     onSelectChannel: (IptvItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalAppStrings.current
+
     // Back Handler: pressing Back returns to channel list
     BackHandler {
         if (uiState.isQuickChannelListOpen) {
@@ -552,13 +555,13 @@ fun VideoPlayerScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Audiotrack,
-                                    contentDescription = "Audio Track",
+                                    contentDescription = strings.audio,
                                     tint = if (isAudioFocused) Slate950 else AccentCyan,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Audio",
+                                    text = strings.audio,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isAudioFocused) Slate950 else PureWhite
@@ -601,13 +604,13 @@ fun VideoPlayerScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.ClosedCaption,
-                                    contentDescription = "Subtitles",
+                                    contentDescription = strings.subtitles,
                                     tint = if (isSubFocused) Slate950 else AccentCyan,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = if (uiState.isSubtitleOff) "CC Off" else "CC",
+                                    text = strings.subtitles,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isSubFocused) Slate950 else PureWhite
@@ -955,7 +958,7 @@ fun VideoPlayerScreen(
             containerColor = Slate900,
             title = {
                 Text(
-                    text = "Select Audio Track",
+                    text = strings.selectAudioTrack,
                     fontWeight = FontWeight.Bold,
                     color = PureWhite
                 )
@@ -1024,7 +1027,7 @@ fun VideoPlayerScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showAudioDialog = false }) {
-                    Text("Close", color = AccentCyan, fontWeight = FontWeight.Bold)
+                    Text(strings.close, color = AccentCyan, fontWeight = FontWeight.Bold)
                 }
             }
         )
@@ -1036,7 +1039,7 @@ fun VideoPlayerScreen(
             containerColor = Slate900,
             title = {
                 Text(
-                    text = "Subtitles / Closed Captions",
+                    text = strings.selectSubtitleTrack,
                     fontWeight = FontWeight.Bold,
                     color = PureWhite
                 )
@@ -1090,7 +1093,7 @@ fun VideoPlayerScreen(
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                text = "Off (Disabled)",
+                                text = strings.off,
                                 color = if (uiState.isSubtitleOff) AccentCyan else PureWhite,
                                 fontSize = 14.sp,
                                 fontWeight = if (uiState.isSubtitleOff) FontWeight.Bold else FontWeight.Normal
@@ -1164,7 +1167,7 @@ fun VideoPlayerScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showSubtitleDialog = false }) {
-                    Text("Close", color = AccentCyan, fontWeight = FontWeight.Bold)
+                    Text(strings.close, color = AccentCyan, fontWeight = FontWeight.Bold)
                 }
             }
         )

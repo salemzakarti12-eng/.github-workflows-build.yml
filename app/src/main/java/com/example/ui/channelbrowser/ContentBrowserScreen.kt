@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -57,12 +59,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
@@ -74,6 +79,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -83,6 +89,7 @@ import com.example.model.IptvItem
 import com.example.model.IptvType
 import com.example.model.StreamFormat
 import com.example.ui.Screen
+import com.example.ui.locale.LocalAppStrings
 import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.AccentRed
 import com.example.ui.theme.PureWhite
@@ -94,6 +101,7 @@ import com.example.ui.theme.Slate800
 import com.example.ui.theme.Slate850
 import com.example.ui.theme.Slate900
 import com.example.ui.theme.Slate950
+import java.util.Locale
 
 @Composable
 fun ContentBrowserScreen(
@@ -103,6 +111,7 @@ fun ContentBrowserScreen(
     searchQuery: String,
     selectedCategory: String,
     totalCount: Int,
+    favoriteCount: Int = 0,
     onSearchChange: (String) -> Unit,
     onCategoryChange: (String) -> Unit,
     onLoadMore: () -> Unit,
@@ -112,15 +121,18 @@ fun ContentBrowserScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalAppStrings.current
+
     val (title, icon, accentColor) = when (screen) {
-        Screen.LIVE_CHANNELS -> Triple("Live TV Channels", Icons.Default.LiveTv, Color(0xFFEF4444))
-        Screen.MOVIES -> Triple("Movies & Cinema", Icons.Default.Movie, Color(0xFF8B5CF6))
-        Screen.SERIES -> Triple("Series & Shows", Icons.Default.VideoLibrary, Color(0xFF06B6D4))
-        else -> Triple("Browse Content", Icons.Default.Tv, AccentCyan)
+        Screen.LIVE_CHANNELS -> Triple(strings.liveChannelsTitle, Icons.Default.LiveTv, Color(0xFFEF4444))
+        Screen.MOVIES -> Triple(strings.moviesTitle, Icons.Default.Movie, Color(0xFF8B5CF6))
+        Screen.SERIES -> Triple(strings.seriesTitle, Icons.Default.VideoLibrary, Color(0xFF06B6D4))
+        else -> Triple(strings.exploreEntertainment, Icons.Default.Tv, AccentCyan)
     }
 
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val isVOD = screen == Screen.MOVIES || screen == Screen.SERIES
 
     val handleItemClick = { item: IptvItem ->
         if (item.type == IptvType.SERIES) {
@@ -140,124 +152,599 @@ fun ContentBrowserScreen(
         val isWideScreen = maxWidth >= 600.dp || isTv || isLandscape
 
         if (isWideScreen) {
-            // Widescreen / Landscape: 2-column or 3-column grid with collapsible header items
-            val columnsCount = if (isTv && maxWidth >= 900.dp) 3 else 2
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(columnsCount),
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 28.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+            // Master-Detail Split Layout in Landscape / Tablet / TV
+            Row(
+                modifier = Modifier.fillMaxSize()
             ) {
-                // Header (compact in landscape, full in portrait wide)
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    if (isLandscape) {
-                        CompactLandscapeHeader(
-                            title = title,
-                            icon = icon,
-                            accentColor = accentColor,
-                            totalCount = totalCount,
-                            searchQuery = searchQuery,
-                            onSearchChange = onSearchChange,
-                            onBack = onBack
-                        )
-                    } else {
-                        PortraitHeader(
-                            title = title,
-                            icon = icon,
-                            accentColor = accentColor,
-                            totalCount = totalCount,
-                            selectedCategory = selectedCategory,
-                            searchQuery = searchQuery,
-                            onSearchChange = onSearchChange,
-                            onBack = onBack
-                        )
-                    }
-                }
+                // Dedicated Left-Side Vertical Category Sidebar (240.dp width)
+                CategorySidebar(
+                    categories = categories,
+                    selectedCategory = selectedCategory,
+                    totalCount = totalCount,
+                    favoriteCount = favoriteCount,
+                    accentColor = accentColor,
+                    onCategoryChange = onCategoryChange
+                )
 
-                // Category Chips Row (spans all columns)
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    CategoryChipsRow(
-                        categories = categories,
-                        selectedCategory = selectedCategory,
-                        totalCount = totalCount,
+                // Divider line between sidebar and content
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .fillMaxHeight()
+                        .background(Slate800)
+                )
+
+                // Main Content Area
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                ) {
+                    // Unified Compact Top Row (48.dp height)
+                    CompactLandscapeHeader(
+                        title = title,
+                        icon = icon,
                         accentColor = accentColor,
-                        onCategoryChange = onCategoryChange
+                        totalCount = totalCount,
+                        searchQuery = searchQuery,
+                        onSearchChange = onSearchChange,
+                        onBack = onBack,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                     )
-                }
 
-                // Stream Cards
-                if (items.isEmpty()) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        EmptyCategoryState()
-                    }
-                } else {
-                    items(items, key = { it.id }) { item ->
-                        StreamItemCard(
-                            item = item,
-                            accentColor = accentColor,
-                            onPlay = { handleItemClick(item) },
-                            onToggleFavorite = { onToggleFavorite(item) }
-                        )
-                    }
+                    // Content Grid
+                    if (isVOD) {
+                        // Vertical Movie & Series Poster Cards (aspectRatio 2:3)
+                        // Adaptive(minSize = 130.dp) shows ~5 posters per row in landscape/TV
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 130.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 28.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            if (items.isEmpty()) {
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    EmptyCategoryState()
+                                }
+                            } else {
+                                items(items, key = { it.id }) { item ->
+                                    VerticalPosterCard(
+                                        item = item,
+                                        accentColor = accentColor,
+                                        onPlay = { handleItemClick(item) },
+                                        onToggleFavorite = { onToggleFavorite(item) }
+                                    )
+                                }
 
-                    if (items.size >= 100) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            LoadMoreButton(onLoadMore = onLoadMore, accentColor = accentColor)
+                                if (items.size >= 100) {
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        LoadMoreButton(onLoadMore = onLoadMore, accentColor = accentColor)
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Live TV channels adaptive grid
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 220.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 28.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            if (items.isEmpty()) {
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    EmptyCategoryState()
+                                }
+                            } else {
+                                items(items, key = { it.id }) { item ->
+                                    StreamItemCard(
+                                        item = item,
+                                        accentColor = accentColor,
+                                        onPlay = { handleItemClick(item) },
+                                        onToggleFavorite = { onToggleFavorite(item) }
+                                    )
+                                }
+
+                                if (items.size >= 100) {
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        LoadMoreButton(onLoadMore = onLoadMore, accentColor = accentColor)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
         } else {
-            // Portrait Phone: Single column with collapsible header
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+            // Portrait Phone Layout
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp)
             ) {
-                item {
-                    PortraitHeader(
-                        title = title,
-                        icon = icon,
-                        accentColor = accentColor,
-                        totalCount = totalCount,
-                        selectedCategory = selectedCategory,
-                        searchQuery = searchQuery,
-                        onSearchChange = onSearchChange,
-                        onBack = onBack
-                    )
-                }
+                PortraitHeader(
+                    title = title,
+                    icon = icon,
+                    accentColor = accentColor,
+                    totalCount = totalCount,
+                    selectedCategory = selectedCategory,
+                    searchQuery = searchQuery,
+                    onSearchChange = onSearchChange,
+                    onBack = onBack
+                )
 
-                item {
-                    CategoryChipsRow(
-                        categories = categories,
-                        selectedCategory = selectedCategory,
-                        totalCount = totalCount,
-                        accentColor = accentColor,
-                        onCategoryChange = onCategoryChange
-                    )
-                }
+                // Category Chips Row in Portrait
+                CategoryChipsRow(
+                    categories = categories,
+                    selectedCategory = selectedCategory,
+                    totalCount = totalCount,
+                    accentColor = accentColor,
+                    onCategoryChange = onCategoryChange
+                )
 
-                if (items.isEmpty()) {
-                    item {
-                        EmptyCategoryState()
+                Spacer(modifier = Modifier.height(4.dp))
+
+                if (isVOD) {
+                    // Vertical Movie & Series Poster Cards: 3 per row in portrait
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 105.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        if (items.isEmpty()) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                EmptyCategoryState()
+                            }
+                        } else {
+                            items(items, key = { it.id }) { item ->
+                                VerticalPosterCard(
+                                    item = item,
+                                    accentColor = accentColor,
+                                    onPlay = { handleItemClick(item) },
+                                    onToggleFavorite = { onToggleFavorite(item) }
+                                )
+                            }
+
+                            if (items.size >= 100) {
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    LoadMoreButton(onLoadMore = onLoadMore, accentColor = accentColor)
+                                }
+                            }
+                        }
                     }
                 } else {
-                    items(items, key = { it.id }) { item ->
-                        StreamItemCard(
-                            item = item,
-                            accentColor = accentColor,
-                            onPlay = { handleItemClick(item) },
-                            onToggleFavorite = { onToggleFavorite(item) }
-                        )
-                    }
+                    // Live TV items in portrait
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (items.isEmpty()) {
+                            item {
+                                EmptyCategoryState()
+                            }
+                        } else {
+                            items(items, key = { it.id }) { item ->
+                                StreamItemCard(
+                                    item = item,
+                                    accentColor = accentColor,
+                                    onPlay = { handleItemClick(item) },
+                                    onToggleFavorite = { onToggleFavorite(item) }
+                                )
+                            }
 
-                    if (items.size >= 100) {
-                        item {
-                            LoadMoreButton(onLoadMore = onLoadMore, accentColor = accentColor)
+                            if (items.size >= 100) {
+                                item {
+                                    LoadMoreButton(onLoadMore = onLoadMore, accentColor = accentColor)
+                                }
+                            }
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Dedicated Left-Side Vertical Category Sidebar (240.dp width)
+ * Lists each category with live count on the right, search box at top, and teal/accent highlight.
+ */
+@Composable
+fun CategorySidebar(
+    categories: List<CategoryInfo>,
+    selectedCategory: String,
+    totalCount: Int,
+    favoriteCount: Int,
+    accentColor: Color,
+    onCategoryChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var searchCategoryQuery by remember { mutableStateOf("") }
+    val strings = LocalAppStrings.current
+
+    val filteredCategories = remember(categories, searchCategoryQuery) {
+        if (searchCategoryQuery.isBlank()) {
+            categories
+        } else {
+            categories.filter { it.name.contains(searchCategoryQuery, ignoreCase = true) }
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .width(240.dp)
+            .fillMaxHeight()
+            .background(Slate950)
+            .padding(vertical = 8.dp)
+            .testTag("category_sidebar")
+    ) {
+        // Search in categories box at the top
+        OutlinedTextField(
+            value = searchCategoryQuery,
+            onValueChange = { searchCategoryQuery = it },
+            placeholder = {
+                Text(
+                    text = strings.searchInCategories,
+                    fontSize = 11.sp,
+                    color = Slate400,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = null,
+                    tint = Slate400,
+                    modifier = Modifier.size(15.dp)
+                )
+            },
+            trailingIcon = {
+                if (searchCategoryQuery.isNotEmpty()) {
+                    IconButton(
+                        onClick = { searchCategoryQuery = "" },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Clear,
+                            contentDescription = "Clear",
+                            tint = Slate400,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+            },
+            singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = AccentCyan,
+                unfocusedBorderColor = Slate800,
+                focusedContainerColor = Slate900,
+                unfocusedContainerColor = Slate900,
+                focusedTextColor = PureWhite,
+                unfocusedTextColor = PureWhite
+            ),
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .height(44.dp)
+                .testTag("search_categories_input")
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Categories List
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            // ALL Category
+            item {
+                SidebarCategoryRow(
+                    name = strings.all,
+                    count = totalCount,
+                    isSelected = selectedCategory.equals("All", ignoreCase = true),
+                    accentColor = accentColor,
+                    onClick = { onCategoryChange("All") }
+                )
+            }
+
+            // FAVOURITES Category
+            item {
+                SidebarCategoryRow(
+                    name = strings.favorites,
+                    count = favoriteCount,
+                    isSelected = selectedCategory.equals("Favorites", ignoreCase = true),
+                    accentColor = Color(0xFFEF4444),
+                    onClick = { onCategoryChange("Favorites") }
+                )
+            }
+
+            // Category Items
+            items(filteredCategories, key = { it.id }) { cat ->
+                SidebarCategoryRow(
+                    name = cat.name,
+                    count = cat.itemCount,
+                    isSelected = selectedCategory.equals(cat.name, ignoreCase = true),
+                    accentColor = accentColor,
+                    onClick = { onCategoryChange(cat.name) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun SidebarCategoryRow(
+    name: String,
+    count: Int?,
+    isSelected: Boolean,
+    accentColor: Color,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
+    val highlightColor = if (accentColor == Color(0xFFEF4444)) Color(0xFFEF4444) else AccentCyan
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .border(
+                width = if (isFocused) 2.dp else if (isSelected) 1.dp else 0.dp,
+                color = if (isFocused) PureWhite else if (isSelected) highlightColor else Color.Transparent,
+                shape = RoundedCornerShape(8.dp)
+            )
+            .focusable(interactionSource = interactionSource)
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyUp &&
+                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                ) {
+                    onClick()
+                    true
+                } else false
+            }
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .testTag("category_sidebar_item_$name"),
+        color = when {
+            isFocused -> Slate800
+            isSelected -> highlightColor.copy(alpha = 0.22f)
+            else -> Color.Transparent
+        },
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Category name on start (left in LTR, right in RTL)
+            Text(
+                text = name,
+                fontSize = 12.sp,
+                fontWeight = if (isSelected || isFocused) FontWeight.Bold else FontWeight.Medium,
+                color = if (isSelected) highlightColor else if (isFocused) PureWhite else Slate300,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+
+            // Item count on end (right in LTR, left in RTL)
+            if (count != null && count > 0) {
+                Spacer(modifier = Modifier.width(6.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (isSelected) highlightColor else Slate850)
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "%,d".format(Locale.US, count),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isSelected) Slate950 else Slate300
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Vertical Movie & Series Poster Card (aspectRatio 2f / 3f)
+ * Displays full-bleed cover image, dark bottom gradient, centered title (maxLines 2),
+ * top-right favorite heart, and cleanly formatted 1-decimal rating badge.
+ */
+@Composable
+fun VerticalPosterCard(
+    item: IptvItem,
+    accentColor: Color,
+    onPlay: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
+    val scale by animateFloatAsState(
+        targetValue = if (isFocused) 1.05f else 1f,
+        animationSpec = spring(dampingRatio = 0.75f, stiffness = 400f),
+        label = "posterScale"
+    )
+
+    val formattedRating = remember(item.rating) {
+        item.rating?.toDoubleOrNull()?.let { ratingVal ->
+            if (ratingVal > 0.0) String.format(Locale.US, "%.1f", ratingVal) else null
+        } ?: item.rating?.takeIf { it.isNotBlank() }
+    }
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .aspectRatio(2f / 3f)
+            .scale(scale)
+            .shadow(
+                elevation = if (isFocused) 12.dp else 2.dp,
+                shape = RoundedCornerShape(12.dp),
+                spotColor = if (isFocused) AccentCyan else Color.Transparent
+            )
+            .clip(RoundedCornerShape(12.dp))
+            .border(
+                width = if (isFocused) 2.5.dp else 1.dp,
+                color = if (isFocused) PureWhite else Slate800,
+                shape = RoundedCornerShape(12.dp)
+            )
+            .focusable(interactionSource = interactionSource)
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyUp &&
+                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                ) {
+                    onPlay()
+                    true
+                } else false
+            }
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onPlay)
+            .testTag("stream_card_${item.id}"),
+        colors = CardDefaults.cardColors(containerColor = Slate900),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Full-bleed cover image
+            if (!item.logoUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = item.logoUrl,
+                    contentDescription = item.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Slate850),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (item.type == IptvType.SERIES) Icons.Default.VideoLibrary else Icons.Default.Movie,
+                        contentDescription = null,
+                        tint = Slate600,
+                        modifier = Modifier.size(38.dp)
+                    )
+                }
+            }
+
+            // Dark bottom gradient overlay
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color(0x22020617),
+                                Color(0xCC020617),
+                                Color(0xF5020617)
+                            ),
+                            startY = 100f
+                        )
+                    )
+            )
+
+            // Top Row: Rating badge on start, Favorite heart on end
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                // Cleanly formatted 1-decimal rating badge
+                if (!formattedRating.isNullOrBlank()) {
+                    Surface(
+                        color = Color(0xD90F172A),
+                        shape = RoundedCornerShape(6.dp),
+                        modifier = Modifier.border(0.5.dp, Slate700, RoundedCornerShape(6.dp))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Star,
+                                contentDescription = null,
+                                tint = Color(0xFFF59E0B),
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Text(
+                                text = formattedRating,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = PureWhite,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
+                } else {
+                    Spacer(modifier = Modifier.width(1.dp))
+                }
+
+                // Small Favorite heart icon
+                IconButton(
+                    onClick = onToggleFavorite,
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x800F172A))
+                        .testTag("fav_button_${item.id}")
+                ) {
+                    Icon(
+                        imageVector = if (item.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = "Favorite",
+                        tint = if (item.isFavorite) AccentRed else PureWhite,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+
+            // Centered Movie/Series title at the bottom (maxLines = 2)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = item.name,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PureWhite,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 14.sp
+                )
             }
         }
     }
@@ -321,14 +808,14 @@ fun CompactLandscapeHeader(
             imageVector = icon,
             contentDescription = null,
             tint = accentColor,
-            modifier = Modifier.size(22.dp)
+            modifier = Modifier.size(20.dp)
         )
 
         Spacer(modifier = Modifier.width(6.dp))
 
         Text(
             text = title,
-            fontSize = 14.sp,
+            fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
             color = PureWhite,
             maxLines = 1
@@ -336,22 +823,22 @@ fun CompactLandscapeHeader(
 
         Spacer(modifier = Modifier.width(10.dp))
 
-        // Compact merged search bar (40dp height)
+        // Compact merged search bar
         OutlinedTextField(
             value = searchQuery,
             onValueChange = onSearchChange,
             modifier = Modifier
                 .weight(1f)
-                .height(44.dp)
+                .height(42.dp)
                 .testTag("input_search_channels"),
-            placeholder = { Text("Search %s...".format(title), color = Slate400, fontSize = 12.sp) },
+            placeholder = { Text("Search %s...".format(title), color = Slate400, fontSize = 11.sp) },
             leadingIcon = {
-                Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = Slate400, modifier = Modifier.size(16.dp))
+                Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = Slate400, modifier = Modifier.size(15.dp))
             },
             trailingIcon = {
                 if (searchQuery.isNotEmpty()) {
-                    IconButton(onClick = { onSearchChange("") }, modifier = Modifier.size(24.dp)) {
-                        Icon(imageVector = Icons.Default.Clear, contentDescription = "Clear", tint = Slate400, modifier = Modifier.size(16.dp))
+                    IconButton(onClick = { onSearchChange("") }, modifier = Modifier.size(22.dp)) {
+                        Icon(imageVector = Icons.Default.Clear, contentDescription = "Clear", tint = Slate400, modifier = Modifier.size(14.dp))
                     }
                 }
             },
@@ -395,7 +882,7 @@ fun PortraitHeader(
                 onClick = onBack,
                 interactionSource = backInteractionSource,
                 modifier = Modifier
-                    .size(42.dp)
+                    .size(40.dp)
                     .clip(CircleShape)
                     .background(if (isBackFocused) AccentCyan else Slate850)
                     .border(
@@ -429,7 +916,7 @@ fun PortraitHeader(
                     imageVector = icon,
                     contentDescription = null,
                     tint = accentColor,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(22.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Column {
@@ -440,7 +927,7 @@ fun PortraitHeader(
                         color = PureWhite
                     )
                     Text(
-                        text = "%,d total  •  %s".format(totalCount, selectedCategory),
+                        text = "%,d total  •  %s".format(Locale.US, totalCount, selectedCategory),
                         fontSize = 11.sp,
                         color = Slate400,
                         maxLines = 1,
@@ -457,7 +944,7 @@ fun PortraitHeader(
                 .fillMaxWidth()
                 .padding(vertical = 4.dp)
                 .testTag("input_search_channels"),
-            placeholder = { Text("Search by stream name or category...", color = Slate400, fontSize = 13.sp) },
+            placeholder = { Text("Search by stream name or category...", color = Slate400, fontSize = 12.sp) },
             leadingIcon = {
                 Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = Slate400)
             },
@@ -490,6 +977,8 @@ fun CategoryChipsRow(
     accentColor: Color,
     onCategoryChange: (String) -> Unit
 ) {
+    val strings = LocalAppStrings.current
+
     LazyRow(
         modifier = Modifier
             .fillMaxWidth()
@@ -499,7 +988,7 @@ fun CategoryChipsRow(
         // "All" chip
         item {
             CategoryChip(
-                name = "All",
+                name = strings.all,
                 count = totalCount,
                 isSelected = selectedCategory.equals("All", ignoreCase = true),
                 accentColor = accentColor,
@@ -510,7 +999,7 @@ fun CategoryChipsRow(
         // "Favorites" chip
         item {
             CategoryChip(
-                name = "Favorites",
+                name = strings.favorites,
                 count = null,
                 isSelected = selectedCategory.equals("Favorites", ignoreCase = true),
                 accentColor = Color(0xFFEF4444),
@@ -533,6 +1022,7 @@ fun CategoryChipsRow(
 
 @Composable
 fun EmptyCategoryState() {
+    val strings = LocalAppStrings.current
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -548,13 +1038,13 @@ fun EmptyCategoryState() {
             )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "No streams in this category",
+                text = strings.noStreamsInCategory,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Slate300
             )
             Text(
-                text = "Try switching categories or clearing the search query.",
+                text = strings.noStreamsHint,
                 fontSize = 12.sp,
                 color = Slate400,
                 modifier = Modifier.padding(top = 4.dp)
@@ -617,7 +1107,7 @@ fun CategoryChip(
                         .padding(horizontal = 6.dp, vertical = 1.dp)
                 ) {
                     Text(
-                        text = "%,d".format(count),
+                        text = "%,d".format(Locale.US, count),
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         color = PureWhite
@@ -635,6 +1125,7 @@ fun LoadMoreButton(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
+    val strings = LocalAppStrings.current
 
     Button(
         onClick = onLoadMore,
@@ -666,7 +1157,7 @@ fun LoadMoreButton(
         Icon(Icons.Default.ExpandMore, null, modifier = Modifier.size(20.dp))
         Spacer(modifier = Modifier.width(6.dp))
         Text(
-            text = "Load More Streams",
+            text = strings.loadMore,
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold
         )
@@ -820,11 +1311,16 @@ fun StreamItemCard(
                                 modifier = Modifier.size(11.dp)
                             )
                             Spacer(modifier = Modifier.width(2.dp))
+                            val cleanRating = item.rating.toDoubleOrNull()?.let {
+                                String.format(Locale.US, "%.1f", it)
+                            } ?: item.rating
                             Text(
-                                text = item.rating,
+                                text = cleanRating,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Slate300
+                                color = Slate300,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }

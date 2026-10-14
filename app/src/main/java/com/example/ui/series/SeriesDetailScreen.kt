@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.model.SeriesDetails
 import com.example.model.SeriesEpisode
+import com.example.ui.locale.LocalAppStrings
 import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.Slate300
@@ -84,6 +85,7 @@ fun SeriesDetailScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalAppStrings.current
     var selectedSeasonIndex by remember { mutableIntStateOf(0) }
 
     val backInteraction = remember { MutableInteractionSource() }
@@ -102,7 +104,7 @@ fun SeriesDetailScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(color = AccentCyan, strokeWidth = 3.dp)
                     Spacer(modifier = Modifier.height(14.dp))
-                    Text("Loading series episodes...", color = Slate300, fontSize = 14.sp)
+                    Text(strings.loadingSeriesDetails, color = Slate300, fontSize = 14.sp)
                 }
             }
             return@BoxWithConstraints
@@ -111,7 +113,7 @@ fun SeriesDetailScreen(
         if (details == null || details.seasons.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("No episodes available for this series.", color = Slate400, fontSize = 15.sp)
+                    Text(strings.noEpisodesFound, color = Slate400, fontSize = 15.sp)
                     Spacer(modifier = Modifier.height(12.dp))
                     IconButton(
                         onClick = onBack,
@@ -119,7 +121,7 @@ fun SeriesDetailScreen(
                             .clip(CircleShape)
                             .background(AccentCyan)
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Slate950)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.back, tint = Slate950)
                     }
                 }
             }

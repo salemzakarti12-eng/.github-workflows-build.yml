@@ -65,6 +65,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val isLoading: StateFlow<Boolean> = repository.isLoading
     val statusMessage: StateFlow<String?> = repository.statusMessage
     val playerUiState: StateFlow<PlayerUiState> = playerManager.uiState
+    val currentLanguage: StateFlow<String> = repository.appLanguage
+
+    fun setLanguage(lang: String) {
+        repository.setAppLanguage(lang)
+    }
+
+    fun toggleLanguage() {
+        repository.toggleAppLanguage()
+    }
 
     // Series detail state
     private val _selectedSeries = MutableStateFlow<IptvItem?>(null)

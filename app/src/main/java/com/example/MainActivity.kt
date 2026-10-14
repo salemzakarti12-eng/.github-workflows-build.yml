@@ -94,6 +94,11 @@ import com.example.ui.theme.Slate800
 import com.example.ui.theme.Slate850
 import com.example.ui.theme.Slate900
 import com.example.ui.theme.Slate950
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
+import com.example.ui.locale.LocalAppLanguage
+import com.example.ui.locale.LocalAppStrings
+import com.example.ui.locale.getAppStrings
 import com.example.util.DeviceUtils
 import com.example.util.LocalIsTelevision
 
@@ -104,9 +109,19 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val isTelevision = remember { DeviceUtils.isTelevision(this@MainActivity) }
-            CompositionLocalProvider(LocalIsTelevision provides isTelevision) {
+            val viewModel: MainViewModel = viewModel()
+            val currentLanguage by viewModel.currentLanguage.collectAsState()
+            val layoutDirection = if (currentLanguage == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr
+            val strings = remember(currentLanguage) { getAppStrings(currentLanguage) }
+
+            CompositionLocalProvider(
+                LocalIsTelevision provides isTelevision,
+                LocalAppLanguage provides currentLanguage,
+                LocalAppStrings provides strings,
+                LocalLayoutDirection provides layoutDirection
+            ) {
                 MyApplicationTheme {
-                    HypnoStreamApp()
+                    HypnoStreamApp(viewModel)
                 }
             }
         }
@@ -137,6 +152,7 @@ fun HypnoStreamApp(viewModel: MainViewModel = viewModel()) {
 
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val strings = LocalAppStrings.current
 
     // System Back Handler
     BackHandler {
@@ -158,11 +174,11 @@ fun HypnoStreamApp(viewModel: MainViewModel = viewModel()) {
         )
     } else {
         val navItems = listOf(
-            Triple(Screen.DASHBOARD, Icons.Default.Home, "Home"),
-            Triple(Screen.LIVE_CHANNELS, Icons.Default.LiveTv, "Live TV"),
-            Triple(Screen.MOVIES, Icons.Default.Movie, "Movies"),
-            Triple(Screen.SERIES, Icons.Default.VideoLibrary, "Series"),
-            Triple(Screen.SOURCES, Icons.Default.Settings, "Sources")
+            Triple(Screen.DASHBOARD, Icons.Default.Home, strings.home),
+            Triple(Screen.LIVE_CHANNELS, Icons.Default.LiveTv, strings.liveTv),
+            Triple(Screen.MOVIES, Icons.Default.Movie, strings.movies),
+            Triple(Screen.SERIES, Icons.Default.VideoLibrary, strings.series),
+            Triple(Screen.SOURCES, Icons.Default.Settings, strings.sources)
         )
 
         val screenContent: @Composable () -> Unit = {
@@ -182,7 +198,8 @@ fun HypnoStreamApp(viewModel: MainViewModel = viewModel()) {
                             } else {
                                 viewModel.playStream(item)
                             }
-                        }
+                        },
+                        onToggleLanguage = { viewModel.toggleLanguage() }
                     )
                 }
 
@@ -199,6 +216,7 @@ fun HypnoStreamApp(viewModel: MainViewModel = viewModel()) {
                             Screen.SERIES -> totalSeriesCount
                             else -> filteredItems.size
                         },
+                        favoriteCount = favorites.size,
                         onSearchChange = { viewModel.setSearchQuery(it) },
                         onCategoryChange = { viewModel.setSelectedCategory(it) },
                         onLoadMore = { viewModel.loadMoreItems() },
@@ -233,7 +251,8 @@ fun HypnoStreamApp(viewModel: MainViewModel = viewModel()) {
                         onLoadDemo = { viewModel.loadDemoShowcase() },
                         onSwitchSource = { viewModel.switchActiveSource(it) },
                         onDeleteSource = { viewModel.deleteSource(it) },
-                        onBack = { viewModel.handleBackPress() }
+                        onBack = { viewModel.handleBackPress() },
+                        onToggleLanguage = { viewModel.toggleLanguage() }
                     )
                 }
 

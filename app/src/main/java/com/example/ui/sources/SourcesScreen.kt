@@ -87,6 +87,8 @@ import com.example.ui.theme.Slate400
 import com.example.ui.theme.Slate700
 import com.example.ui.theme.Slate800
 import com.example.ui.theme.Slate850
+import com.example.ui.components.LanguageToggleButton
+import com.example.ui.locale.LocalAppStrings
 import com.example.ui.theme.Slate900
 import com.example.ui.theme.Slate950
 
@@ -102,8 +104,11 @@ fun SourcesScreen(
     onSwitchSource: (IptvSource) -> Unit,
     onDeleteSource: (String) -> Unit,
     onBack: () -> Unit,
+    onToggleLanguage: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalAppStrings.current
+
     // Dual Login Tabs: 0 = M3U URL, 1 = Xtream Codes API, 2 = Saved Providers
     var selectedTab by remember { mutableIntStateOf(0) }
 
@@ -166,24 +171,27 @@ fun SourcesScreen(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
+                    contentDescription = strings.back,
                     tint = if (isBackFocused) Slate950 else PureWhite
                 )
             }
             Spacer(modifier = Modifier.width(12.dp))
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "IPTV Providers & Sources",
+                    text = strings.sourcesAndProviders,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = PureWhite
                 )
                 Text(
-                    text = "Dual Login: M3U Playlist URL or Xtream Codes API",
+                    text = strings.managePlaylists,
                     fontSize = 11.sp,
                     color = Slate400
                 )
             }
+
+            Spacer(modifier = Modifier.width(8.dp))
+            LanguageToggleButton(onToggleLanguage = onToggleLanguage)
         }
 
         // Dual Login Tabs (M3U URL | Xtream Codes API | Saved Sources)
@@ -208,7 +216,7 @@ fun SourcesScreen(
                 interactionSource = tab0Interaction,
                 text = {
                     Text(
-                        "M3U URL",
+                        strings.m3uTab,
                         fontWeight = if (selectedTab == 0 || isTab0Focused) FontWeight.Bold else FontWeight.Normal,
                         color = if (selectedTab == 0 || isTab0Focused) AccentCyan else Slate400,
                         fontSize = 13.sp
@@ -228,7 +236,7 @@ fun SourcesScreen(
                 interactionSource = tab1Interaction,
                 text = {
                     Text(
-                        "Xtream Codes API",
+                        strings.xtreamTab,
                         fontWeight = if (selectedTab == 1 || isTab1Focused) FontWeight.Bold else FontWeight.Normal,
                         color = if (selectedTab == 1 || isTab1Focused) AccentCyan else Slate400,
                         fontSize = 13.sp
@@ -248,7 +256,7 @@ fun SourcesScreen(
                 interactionSource = tab2Interaction,
                 text = {
                     Text(
-                        "Saved (${sources.size})",
+                        "${strings.savedTab} (${sources.size})",
                         fontWeight = if (selectedTab == 2 || isTab2Focused) FontWeight.Bold else FontWeight.Normal,
                         color = if (selectedTab == 2 || isTab2Focused) AccentCyan else Slate400,
                         fontSize = 13.sp
