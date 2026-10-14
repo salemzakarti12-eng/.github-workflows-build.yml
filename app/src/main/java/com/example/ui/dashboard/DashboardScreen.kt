@@ -280,7 +280,7 @@ fun DashboardScreen(
             }
 
             item {
-                Spacer(modifier = Modifier.height(if (isMiniPlayerActive) 48.dp else 24.dp))
+                Spacer(modifier = Modifier.height(70.dp))
             }
         }
     }

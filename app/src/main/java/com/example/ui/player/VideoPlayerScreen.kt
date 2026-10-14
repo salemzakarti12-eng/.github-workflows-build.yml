@@ -82,6 +82,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
@@ -187,34 +188,53 @@ fun VideoPlayerScreen(
             .fillMaxSize()
             .background(Color.Black)
             .focusable()
-            .onPreviewKeyEvent { event ->
+            .onKeyEvent { event ->
                 if (event.type == KeyEventType.KeyUp) {
                     when (event.key) {
                         Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
                             if (!uiState.isControlsVisible) {
                                 playerManager.showControlsTemporarily()
+                                true
                             } else {
-                                playerManager.togglePlayPause()
+                                // Allow focused child button to consume Enter
+                                false
                             }
-                            true
                         }
                         Key.DirectionUp -> {
-                            onPlayPrevious()
-                            playerManager.showControlsTemporarily()
-                            true
+                            // Only switch channel if controls/dialogs are NOT visible
+                            if (!uiState.isControlsVisible && !showAudioDialog && !showSubtitleDialog && !uiState.isQuickChannelListOpen) {
+                                onPlayPrevious()
+                                true
+                            } else {
+                                false
+                            }
                         }
                         Key.DirectionDown -> {
-                            onPlayNext()
-                            playerManager.showControlsTemporarily()
-                            true
+                            // Only switch channel if controls/dialogs are NOT visible
+                            if (!uiState.isControlsVisible && !showAudioDialog && !showSubtitleDialog && !uiState.isQuickChannelListOpen) {
+                                onPlayNext()
+                                true
+                            } else {
+                                false
+                            }
                         }
                         Key.Back -> {
                             if (uiState.isQuickChannelListOpen) {
                                 playerManager.closeQuickChannelList()
+                                true
+                            } else if (showAudioDialog) {
+                                showAudioDialog = false
+                                true
+                            } else if (showSubtitleDialog) {
+                                showSubtitleDialog = false
+                                true
+                            } else if (uiState.isControlsVisible) {
+                                playerManager.toggleControlsVisibility()
+                                true
                             } else {
                                 onBack()
+                                true
                             }
-                            true
                         }
                         else -> false
                     }
@@ -629,17 +649,16 @@ fun VideoPlayerScreen(
                             ),
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
-                                .focusable(interactionSource = aspectInteraction)
-                                .onPreviewKeyEvent { event ->
+                                .clickable(interactionSource = aspectInteraction, indication = null) {
+                                    playerManager.cycleAspectRatio()
+                                }
+                                .onKeyEvent { event ->
                                     if (event.type == KeyEventType.KeyUp &&
                                         (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
                                     ) {
                                         playerManager.cycleAspectRatio()
                                         true
                                     } else false
-                                }
-                                .clickable(interactionSource = aspectInteraction, indication = null) {
-                                    playerManager.cycleAspectRatio()
                                 }
                                 .testTag("btn_aspect_ratio")
                         ) {
@@ -676,8 +695,11 @@ fun VideoPlayerScreen(
                             ),
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
-                                .focusable(interactionSource = audioInteraction)
-                                .onPreviewKeyEvent { event ->
+                                .clickable(interactionSource = audioInteraction, indication = null) {
+                                    playerManager.updateTracksState()
+                                    showAudioDialog = true
+                                }
+                                .onKeyEvent { event ->
                                     if (event.type == KeyEventType.KeyUp &&
                                         (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
                                     ) {
@@ -685,10 +707,6 @@ fun VideoPlayerScreen(
                                         showAudioDialog = true
                                         true
                                     } else false
-                                }
-                                .clickable(interactionSource = audioInteraction, indication = null) {
-                                    playerManager.updateTracksState()
-                                    showAudioDialog = true
                                 }
                                 .testTag("btn_player_audio")
                         ) {
@@ -725,8 +743,11 @@ fun VideoPlayerScreen(
                             ),
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
-                                .focusable(interactionSource = subInteraction)
-                                .onPreviewKeyEvent { event ->
+                                .clickable(interactionSource = subInteraction, indication = null) {
+                                    playerManager.updateTracksState()
+                                    showSubtitleDialog = true
+                                }
+                                .onKeyEvent { event ->
                                     if (event.type == KeyEventType.KeyUp &&
                                         (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
                                     ) {
@@ -734,10 +755,6 @@ fun VideoPlayerScreen(
                                         showSubtitleDialog = true
                                         true
                                     } else false
-                                }
-                                .clickable(interactionSource = subInteraction, indication = null) {
-                                    playerManager.updateTracksState()
-                                    showSubtitleDialog = true
                                 }
                                 .testTag("btn_player_subtitles")
                         ) {
@@ -819,15 +836,6 @@ fun VideoPlayerScreen(
                                 color = if (isPrevFocused) PureWhite else Slate700,
                                 shape = CircleShape
                             )
-                            .focusable(interactionSource = prevInteraction)
-                            .onPreviewKeyEvent { event ->
-                                if (event.type == KeyEventType.KeyUp &&
-                                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                                ) {
-                                    onPlayPrevious()
-                                    true
-                                } else false
-                            }
                             .testTag("btn_player_prev")
                     ) {
                         Icon(
@@ -855,15 +863,6 @@ fun VideoPlayerScreen(
                                 color = PureWhite,
                                 shape = CircleShape
                             )
-                            .focusable(interactionSource = playInteraction)
-                            .onPreviewKeyEvent { event ->
-                                if (event.type == KeyEventType.KeyUp &&
-                                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                                ) {
-                                    playerManager.togglePlayPause()
-                                    true
-                                } else false
-                            }
                             .testTag("btn_player_play_pause")
                     ) {
                         Icon(
@@ -890,15 +889,6 @@ fun VideoPlayerScreen(
                                 color = if (isNextFocused) PureWhite else Slate700,
                                 shape = CircleShape
                             )
-                            .focusable(interactionSource = nextInteraction)
-                            .onPreviewKeyEvent { event ->
-                                if (event.type == KeyEventType.KeyUp &&
-                                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                                ) {
-                                    onPlayNext()
-                                    true
-                                } else false
-                            }
                             .testTag("btn_player_next")
                     ) {
                         Icon(

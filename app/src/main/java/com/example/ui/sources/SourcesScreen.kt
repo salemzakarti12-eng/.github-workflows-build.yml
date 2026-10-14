@@ -52,6 +52,7 @@ import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -66,7 +67,9 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -136,12 +139,15 @@ fun SourcesScreen(
             statusMessage?.contains("فشل", true) == true ||
             statusMessage?.contains("خطأ", true) == true
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Slate950)
-            .testTag("sources_screen")
-    ) {
+    val layoutDirection = if (isAr) LayoutDirection.Rtl else LayoutDirection.Ltr
+
+    CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .background(Slate950)
+                .testTag("sources_screen")
+        ) {
         // Top App Bar
         Row(
             modifier = Modifier
@@ -800,10 +806,15 @@ fun SourcesScreen(
                     item {
                         DemoStreamsBanner(onLoadDemo = onLoadDemo)
                     }
+
+                    item {
+                        Spacer(modifier = Modifier.height(70.dp))
+                    }
                 }
             }
         }
     }
+}
 }
 
 @Composable

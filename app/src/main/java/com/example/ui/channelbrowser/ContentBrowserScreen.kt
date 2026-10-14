@@ -60,6 +60,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -80,7 +81,9 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -255,13 +258,16 @@ fun ContentBrowserScreen(
         }
     }
 
-    BoxWithConstraints(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Slate950)
-            .statusBarsPadding()
-            .testTag("content_browser_screen")
-    ) {
+    val layoutDirection = if (isAr) LayoutDirection.Rtl else LayoutDirection.Ltr
+
+    CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
+        BoxWithConstraints(
+            modifier = modifier
+                .fillMaxSize()
+                .background(Slate950)
+                .statusBarsPadding()
+                .testTag("content_browser_screen")
+        ) {
         val isTv = com.example.util.LocalIsTelevision.current
         val isWideScreen = maxWidth >= 600.dp || isTv || isLandscape
 
@@ -341,6 +347,9 @@ fun ContentBrowserScreen(
                                         LoadMoreButton(onLoadMore = onLoadMore, accentColor = accentColor)
                                     }
                                 }
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    Spacer(modifier = Modifier.height(70.dp))
+                                }
                             }
                         }
                     } else if (isLiveGridView) {
@@ -372,6 +381,9 @@ fun ContentBrowserScreen(
                                         LoadMoreButton(onLoadMore = onLoadMore, accentColor = accentColor)
                                     }
                                 }
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    Spacer(modifier = Modifier.height(70.dp))
+                                }
                             }
                         }
                     } else {
@@ -400,6 +412,9 @@ fun ContentBrowserScreen(
                                     item {
                                         LoadMoreButton(onLoadMore = onLoadMore, accentColor = accentColor)
                                     }
+                                }
+                                item {
+                                    Spacer(modifier = Modifier.height(70.dp))
                                 }
                             }
                         }
@@ -463,6 +478,9 @@ fun ContentBrowserScreen(
                                     LoadMoreButton(onLoadMore = onLoadMore, accentColor = accentColor)
                                 }
                             }
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                Spacer(modifier = Modifier.height(70.dp))
+                            }
                         }
                     }
                 } else {
@@ -492,12 +510,16 @@ fun ContentBrowserScreen(
                                     LoadMoreButton(onLoadMore = onLoadMore, accentColor = accentColor)
                                 }
                             }
+                            item {
+                                Spacer(modifier = Modifier.height(70.dp))
+                            }
                         }
                     }
                 }
             }
         }
     }
+}
 }
 
 @Composable
@@ -583,6 +605,9 @@ fun CategorySidebar(
                     accentColor = accentColor,
                     onClick = { onCategoryChange(cat.name) }
                 )
+            }
+            item {
+                Spacer(modifier = Modifier.height(70.dp))
             }
         }
     }

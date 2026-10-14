@@ -43,6 +43,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -58,7 +59,9 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -94,12 +97,15 @@ fun SeriesDetailScreen(
     val backInteraction = remember { MutableInteractionSource() }
     val isBackFocused by backInteraction.collectIsFocusedAsState()
 
-    BoxWithConstraints(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Slate950)
-            .testTag("series_detail_screen")
-    ) {
+    val layoutDirection = if (isAr) LayoutDirection.Rtl else LayoutDirection.Ltr
+
+    CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
+        BoxWithConstraints(
+            modifier = modifier
+                .fillMaxSize()
+                .background(Slate950)
+                .testTag("series_detail_screen")
+        ) {
         val isWide = maxWidth >= 600.dp
 
         if (isLoading && details == null) {
@@ -391,8 +397,12 @@ fun SeriesDetailScreen(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 5.dp)
                 )
             }
+            item {
+                Spacer(modifier = Modifier.height(70.dp))
+            }
         }
     }
+}
 }
 
 @Composable
