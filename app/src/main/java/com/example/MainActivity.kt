@@ -15,9 +15,17 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -49,10 +57,9 @@ import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.VideoLibrary
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -74,7 +81,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -84,8 +101,11 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -112,6 +132,7 @@ import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.AccentRed
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.PureWhite
+import com.example.ui.theme.Slate300
 import com.example.ui.theme.Slate400
 import com.example.ui.theme.Slate700
 import com.example.ui.theme.Slate800
@@ -240,12 +261,27 @@ fun HypnoStreamApp(
     val isAr = LocalAppLanguage.current == "ar"
     val context = LocalContext.current
 
-    // Startup Splash State: Shows full-screen animation until channels are connected or minimum 1.8s passes
-    var showSplash by remember { mutableStateOf(true) }
+    // Smart Startup Splash: Stays visible until the initial playlist connection finishes!
+    val totalLoadedItems = totalLiveCount + totalMoviesCount + totalSeriesCount
+    var minSplashTimePassed by remember { mutableStateOf(false) }
+    var initialLoadCompleted by remember { mutableStateOf(false) }
+
     LaunchedEffect(Unit) {
-        delay(1800L) // Minimum cinematic splash duration
-        showSplash = false
+        delay(2000L) // Minimum 2s for smooth intro animation
+        minSplashTimePassed = true
+        // Safety fallback: if server takes more than 12s or is offline, unlock screen
+        delay(10000L)
+        initialLoadCompleted = true
     }
+
+    LaunchedEffect(minSplashTimePassed, isLoading, totalLoadedItems) {
+        if (minSplashTimePassed && (!isLoading && (totalLoadedItems > 0 || activeSource == null))) {
+            delay(250L) // Brief pause after items index so numbers are 100% ready
+            initialLoadCompleted = true
+        }
+    }
+
+    val showSplash = !initialLoadCompleted
 
     var lastBackPressTime by remember { mutableLongStateOf(0L) }
 
@@ -548,58 +584,342 @@ fun HypnoStreamApp(
             }
         }
 
-        // Full-Screen Animated HypnoStream Startup Splash Screen (Hides Playlist Loading Delay)
+        // Full-Screen 3D Orbital HypnoStream Splash Screen (Stays until playlist finishes loading!)
         AnimatedVisibility(
             visible = showSplash,
-            enter = fadeIn(),
-            exit = fadeOut()
+            enter = fadeIn(tween(300)),
+            exit = fadeOut(tween(650))
         ) {
+            HypnoOrbitalSplashOverlay(
+                isAr = isAr,
+                statusMessage = statusMessage,
+                totalLoadedItems = totalLoadedItems
+            )
+        }
+    }
+}
+
+/**
+ * Custom Animated HypnoStream Orbital Splash Screen
+ * Matches the glowing 3D orbital ring, 3 neon top bars (Red, Purple, Cyan),
+ * breathing gradient play button, and two-tone "HypnoStream" typography.
+ */
+@Composable
+fun HypnoOrbitalSplashOverlay(
+    isAr: Boolean,
+    statusMessage: String?,
+    totalLoadedItems: Int
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "hypnoSplash")
+
+    // Continuous 360-degree orbital ring glow rotation
+    val orbitAngle by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2600, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "orbitRotation"
+    )
+
+    // Breathing Play button & glow pulse
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.94f,
+        targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseScale"
+    )
+
+    // Sequential neon bar shimmer
+    val barPhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 3f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1500, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "barPhase"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF071A3E), // Deep royal navy center glow
+                        Color(0xFF030917),
+                        Color(0xFF000000)  // Pure black outer edge
+                    ),
+                    radius = 950f
+                )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(horizontal = 32.dp)
+        ) {
+            // Glowing App Icon Container with Animated Orbital TV Emblem
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .background(Slate950),
+                    .size(210.dp)
+                    .clip(RoundedCornerShape(46.dp))
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(
+                                Color(0xFF071C44),
+                                Color(0xFF030B1B),
+                                Color(0xFF051533)
+                            )
+                        )
+                    )
+                    .border(
+                        width = 2.dp,
+                        brush = Brush.linearGradient(
+                            colors = listOf(
+                                Color(0xFF00E5FF),
+                                Color(0xFF1D4ED8),
+                                Color(0xFF00E5FF)
+                            )
+                        ),
+                        shape = RoundedCornerShape(46.dp)
+                    ),
                 contentAlignment = Alignment.Center
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(96.dp)
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(Slate900)
-                            .border(2.dp, AccentCyan, RoundedCornerShape(24.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Tv,
-                            contentDescription = null,
-                            tint = AccentCyan,
-                            modifier = Modifier.size(52.dp)
+                Canvas(modifier = Modifier.size(170.dp)) {
+                    val w = size.width
+                    val h = size.height
+                    val cx = w / 2f
+                    val cy = h / 2f
+
+                    // Subtle inner cyan radial aura
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0x4400E5FF),
+                                Color.Transparent
+                            ),
+                            center = Offset(cx, cy),
+                            radius = w * 0.55f
+                        ),
+                        radius = w * 0.55f,
+                        center = Offset(cx, cy)
+                    )
+
+                    // 1. Back half of the tilted 3D Orbital Ring (behind the TV monitor)
+                    rotate(degrees = -18f, pivot = Offset(cx, cy)) {
+                        val ovalTopLeft = Offset(w * 0.04f, h * 0.30f)
+                        val ovalSize = Size(w * 0.92f, h * 0.40f)
+
+                        drawArc(
+                            color = Color(0xFF0284C7).copy(alpha = 0.65f),
+                            startAngle = 180f,
+                            sweepAngle = 180f,
+                            useCenter = false,
+                            topLeft = ovalTopLeft,
+                            size = ovalSize,
+                            style = Stroke(width = 7.dp.toPx(), cap = StrokeCap.Round)
                         )
                     }
-                    Spacer(modifier = Modifier.height(20.dp))
-                    Text(
-                        text = "HypnoStream",
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.Black,
-                        color = PureWhite
+
+                    // 2. TV Monitor Frame
+                    val tvWidth = w * 0.62f
+                    val tvHeight = h * 0.48f
+                    val tvLeft = cx - (tvWidth / 2f)
+                    val tvTop = cy - (tvHeight / 2f) - 6.dp.toPx()
+
+                    // Monitor dark screen fill
+                    drawRoundRect(
+                        color = Color(0xFF020712),
+                        topLeft = Offset(tvLeft, tvTop),
+                        size = Size(tvWidth, tvHeight),
+                        cornerRadius = CornerRadius(14.dp.toPx(), 14.dp.toPx())
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = if (isAr) "جاري الاتصال وتجهيز القنوات..." else "Connecting & preparing your channels...",
-                        fontSize = 13.sp,
-                        color = AccentCyan
+
+                    // Monitor glowing cyan-blue border
+                    drawRoundRect(
+                        brush = Brush.linearGradient(
+                            colors = listOf(Color(0xFF00E5FF), Color(0xFF2979FF), Color(0xFF00E5FF))
+                        ),
+                        topLeft = Offset(tvLeft, tvTop),
+                        size = Size(tvWidth, tvHeight),
+                        cornerRadius = CornerRadius(14.dp.toPx(), 14.dp.toPx()),
+                        style = Stroke(width = 5.5.dp.toPx())
                     )
-                    Spacer(modifier = Modifier.height(28.dp))
-                    CircularProgressIndicator(
-                        color = AccentCyan,
-                        strokeWidth = 3.dp,
-                        modifier = Modifier.size(38.dp)
+
+                    // 3. Top 3 Neon Bars inside TV (Red = Live, Purple = Movies, Cyan = Series)
+                    val barY = tvTop + 13.dp.toPx()
+                    val barWidth = tvWidth * 0.22f
+                    val barSpacing = tvWidth * 0.06f
+                    val startX = cx - ((barWidth * 3 + barSpacing * 2) / 2f)
+
+                    val redAlpha = if (barPhase.toInt() == 0) 1f else 0.72f
+                    val purpleAlpha = if (barPhase.toInt() == 1) 1f else 0.72f
+                    val cyanAlpha = if (barPhase.toInt() == 2) 1f else 0.72f
+
+                    // Red Bar
+                    drawLine(
+                        color = Color(0xFFFF2A54).copy(alpha = redAlpha),
+                        start = Offset(startX, barY),
+                        end = Offset(startX + barWidth, barY),
+                        strokeWidth = 6.dp.toPx(),
+                        cap = StrokeCap.Round
                     )
+                    // Purple Bar
+                    drawLine(
+                        color = Color(0xFF8B5CF6).copy(alpha = purpleAlpha),
+                        start = Offset(startX + barWidth + barSpacing, barY),
+                        end = Offset(startX + barWidth * 2 + barSpacing, barY),
+                        strokeWidth = 6.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+                    // Cyan Bar
+                    drawLine(
+                        color = Color(0xFF00E5FF).copy(alpha = cyanAlpha),
+                        start = Offset(startX + (barWidth + barSpacing) * 2, barY),
+                        end = Offset(startX + barWidth * 3 + barSpacing * 2, barY),
+                        strokeWidth = 6.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+
+                    // 4. Center Breathing Play Triangle
+                    val playCenterY = tvTop + (tvHeight * 0.58f)
+                    scale(scale = pulseScale, pivot = Offset(cx, playCenterY)) {
+                        val triSize = 24.dp.toPx()
+                        val playPath = Path().apply {
+                            moveTo(cx - triSize * 0.42f, playCenterY - triSize * 0.52f)
+                            lineTo(cx - triSize * 0.42f, playCenterY + triSize * 0.52f)
+                            lineTo(cx + triSize * 0.58f, playCenterY)
+                            close()
+                        }
+                        drawPath(
+                            path = playPath,
+                            brush = Brush.linearGradient(
+                                colors = listOf(Color.White, Color(0xFF80D8FF))
+                            )
+                        )
+                        drawPath(
+                            path = playPath,
+                            color = Color(0xFF00E5FF),
+                            style = Stroke(width = 1.5.dp.toPx(), join = StrokeJoin.Round)
+                        )
+                    }
+
+                    // 5. TV Monitor Stand (Neck & Base)
+                    val standTop = tvTop + tvHeight
+                    val standBottom = standTop + 11.dp.toPx()
+                    drawLine(
+                        color = Color(0xFF00B0FF),
+                        start = Offset(cx, standTop),
+                        end = Offset(cx, standBottom),
+                        strokeWidth = 6.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+                    drawLine(
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(Color(0xFF2979FF), Color(0xFF00E5FF), Color(0xFF2979FF))
+                        ),
+                        start = Offset(cx - 22.dp.toPx(), standBottom),
+                        end = Offset(cx + 22.dp.toPx(), standBottom),
+                        strokeWidth = 5.5.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+
+                    // 6. Front Half of Tilted 3D Orbital Ring + Rotating Comet Highlight
+                    rotate(degrees = -18f, pivot = Offset(cx, cy)) {
+                        val ovalTopLeft = Offset(w * 0.04f, h * 0.30f)
+                        val ovalSize = Size(w * 0.92f, h * 0.40f)
+
+                        // Front bright cyan swoosh
+                        drawArc(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color(0xFF00E5FF),
+                                    Color(0xFF7CE8FF),
+                                    Color(0xFF00B0FF)
+                                )
+                            ),
+                            startAngle = 0f,
+                            sweepAngle = 180f,
+                            useCenter = false,
+                            topLeft = ovalTopLeft,
+                            size = ovalSize,
+                            style = Stroke(width = 8.5.dp.toPx(), cap = StrokeCap.Round)
+                        )
+
+                        // Spinning energy highlight along the orbital ring
+                        drawArc(
+                            color = Color.White,
+                            startAngle = orbitAngle,
+                            sweepAngle = 55f,
+                            useCenter = false,
+                            topLeft = ovalTopLeft,
+                            size = ovalSize,
+                            style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
+                        )
+                    }
                 }
             }
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // Two-Tone "HypnoStream" Logo Typography (White + Glowing Cyan)
+            Text(
+                text = buildAnnotatedString {
+                    withStyle(SpanStyle(color = PureWhite, fontWeight = FontWeight.Black)) {
+                        append("Hypno")
+                    }
+                    withStyle(SpanStyle(color = Color(0xFF00E5FF), fontWeight = FontWeight.Black)) {
+                        append("Stream")
+                    }
+                },
+                fontSize = 34.sp,
+                letterSpacing = 0.5.sp
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Live Dynamic Status Text
+            val displayStatus = when {
+                totalLoadedItems > 0 -> if (isAr) {
+                    "تم تجهيز %,d قناة وفيلم ومسلسل...".format(totalLoadedItems)
+                } else {
+                    "Ready! Loaded %,d channels, movies & series...".format(totalLoadedItems)
+                }
+                !statusMessage.isNullOrBlank() -> statusMessage
+                else -> if (isAr) {
+                    "جاري الاتصال وتجهيز قنواتك..."
+                } else {
+                    "Connecting & preparing your entertainment..."
+                }
+            }
+
+            Text(
+                text = displayStatus,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = Slate300,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Sleek Glowing Cyan Progress Pill
+            LinearProgressIndicator(
+                color = Color(0xFF00E5FF),
+                trackColor = Slate800,
+                modifier = Modifier
+                    .width(190.dp)
+                    .height(5.dp)
+                    .clip(RoundedCornerShape(3.dp))
+            )
         }
     }
 }
