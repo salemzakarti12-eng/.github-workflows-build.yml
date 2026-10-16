@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
@@ -29,6 +30,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+
+data class SubtitleCue(
+    val startTimeMs: Long,
+    val endTimeMs: Long,
+    val text: String
+)
 
 @OptIn(UnstableApi::class)
 class ExoPlayerManager(
@@ -54,6 +64,12 @@ class ExoPlayerManager(
     private var reconnectJob: Job? = null
     private var retryCount = 0
     private val maxRetries = 4
+
+    private var parsedExternalCues: List<SubtitleCue> = emptyList()
+    private val httpClient = OkHttpClient.Builder()
+        .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
 
     init {
         player.addListener(object : Player.Listener {
@@ -147,12 +163,15 @@ class ExoPlayerManager(
     fun playItem(item: IptvItem) {
         retryCount = 0
         reconnectJob?.cancel()
+        parsedExternalCues = emptyList()
         // Keep current controls visibility state if already in player so Next/Prev doesn't reset focus!
         _uiState.value = _uiState.value.copy(
             currentItem = item,
             isBuffering = true,
             isPlaying = true,
-            errorMessage = null
+            errorMessage = null,
+            subtitleOffsetMs = 0L,
+            activeSubtitleText = null
         )
         loadStreamInternal(item)
     }
@@ -196,7 +215,9 @@ class ExoPlayerManager(
     }
 
     fun seekTo(positionMs: Long) {
-        player.seekTo(positionMs.coerceIn(0L, player.duration.coerceAtLeast(0L)))
+        val target = positionMs.coerceIn(0L, player.duration.coerceAtLeast(0L))
+        player.seekTo(target)
+        updateActiveSubtitleCue(target)
     }
 
     fun cycleAspectRatio() {
@@ -266,11 +287,13 @@ class ExoPlayerManager(
         progressJob?.cancel()
         progressJob = coroutineScope.launch(Dispatchers.Main) {
             while (isActive && player.isPlaying) {
+                val currentPos = player.currentPosition.coerceAtLeast(0L)
+                updateActiveSubtitleCue(currentPos)
                 _uiState.value = _uiState.value.copy(
-                    currentPositionMs = player.currentPosition.coerceAtLeast(0L),
+                    currentPositionMs = currentPos,
                     durationMs = player.duration.coerceAtLeast(0L)
                 )
-                delay(1000)
+                delay(250)
             }
         }
     }
@@ -344,6 +367,13 @@ class ExoPlayerManager(
     }
 
     fun selectSubtitleTrack(track: TrackOption) {
+        if (track.groupIndex == -1) {
+            _uiState.value = _uiState.value.copy(isSubtitleOff = false)
+            updateActiveSubtitleCue(player.currentPosition)
+            return
+        }
+        parsedExternalCues = emptyList()
+        _uiState.value = _uiState.value.copy(activeSubtitleText = null)
         val groups = player.currentTracks.groups
         if (track.groupIndex in groups.indices) {
             val group = groups[track.groupIndex]
@@ -359,12 +389,192 @@ class ExoPlayerManager(
     }
 
     fun disableSubtitles() {
+        parsedExternalCues = emptyList()
         player.trackSelectionParameters = player.trackSelectionParameters
             .buildUpon()
             .clearOverridesOfType(C.TRACK_TYPE_TEXT)
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
             .build()
+        _uiState.value = _uiState.value.copy(
+            isSubtitleOff = true,
+            activeSubtitleText = null
+        )
         updateTracksState()
+    }
+
+    fun setSubtitleOffset(offsetMs: Long) {
+        _uiState.value = _uiState.value.copy(subtitleOffsetMs = offsetMs)
+        updateActiveSubtitleCue(player.currentPosition)
+    }
+
+    fun adjustSubtitleOffset(deltaMs: Long) {
+        val newOffset = _uiState.value.subtitleOffsetMs + deltaMs
+        setSubtitleOffset(newOffset)
+    }
+
+    fun resetSubtitleOffset() {
+        setSubtitleOffset(0L)
+    }
+
+    fun loadExternalSubtitle(uri: Uri, label: String) {
+        coroutineScope.launch(Dispatchers.Main) {
+            val uriString = uri.toString().lowercase()
+            val isVtt = uriString.endsWith(".vtt") || uriString.contains(".vtt?") || label.contains("vtt", ignoreCase = true)
+            val mimeType = if (isVtt) MimeTypes.TEXT_VTT else MimeTypes.APPLICATION_SUBRIP
+
+            // 1. Parse text cues in background for offset shifting
+            val rawContent = readSubtitleContent(uri)
+            if (!rawContent.isNullOrBlank()) {
+                parsedExternalCues = parseSubtitles(rawContent)
+            }
+
+            // 2. Build SubtitleConfiguration
+            val subtitleConfig = MediaItem.SubtitleConfiguration.Builder(uri)
+                .setMimeType(mimeType)
+                .setLabel(label)
+                .setLanguage("und")
+                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                .build()
+
+            // 3. Attach to current MediaItem preserving playback position
+            val currentPos = player.currentPosition
+            val wasPlaying = player.isPlaying || player.playWhenReady
+            val currentMediaItem = player.currentMediaItem ?: _uiState.value.currentItem?.let {
+                MediaItem.fromUri(Uri.parse(it.streamUrl.trim()))
+            }
+
+            if (currentMediaItem != null) {
+                val newMediaItem = currentMediaItem.buildUpon()
+                    .setSubtitleConfigurations(listOf(subtitleConfig))
+                    .build()
+
+                val mediaSource = DefaultMediaSourceFactory(httpDataSourceFactory)
+                    .createMediaSource(newMediaItem)
+
+                player.setMediaSource(mediaSource, currentPos)
+                player.prepare()
+                player.playWhenReady = wasPlaying
+            }
+
+            // 4. Enable text tracks
+            player.trackSelectionParameters = player.trackSelectionParameters
+                .buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .build()
+
+            // Update tracks list in UI state
+            val customOption = TrackOption(
+                groupIndex = -1,
+                trackIndex = -1,
+                label = "★ $label (External)",
+                isSelected = true
+            )
+            val existing = _uiState.value.subtitleTracks.toMutableList()
+            existing.removeAll { it.label.contains("(External)") }
+            existing.add(0, customOption)
+
+            _uiState.value = _uiState.value.copy(
+                subtitleTracks = existing,
+                isSubtitleOff = false
+            )
+
+            updateActiveSubtitleCue(currentPos)
+        }
+    }
+
+    private suspend fun readSubtitleContent(uri: Uri): String? = withContext(Dispatchers.IO) {
+        try {
+            val scheme = uri.scheme?.lowercase()
+            if (scheme == "http" || scheme == "https") {
+                val req = Request.Builder().url(uri.toString()).build()
+                httpClient.newCall(req).execute().use { resp ->
+                    if (resp.isSuccessful) resp.body?.string() else null
+                }
+            } else {
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    stream.bufferedReader(Charsets.UTF_8).readText()
+                }
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun parseSubtitles(content: String): List<SubtitleCue> {
+        val cues = mutableListOf<SubtitleCue>()
+        val lines = content.replace("\r\n", "\n").replace("\r", "\n").lines()
+        var i = 0
+        while (i < lines.size) {
+            val line = lines[i].trim()
+            if (line.contains("-->")) {
+                val arrowParts = line.split("-->")
+                if (arrowParts.size == 2) {
+                    val start = parseTimestampToMs(arrowParts[0].trim().split(" ")[0])
+                    val end = parseTimestampToMs(arrowParts[1].trim().split(" ")[0])
+                    if (start != null && end != null) {
+                        i++
+                        val textLines = mutableListOf<String>()
+                        while (i < lines.size && lines[i].trim().isNotEmpty()) {
+                            textLines.add(lines[i].trim())
+                            i++
+                        }
+                        val text = textLines.joinToString("\n").replace(Regex("<[^>]*>"), "")
+                        if (text.isNotBlank()) {
+                            cues.add(SubtitleCue(start, end, text))
+                        }
+                    }
+                }
+            }
+            i++
+        }
+        return cues
+    }
+
+    private fun parseTimestampToMs(timeStr: String): Long? {
+        val clean = timeStr.trim().replace(',', '.')
+        val parts = clean.split(':')
+        return try {
+            when (parts.size) {
+                3 -> {
+                    val hours = parts[0].toLong()
+                    val minutes = parts[1].toLong()
+                    val secParts = parts[2].split('.')
+                    val seconds = secParts[0].toLong()
+                    val millis = (if (secParts.size > 1) secParts[1].padEnd(3, '0').take(3) else "0").toLong()
+                    (hours * 3600 + minutes * 60 + seconds) * 1000 + millis
+                }
+                2 -> {
+                    val minutes = parts[0].toLong()
+                    val secParts = parts[1].split('.')
+                    val seconds = secParts[0].toLong()
+                    val millis = (if (secParts.size > 1) secParts[1].padEnd(3, '0').take(3) else "0").toLong()
+                    (minutes * 60 + seconds) * 1000 + millis
+                }
+                else -> null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun updateActiveSubtitleCue(currentPosMs: Long) {
+        if (_uiState.value.isSubtitleOff || parsedExternalCues.isEmpty()) {
+            if (_uiState.value.activeSubtitleText != null) {
+                _uiState.value = _uiState.value.copy(activeSubtitleText = null)
+            }
+            return
+        }
+
+        val offset = _uiState.value.subtitleOffsetMs
+        val effectiveTime = currentPosMs - offset
+        val matchingCue = parsedExternalCues.firstOrNull { cue ->
+            effectiveTime in cue.startTimeMs..cue.endTimeMs
+        }
+
+        val text = matchingCue?.text
+        if (_uiState.value.activeSubtitleText != text) {
+            _uiState.value = _uiState.value.copy(activeSubtitleText = text)
+        }
     }
 
     fun stop() {

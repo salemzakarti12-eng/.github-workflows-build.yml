@@ -5,42 +5,103 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- TV Outer Display Shell (safe zone centered within 22,22 to 86,86) -->
-    <path
-        android:fillColor="#1E293B"
-        android:strokeColor="#38BDF8"
-        android:strokeWidth="2"
-        android:pathData="M 28,30 C 28,26.5 30.5,24 34,24 L 74,24 C 77.5,24 80,26.5 80,30 L 80,68 C 80,71.5 77.5,74 74,74 L 34,74 C 30.5,74 28,71.5 28,68 Z" />
 
-    <!-- Screen Inner Display Area -->
-    <path
-        android:fillColor="#090D16"
-        android:pathData="M 32,28 L 76,28 L 76,70 L 32,70 Z" />
+    <!-- 1. Tilted 3D Cyan Orbital Swoosh Ring (Back half, behind TV monitor) -->
+    <group
+        android:pivotX="54"
+        android:pivotY="50"
+        android:rotation="-18">
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#5000E5FF"
+            android:strokeWidth="2.2"
+            android:strokeLineCap="round"
+            android:pathData="M 16,50 C 16,43 33,37.5 54,37.5 C 75,37.5 92,43 92,50" />
+    </group>
 
-    <!-- TV Stand -->
+    <!-- 2. TV Stand Neck & Base -->
     <path
-        android:fillColor="#38BDF8"
-        android:pathData="M 52,74 L 56,74 L 56,80 L 52,80 Z" />
+        android:fillColor="#2979FF"
+        android:pathData="M 52,65 L 56,65 L 56,71 L 52,71 Z" />
     <path
-        android:fillColor="#38BDF8"
-        android:pathData="M 44,80 L 64,80 L 64,82.5 L 44,82.5 Z" />
+        android:fillColor="#00E5FF"
+        android:pathData="M 44,71 L 64,71 C 65,71 65.5,71.5 65.5,72.2 L 65.5,72.8 C 65.5,73.5 65,74 64,74 L 44,74 C 43,74 42.5,73.5 42.5,72.8 L 42.5,72.2 C 42.5,71.5 43,71 44,71 Z" />
 
-    <!-- Hypnotix Triple Gradient Wave Bars on Screen -->
-    <!-- Red/Orange Live TV Accent Bar -->
+    <!-- 3. TV Monitor Frame Outer Glow & Stroke (#00E5FF to #2979FF) -->
     <path
-        android:fillColor="#EF4444"
-        android:pathData="M 34,31 L 46,31 L 46,34 L 34,34 Z" />
-    <!-- Purple/Blue Movie Accent Bar -->
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M 34.5,32 L 73.5,32 C 76,32 78,34 78,36.5 L 78,60.5 C 78,63 76,65 73.5,65 L 34.5,65 C 32,65 30,63 30,60.5 L 30,36.5 C 30,34 32,32 34.5,32 Z">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="30"
+                android:startY="32"
+                android:endX="78"
+                android:endY="65"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#00E5FF" />
+                <item android:offset="1.0" android:color="#2979FF" />
+            </gradient>
+        </aapt:attr>
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="54"
+                android:startY="33"
+                android:endX="54"
+                android:endY="64"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#030814" />
+                <item android:offset="1.0" android:color="#071126" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 4. Three Top Neon Indicator Pills (Red #FF2A54, Purple #8B5CF6, Cyan #00E5FF) -->
+    <!-- Red Pill (Live TV) -->
+    <path
+        android:fillColor="#FF2A54"
+        android:pathData="M 36.6,35.5 L 43.4,35.5 C 44,35.5 44.5,36 44.5,36.65 C 44.5,37.3 44,37.8 43.4,37.8 L 36.6,37.8 C 36,37.8 35.5,37.3 35.5,36.65 C 35.5,36 36,35.5 36.6,35.5 Z" />
+    <!-- Purple Pill (Movies) -->
     <path
         android:fillColor="#8B5CF6"
-        android:pathData="M 48,31 L 60,31 L 60,34 L 48,34 Z" />
-    <!-- Cyan Series Accent Bar -->
+        android:pathData="M 50.6,35.5 L 57.4,35.5 C 58,35.5 58.5,36 58.5,36.65 C 58.5,37.3 58,37.8 57.4,37.8 L 50.6,37.8 C 50,37.8 49.5,37.3 49.5,36.65 C 49.5,36 50,35.5 50.6,35.5 Z" />
+    <!-- Cyan Pill (Series) -->
     <path
-        android:fillColor="#06B6D4"
-        android:pathData="M 62,31 L 74,31 L 74,34 L 62,34 Z" />
+        android:fillColor="#00E5FF"
+        android:pathData="M 64.6,35.5 L 71.4,35.5 C 72,35.5 72.5,36 72.5,36.65 C 72.5,37.3 72,37.8 71.4,37.8 L 64.6,37.8 C 64,37.8 63.5,37.3 63.5,36.65 C 63.5,36 64,35.5 64.6,35.5 Z" />
 
-    <!-- Play Icon in Center Screen -->
+    <!-- 5. Center Play Triangle (White-to-Cyan Gradient) -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M 48,41 L 64,49 L 48,57 Z" />
+        android:pathData="M 49,44.2 C 49,43.4 49.8,42.9 50.5,43.3 L 60.5,48.8 C 61.2,49.2 61.2,50.2 60.5,50.6 L 50.5,56.1 C 49.8,56.5 49,56 49,55.2 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="49"
+                android:startY="43"
+                android:endX="61"
+                android:endY="55"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FFFFFF" />
+                <item android:offset="1.0" android:color="#00E5FF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 6. Tilted 3D Cyan Orbital Swoosh Ring (Front half, sweeping across TV monitor) -->
+    <group
+        android:pivotX="54"
+        android:pivotY="50"
+        android:rotation="-18">
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#00E5FF"
+            android:strokeWidth="2.5"
+            android:strokeLineCap="round"
+            android:pathData="M 92,50 C 92,57 75,62.5 54,62.5 C 33,62.5 16,57 16,50" />
+        <!-- Front orbital glowing comet highlight -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M 68,61.2 C 68,60.5 76,60.5 76,61.2 C 76,61.9 68,61.9 68,61.2 Z" />
+    </group>
+
 </vector>

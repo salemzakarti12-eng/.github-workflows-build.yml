@@ -3,10 +3,13 @@ package com.example.ui.player
 import android.app.Activity
 import android.content.Context
 import android.media.AudioManager
+import android.net.Uri
 import android.os.Build
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -47,14 +50,19 @@ import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.BrightnessHigh
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.filled.FileOpen
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.VideoLibrary
@@ -63,6 +71,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Slider
@@ -70,6 +80,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -256,6 +267,18 @@ fun VideoPlayerScreen(
     var lastFocusedControl by remember { mutableStateOf("play") }
     var showAudioDialog by remember { mutableStateOf(false) }
     var showSubtitleDialog by remember { mutableStateOf(false) }
+    var subtitleUrlInput by remember { mutableStateOf("") }
+    var subtitleUrlError by remember { mutableStateOf(false) }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val filename = uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: "Local Subtitle"
+            playerManager.loadExternalSubtitle(uri, filename)
+            showSubtitleDialog = false
+        }
+    }
 
     var wasControlsVisible by remember { mutableStateOf(false) }
     LaunchedEffect(uiState.isControlsVisible) {
@@ -399,6 +422,33 @@ fun VideoPlayerScreen(
                     }
                 }
             )
+        }
+
+        // Subtitle Text Overlay (for External Subtitles with offset sync support)
+        if (!uiState.isSubtitleOff && !uiState.activeSubtitleText.isNullOrBlank()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 32.dp)
+                    .padding(bottom = if (uiState.isControlsVisible) 116.dp else 44.dp),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                Surface(
+                    color = Color(0xDD0B132B),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, Color(0x6638BDF8)),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = uiState.activeSubtitleText,
+                        color = PureWhite,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                    )
+                }
+            }
         }
 
         // Temporary Gesture HUD Overlay
@@ -1353,21 +1403,317 @@ fun VideoPlayerScreen(
     }
 
     if (!isInPipMode && showSubtitleDialog) {
+        val offsetSec = uiState.subtitleOffsetMs / 1000f
+        val offsetDisplay = when {
+            uiState.subtitleOffsetMs > 0 -> "+%.1fs".format(Locale.US, offsetSec)
+            uiState.subtitleOffsetMs < 0 -> "%.1fs".format(Locale.US, offsetSec)
+            else -> "0.0s"
+        }
+
         AlertDialog(
             onDismissRequest = { showSubtitleDialog = false },
             containerColor = Slate900,
             title = {
-                Text(
-                    text = if (isAr) "اختر لغة الترجمة" else strings.selectSubtitleTrack,
-                    fontWeight = FontWeight.Bold,
-                    color = PureWhite
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (isAr) "إعدادات الترجمة" else "Subtitles Settings",
+                        fontWeight = FontWeight.Bold,
+                        color = PureWhite,
+                        fontSize = 18.sp
+                    )
+                    IconButton(
+                        onClick = { showSubtitleDialog = false },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(Icons.Default.Close, "Close", tint = Slate400)
+                    }
+                }
             },
             text = {
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    // --- 1. Subtitle Timing / Sync (ضبط توقيت الترجمة) ---
+                    item {
+                        Surface(
+                            color = Slate850,
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, Slate700),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Schedule,
+                                        contentDescription = null,
+                                        tint = AccentCyan,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = if (isAr) "ضبط توقيت الترجمة (مزامنة)" else "Subtitle Timing / Sync",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        color = PureWhite
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // -0.5s Button
+                                    Surface(
+                                        color = Slate800,
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(1.dp, Slate700),
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable { playerManager.adjustSubtitleOffset(-500L) }
+                                    ) {
+                                        Text(
+                                            text = "-0.5s",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = PureWhite,
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                                        )
+                                    }
+
+                                    // Current Offset Badge (e.g., +1.5s, 0.0s)
+                                    Surface(
+                                        color = if (uiState.subtitleOffsetMs != 0L) AccentCyan else Slate900,
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(1.dp, if (uiState.subtitleOffsetMs != 0L) AccentCyan else Slate700)
+                                    ) {
+                                        Text(
+                                            text = offsetDisplay,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp,
+                                            color = if (uiState.subtitleOffsetMs != 0L) Slate950 else PureWhite,
+                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                                        )
+                                    }
+
+                                    // +0.5s Button
+                                    Surface(
+                                        color = Slate800,
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(1.dp, Slate700),
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable { playerManager.adjustSubtitleOffset(500L) }
+                                    ) {
+                                        Text(
+                                            text = "+0.5s",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = PureWhite,
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                                        )
+                                    }
+
+                                    // Reset Button
+                                    Surface(
+                                        color = Slate800,
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(1.dp, Slate700),
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable { playerManager.resetSubtitleOffset() }
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.RestartAlt,
+                                                contentDescription = null,
+                                                tint = Slate400,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = if (isAr) "إعادة ضبط" else "Reset",
+                                                fontWeight = FontWeight.SemiBold,
+                                                fontSize = 12.sp,
+                                                color = Slate300
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // --- 2. Load External Subtitle (تحميل ترجمة خارجية) ---
+                    item {
+                        Surface(
+                            color = Slate850,
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, Slate700),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.FileUpload,
+                                        contentDescription = null,
+                                        tint = AccentCyan,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = if (isAr) "تحميل ترجمة خارجية" else "Load External Subtitle",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        color = PureWhite
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                // Option A: Pick .SRT/.VTT File from Device
+                                Surface(
+                                    color = Slate800,
+                                    shape = RoundedCornerShape(10.dp),
+                                    border = BorderStroke(1.dp, Slate700),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .clickable {
+                                            filePickerLauncher.launch("*/*")
+                                        }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.FileOpen,
+                                            contentDescription = null,
+                                            tint = AccentCyan,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Text(
+                                            text = if (isAr) "اختر ملف .SRT / .VTT من الجهاز" else "Pick .SRT/.VTT File from Device",
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 13.sp,
+                                            color = PureWhite
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                // Option B: Load Subtitle from URL
+                                Column {
+                                    Text(
+                                        text = if (isAr) "أو أدخل رابط ملف الترجمة (URL):" else "Or enter subtitle link (URL):",
+                                        fontSize = 11.sp,
+                                        color = Slate400,
+                                        modifier = Modifier.padding(bottom = 6.dp)
+                                    )
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        OutlinedTextField(
+                                            value = subtitleUrlInput,
+                                            onValueChange = { subtitleUrlInput = it; subtitleUrlError = false },
+                                            placeholder = {
+                                                Text("https://.../sub.srt", fontSize = 11.sp, color = Slate400)
+                                            },
+                                            isError = subtitleUrlError,
+                                            singleLine = true,
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedTextColor = PureWhite,
+                                                unfocusedTextColor = PureWhite,
+                                                focusedBorderColor = AccentCyan,
+                                                unfocusedBorderColor = Slate700,
+                                                focusedContainerColor = Slate900,
+                                                unfocusedContainerColor = Slate900
+                                            ),
+                                            modifier = Modifier.weight(1f)
+                                        )
+
+                                        Surface(
+                                            color = AccentCyan,
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .clickable {
+                                                    val trimmed = subtitleUrlInput.trim()
+                                                    if (trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)) {
+                                                        val label = trimmed.substringAfterLast('/').substringBefore('?').takeIf { it.isNotBlank() } ?: "URL Subtitle"
+                                                        playerManager.loadExternalSubtitle(Uri.parse(trimmed), label)
+                                                        showSubtitleDialog = false
+                                                    } else {
+                                                        subtitleUrlError = true
+                                                    }
+                                                }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Download,
+                                                    contentDescription = null,
+                                                    tint = Slate950,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(
+                                                    text = if (isAr) "تحميل" else "Load",
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 12.sp,
+                                                    color = Slate950
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    if (subtitleUrlError) {
+                                        Text(
+                                            text = if (isAr) "يرجى إدخال رابط http:// أو https:// صالح" else "Please enter a valid http:// or https:// URL",
+                                            color = AccentRed,
+                                            fontSize = 11.sp,
+                                            modifier = Modifier.padding(top = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // --- 3. Tracks List Header ---
+                    item {
+                        Text(
+                            text = if (isAr) "مسارات الترجمة المتوفرة" else "Available Subtitle Tracks",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = Slate300,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+
                     item {
                         val offInteraction = remember { MutableInteractionSource() }
                         val isOffFocused by offInteraction.collectIsFocusedAsState()

@@ -6,7 +6,7 @@
     android:viewportWidth="320"
     android:viewportHeight="180">
 
-    <!-- Dark Slate Background Gradient -->
+    <!-- 1. Rich Deep Midnight-Blue Background Gradient -->
     <path
         android:pathData="M0,0h320v180h-320z">
         <aapt:attr name="android:fillColor">
@@ -16,45 +16,198 @@
                 android:endX="320"
                 android:endY="180"
                 android:type="linear">
-                <item android:offset="0.0" android:color="#070B14" />
-                <item android:offset="0.5" android:color="#0F172A" />
-                <item android:offset="1.0" android:color="#1E293B" />
+                <item android:offset="0.0" android:color="#020611" />
+                <item android:offset="0.45" android:color="#040F26" />
+                <item android:offset="1.0" android:color="#081E48" />
             </gradient>
         </aapt:attr>
     </path>
 
-    <!-- TV Display Screen Silhouette -->
+    <!-- Subtle Cyan Radial Glow Behind the Emblem -->
     <path
-        android:fillColor="#111827"
-        android:strokeColor="#38BDF8"
-        android:strokeWidth="2.5"
-        android:pathData="M 70,35 C 70,29 75,24 81,24 L 239,24 C 245,24 250,29 250,35 L 250,135 C 250,141 245,146 239,146 L 81,146 C 75,146 70,141 70,135 Z" />
+        android:pathData="M68,86m-70,0a70,70 0 1,1 140,0a70,70 0 1,1 -140,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="68"
+                android:centerY="86"
+                android:gradientRadius="70">
+                <item android:offset="0.0" android:color="#3500E5FF" />
+                <item android:offset="0.6" android:color="#1000E5FF" />
+                <item android:offset="1.0" android:color="#00000000" />
+            </gradient>
+        </aapt:attr>
+    </path>
 
-    <!-- TV Stand -->
-    <path
-        android:fillColor="#38BDF8"
-        android:pathData="M 154,146 L 166,146 L 166,158 L 154,158 Z" />
-    <path
-        android:fillColor="#38BDF8"
-        android:pathData="M 136,158 L 184,158 L 184,162 L 136,162 Z" />
+    <!-- ==================== EMBLEM (Left Side) ==================== -->
 
-    <!-- Hypnotix Three Accent Gradient Wave Lines inside Screen -->
-    <!-- Red Live TV -->
+    <!-- Orbital Ring (Back half, behind TV monitor) -->
+    <group
+        android:pivotX="68"
+        android:pivotY="86"
+        android:rotation="-18">
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#5000E5FF"
+            android:strokeWidth="2.8"
+            android:strokeLineCap="round"
+            android:pathData="M 20,86 C 20,76.5 41.5,69 68,69 C 94.5,69 116,76.5 116,86" />
+    </group>
+
+    <!-- TV Stand Neck & Base -->
     <path
-        android:fillColor="#EF4444"
-        android:pathData="M 85,38 L 125,38 L 125,42 L 85,42 Z" />
-    <!-- Purple Movies -->
+        android:fillColor="#2979FF"
+        android:pathData="M 65,107 L 71,107 L 71,116 L 65,116 Z" />
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M 54,116 L 82,116 C 83.5,116 84.5,116.8 84.5,117.8 L 84.5,118.5 C 84.5,119.5 83.5,120.2 82,120.2 L 54,120.2 C 52.5,120.2 51.5,119.5 51.5,118.5 L 51.5,117.8 C 51.5,116.8 52.5,116 54,116 Z" />
+
+    <!-- TV Monitor Frame Outer Glow & Stroke (#00E5FF to #2979FF) -->
+    <path
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M 43,65 L 93,65 C 96.5,65 99,67.5 99,71 L 99,101 C 99,104.5 96.5,107 93,107 L 43,107 C 39.5,107 37,104.5 37,101 L 37,71 C 37,67.5 39.5,65 43,65 Z">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="37"
+                android:startY="65"
+                android:endX="99"
+                android:endY="107"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#00E5FF" />
+                <item android:offset="1.0" android:color="#2979FF" />
+            </gradient>
+        </aapt:attr>
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="68"
+                android:startY="66"
+                android:endX="68"
+                android:endY="106"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#030814" />
+                <item android:offset="1.0" android:color="#071126" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Three Top Neon Indicator Pills (Red #FF2A54, Purple #8B5CF6, Cyan #00E5FF) -->
+    <!-- Red Pill (Live TV) -->
+    <path
+        android:fillColor="#FF2A54"
+        android:pathData="M 46,70 L 58,70 C 58.8,70 59.5,70.6 59.5,71.5 C 59.5,72.4 58.8,73 58,73 L 46,73 C 45.2,73 44.5,72.4 44.5,71.5 C 44.5,70.6 45.2,70 46,70 Z" />
+    <!-- Purple Pill (Movies) -->
     <path
         android:fillColor="#8B5CF6"
-        android:pathData="M 140,38 L 180,38 L 180,42 L 140,42 Z" />
-    <!-- Cyan Series -->
+        android:pathData="M 62,70 L 74,70 C 74.8,70 75.5,70.6 75.5,71.5 C 75.5,72.4 74.8,73 74,73 L 62,73 C 61.2,73 60.5,72.4 60.5,71.5 C 60.5,70.6 61.2,70 62,70 Z" />
+    <!-- Cyan Pill (Series) -->
     <path
-        android:fillColor="#06B6D4"
-        android:pathData="M 195,38 L 235,38 L 235,42 L 195,42 Z" />
+        android:fillColor="#00E5FF"
+        android:pathData="M 78,70 L 90,70 C 90.8,70 91.5,70.6 91.5,71.5 C 91.5,72.4 90.8,73 90,73 L 78,73 C 77.2,73 76.5,72.4 76.5,71.5 C 76.5,70.6 77.2,70 78,70 Z" />
 
-    <!-- Large Play Triangle in Center -->
+    <!-- Center Play Triangle (White-to-Cyan Gradient) -->
     <path
-        android:fillColor="#38BDF8"
-        android:pathData="M 148,70 L 182,90 L 148,110 Z" />
+        android:pathData="M 61,79.5 C 61,78.5 62,77.8 63,78.4 L 76.5,85.2 C 77.5,85.7 77.5,87.3 76.5,87.8 L 63,94.6 C 62,95.2 61,94.5 61,93.5 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="61"
+                android:startY="78"
+                android:endX="77"
+                android:endY="94"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FFFFFF" />
+                <item android:offset="1.0" android:color="#00E5FF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Orbital Ring (Front half, sweeping across TV monitor) -->
+    <group
+        android:pivotX="68"
+        android:pivotY="86"
+        android:rotation="-18">
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#00E5FF"
+            android:strokeWidth="3.2"
+            android:strokeLineCap="round"
+            android:pathData="M 116,86 C 116,95.5 94.5,103 68,103 C 41.5,103 20,95.5 20,86" />
+        <!-- Front orbital glowing comet highlight -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M 85,101.5 C 85,100.5 95,100.5 95,101.5 C 95,102.5 85,102.5 85,101.5 Z" />
+    </group>
+
+    <!-- ==================== TYPOGRAPHY (Right Side) ==================== -->
+
+    <!-- "Hypno" in PureWhite (#FFFFFF) -->
+    <!-- Letter H -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 126,73 L 130,73 L 130,83.5 L 135,83.5 L 135,73 L 139,73 L 139,99 L 135,99 L 135,87.5 L 130,87.5 L 130,99 L 126,99 Z" />
+    <!-- Letter Y -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 143,73 L 147.5,73 L 149.5,84 L 151.5,73 L 156,73 L 151.5,88 L 151.5,99 L 147.5,99 L 147.5,88 Z" />
+    <!-- Letter P -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 160,73 L 168.5,73 C 171,73 172,74.5 172,78.5 C 172,82.5 171,84 168.5,84 L 164,84 L 164,99 L 160,99 Z M 164,76.8 L 168,76.8 C 169.5,76.8 170,77.3 170,78.5 C 170,79.7 169.5,80.2 168,80.2 L 164,80.2 Z" />
+    <!-- Letter N -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 176,73 L 180,73 L 185,86.5 L 185,73 L 189,73 L 189,99 L 185,99 L 180,85.5 L 180,99 L 176,99 Z" />
+    <!-- Letter O -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 197.5,73 L 201.5,73 C 205,73 206,75.5 206,80 L 206,92 C 206,96.5 205,99 201.5,99 L 197.5,99 C 194,99 193,96.5 193,92 L 193,80 C 193,75.5 194,73 197.5,73 Z M 198,77 C 197.2,77 197,78 197,80 L 197,92 C 197,94 197.2,95 198,95 L 201,95 C 201.8,95 202,94 202,92 L 202,80 C 202,78 201.8,77 201,77 Z" />
+
+    <!-- "Stream" in Glowing AccentCyan (#00E5FF) -->
+    <!-- Letter S -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M 218.5,73 L 225,73 C 226.2,73 226.8,74.2 226.8,76 L 223,76 C 223,75.2 222.2,74.8 221.5,74.8 L 218.5,74.8 C 217.5,74.8 216.5,75.5 216.5,77.2 C 216.5,79 217.8,79.8 219.8,80.5 L 223.2,81.8 C 226,82.8 227,85.5 227,88.5 C 227,94.5 224.5,99 220,99 L 216,99 C 214.5,99 213.5,97.5 213.5,95.5 L 217.5,95.5 C 217.5,96.8 218.5,97.2 219.8,97.2 L 222.5,97.2 C 223.8,97.2 224.5,96.2 224.5,94.2 C 224.5,92.5 223.5,91.8 221.5,91 L 218,89.8 C 215,88.5 213.5,86 213.5,82.5 C 213.5,76 216,73 218.5,73 Z" />
+    <!-- Letter T -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M 230,73 L 242,73 L 242,76.8 L 238,76.8 L 238,99 L 234,99 L 234,76.8 L 230,76.8 Z" />
+    <!-- Letter R -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M 246,73 L 254.5,73 C 257,73 258,74.5 258,78 C 258,81 257,82.5 254.5,83 L 258,99 L 253.5,99 L 250.5,84.5 L 250,84.5 L 250,99 L 246,99 Z M 250,76.8 L 254,76.8 C 255.5,76.8 256,77.2 256,78.2 C 256,79.2 255.5,79.8 254,79.8 L 250,79.8 Z" />
+    <!-- Letter E -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M 262,73 L 273,73 L 273,76.8 L 266,76.8 L 266,84 L 272,84 L 272,87.8 L 266,87.8 L 266,95.2 L 273,95.2 L 273,99 L 262,99 Z" />
+    <!-- Letter A -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M 281,73 L 285,73 L 289,99 L 285,99 L 283.8,91 L 282.2,91 L 281,99 L 277,99 Z M 283,79.5 L 281.8,87.5 L 284.2,87.5 Z" />
+    <!-- Letter M -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M 293,73 L 297,73 L 300,86 L 303,73 L 307,73 L 307,99 L 303.5,99 L 303.5,81 L 301,91.5 L 299,91.5 L 296.5,81 L 296.5,99 L 293,99 Z" />
+
+    <!-- Subtitle Pill & Accent Line -->
+    <path
+        android:fillColor="#08142C"
+        android:strokeColor="#1E3A8A"
+        android:strokeWidth="1"
+        android:pathData="M 128,107 L 295,107 C 297,107 298,108 298,110 L 298,114 C 298,116 297,117 295,117 L 128,117 C 126,117 125,116 125,114 L 125,110 C 125,108 126,107 128,107 Z" />
+    <!-- Neon indicator dots on badge -->
+    <path
+        android:fillColor="#FF2A54"
+        android:pathData="M 132,112m-2,0a2,2 0 1,1 4,0a2,2 0 1,1 -4,0" />
+    <path
+        android:fillColor="#8B5CF6"
+        android:pathData="M 140,112m-2,0a2,2 0 1,1 4,0a2,2 0 1,1 -4,0" />
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M 148,112m-2,0a2,2 0 1,1 4,0a2,2 0 1,1 -4,0" />
+    <!-- Glowing cyan bar accent -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M 158,111 L 290,111 L 290,113 L 158,113 Z" />
 
 </vector>
