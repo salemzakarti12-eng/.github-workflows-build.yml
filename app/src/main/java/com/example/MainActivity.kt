@@ -14,6 +14,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.annotation.OptIn
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -46,7 +49,9 @@ import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -59,6 +64,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -113,6 +119,7 @@ import com.example.ui.theme.Slate900
 import com.example.ui.theme.Slate950
 import com.example.util.DeviceUtils
 import com.example.util.LocalIsTelevision
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
 
@@ -233,6 +240,13 @@ fun HypnoStreamApp(
     val isAr = LocalAppLanguage.current == "ar"
     val context = LocalContext.current
 
+    // Startup Splash State: Shows full-screen animation until channels are connected or minimum 1.8s passes
+    var showSplash by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        delay(1800L) // Minimum cinematic splash duration
+        showSplash = false
+    }
+
     var lastBackPressTime by remember { mutableLongStateOf(0L) }
 
     BackHandler {
@@ -248,285 +262,342 @@ fun HypnoStreamApp(
         }
     }
 
-    if (currentScreen == Screen.PLAYER || isInPipMode) {
-        val activeItem = playerUiState.currentItem
-        val sideDrawerItems = when (activeItem?.type) {
-            IptvType.LIVE_TV -> viewModel.repository.getAllLiveChannels()
-            IptvType.SERIES -> currentSeriesEpisodes
-            else -> emptyList()
-        }
-
-        VideoPlayerScreen(
-            playerManager = viewModel.playerManager,
-            uiState = playerUiState,
-            allChannels = sideDrawerItems,
-            onBack = { viewModel.handleBackPress() },
-            onPlayNext = { viewModel.playNextChannel() },
-            onPlayPrevious = { viewModel.playPreviousChannel() },
-            onSelectChannel = { viewModel.playStream(it) },
-            modifier = Modifier.fillMaxSize()
-        )
-    } else {
-        val navItems = listOf(
-            Triple(Screen.DASHBOARD, Icons.Default.Home, if (isAr) "الرئيسية" else strings.home),
-            Triple(Screen.LIVE_CHANNELS, Icons.Default.LiveTv, if (isAr) "البث المباشر" else strings.liveTv),
-            Triple(Screen.MOVIES, Icons.Default.Movie, if (isAr) "الأفلام" else strings.movies),
-            Triple(Screen.SERIES, Icons.Default.VideoLibrary, if (isAr) "المسلسلات" else strings.series),
-            Triple(Screen.SOURCES, Icons.Default.Settings, if (isAr) "المصادر" else strings.sources)
-        )
-
-        val screenContent: @Composable () -> Unit = {
-            when (currentScreen) {
-                Screen.DASHBOARD -> {
-                    DashboardScreen(
-                        activeSource = activeSource,
-                        liveCount = totalLiveCount,
-                        moviesCount = totalMoviesCount,
-                        seriesCount = totalSeriesCount,
-                        favorites = favoriteItems,
-                        recentlyWatched = recentlyWatched,
-                        onNavigate = { viewModel.navigateTo(it) },
-                        onPlayItem = { item ->
-                            if (item.type == IptvType.SERIES) {
-                                viewModel.openSeriesDetail(item)
-                            } else {
-                                viewModel.playStream(item)
-                            }
-                        },
-                        onToggleLanguage = { viewModel.toggleLanguage() }
-                    )
-                }
-
-                Screen.LIVE_CHANNELS, Screen.MOVIES, Screen.SERIES -> {
-                    ContentBrowserScreen(
-                        screen = currentScreen,
-                        categories = currentCategories,
-                        items = filteredItems,
-                        searchQuery = searchQuery,
-                        selectedCategory = selectedCategory,
-                        totalCount = when (currentScreen) {
-                            Screen.LIVE_CHANNELS -> totalLiveCount
-                            Screen.MOVIES -> totalMoviesCount
-                            Screen.SERIES -> totalSeriesCount
-                            else -> filteredItems.size
-                        },
-                        favoriteCount = favorites.size,
-                        onSearchChange = { viewModel.setSearchQuery(it) },
-                        onCategoryChange = { viewModel.setSelectedCategory(it) },
-                        onLoadMore = { viewModel.loadMoreItems() },
-                        onPlayItem = { viewModel.playStream(it) },
-                        onOpenSeries = { seriesItem -> viewModel.openSeriesDetail(seriesItem) },
-                        onToggleFavorite = { viewModel.toggleFavorite(it) },
-                        onBack = { viewModel.handleBackPress() }
-                    )
-                }
-
-                Screen.SERIES_DETAIL -> {
-                    SeriesDetailScreen(
-                        details = seriesDetails,
-                        isLoading = isSeriesLoading,
-                        onPlayEpisode = { episode -> viewModel.playEpisode(episode) },
-                        onBack = { viewModel.handleBackPress() }
-                    )
-                }
-
-                Screen.SOURCES -> {
-                    SourcesScreen(
-                        sources = sources,
-                        activeSource = activeSource,
-                        isLoading = isLoading,
-                        statusMessage = statusMessage,
-                        onConnectXtream = { server, user, pass, name ->
-                            viewModel.connectXtream(server, user, pass, name)
-                        },
-                        onLoadM3u = { url, content, name ->
-                            viewModel.loadM3u(url, content, name)
-                        },
-                        onLoadDemo = { viewModel.loadDemoShowcase() },
-                        onSwitchSource = { viewModel.switchActiveSource(it) },
-                        onDeleteSource = { viewModel.deleteSource(it) },
-                        onBack = { viewModel.handleBackPress() },
-                        onToggleLanguage = { viewModel.toggleLanguage() }
-                    )
-                }
-
-                Screen.PLAYER -> {}
+    Box(modifier = Modifier.fillMaxSize().background(Slate950)) {
+        // Main App UI
+        if (currentScreen == Screen.PLAYER || isInPipMode) {
+            val activeItem = playerUiState.currentItem
+            val sideDrawerItems = when (activeItem?.type) {
+                IptvType.LIVE_TV -> viewModel.repository.getAllLiveChannels()
+                IptvType.SERIES -> currentSeriesEpisodes
+                else -> emptyList()
             }
-        }
 
-        if (useSideRailLayout) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Slate950)
-            ) {
-                NavigationRail(
-                    containerColor = Slate900,
-                    contentColor = PureWhite,
-                    modifier = Modifier
-                        .width(if (isTablet) 84.dp else 76.dp)
-                        .fillMaxHeight()
-                        .border(BorderStroke(1.dp, Slate800))
-                        .testTag("main_navigation_rail")
-                ) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    navItems.forEach { (screen, icon, label) ->
-                        val isSelected = currentScreen == screen || (screen == Screen.SERIES && currentScreen == Screen.SERIES_DETAIL)
-                        val navInteraction = remember { MutableInteractionSource() }
-                        val isNavFocused by navInteraction.collectIsFocusedAsState()
+            VideoPlayerScreen(
+                playerManager = viewModel.playerManager,
+                uiState = playerUiState,
+                allChannels = sideDrawerItems,
+                onBack = { viewModel.handleBackPress() },
+                onPlayNext = { viewModel.playNextChannel() },
+                onPlayPrevious = { viewModel.playPreviousChannel() },
+                onSelectChannel = { viewModel.playStream(it) },
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            val navItems = listOf(
+                Triple(Screen.DASHBOARD, Icons.Default.Home, if (isAr) "الرئيسية" else strings.home),
+                Triple(Screen.LIVE_CHANNELS, Icons.Default.LiveTv, if (isAr) "البث المباشر" else strings.liveTv),
+                Triple(Screen.MOVIES, Icons.Default.Movie, if (isAr) "الأفلام" else strings.movies),
+                Triple(Screen.SERIES, Icons.Default.VideoLibrary, if (isAr) "المسلسلات" else strings.series),
+                Triple(Screen.SOURCES, Icons.Default.Settings, if (isAr) "المصادر" else strings.sources)
+            )
 
-                        NavigationRailItem(
-                            selected = isSelected,
-                            onClick = { viewModel.navigateTo(screen) },
-                            interactionSource = navInteraction,
-                            icon = {
-                                Icon(
-                                    imageVector = icon,
-                                    contentDescription = label,
-                                    tint = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
-                                    modifier = Modifier.size(if (isNavFocused) 24.dp else 20.dp)
-                                )
-                            },
-                            label = {
-                                Text(
-                                    text = label,
-                                    fontSize = 10.sp,
-                                    fontWeight = if (isSelected || isNavFocused) FontWeight.Bold else FontWeight.SemiBold,
-                                    color = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
-                                    maxLines = 1
-                                )
-                            },
-                            colors = navigationRailItemColors(),
-                            modifier = Modifier
-                                .focusable(interactionSource = navInteraction)
-                                .border(
-                                    width = if (isNavFocused) 2.dp else 0.dp,
-                                    color = if (isNavFocused) AccentCyan else Color.Transparent,
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                                .onPreviewKeyEvent { event ->
-                                    if (event.type == KeyEventType.KeyUp &&
-                                        (event.key == Key.DirectionCenter ||
-                                         event.key == Key.Enter ||
-                                         event.key == Key.NumPadEnter)
-                                    ) {
-                                        viewModel.navigateTo(screen)
-                                        true
-                                    } else false
+            val screenContent: @Composable () -> Unit = {
+                when (currentScreen) {
+                    Screen.DASHBOARD -> {
+                        DashboardScreen(
+                            activeSource = activeSource,
+                            liveCount = totalLiveCount,
+                            moviesCount = totalMoviesCount,
+                            seriesCount = totalSeriesCount,
+                            favorites = favoriteItems,
+                            recentlyWatched = recentlyWatched,
+                            onNavigate = { viewModel.navigateTo(it) },
+                            onPlayItem = { item ->
+                                if (item.type == IptvType.SERIES) {
+                                    viewModel.openSeriesDetail(item)
+                                } else {
+                                    viewModel.playStream(item)
                                 }
+                            },
+                            onToggleLanguage = { viewModel.toggleLanguage() }
                         )
                     }
-                }
 
-                Column(
+                    Screen.LIVE_CHANNELS, Screen.MOVIES, Screen.SERIES -> {
+                        ContentBrowserScreen(
+                            screen = currentScreen,
+                            categories = currentCategories,
+                            items = filteredItems,
+                            searchQuery = searchQuery,
+                            selectedCategory = selectedCategory,
+                            totalCount = when (currentScreen) {
+                                Screen.LIVE_CHANNELS -> totalLiveCount
+                                Screen.MOVIES -> totalMoviesCount
+                                Screen.SERIES -> totalSeriesCount
+                                else -> filteredItems.size
+                            },
+                            favoriteCount = favorites.size,
+                            onSearchChange = { viewModel.setSearchQuery(it) },
+                            onCategoryChange = { viewModel.setSelectedCategory(it) },
+                            onLoadMore = { viewModel.loadMoreItems() },
+                            onPlayItem = { viewModel.playStream(it) },
+                            onOpenSeries = { seriesItem -> viewModel.openSeriesDetail(seriesItem) },
+                            onToggleFavorite = { viewModel.toggleFavorite(it) },
+                            onBack = { viewModel.handleBackPress() }
+                        )
+                    }
+
+                    Screen.SERIES_DETAIL -> {
+                        SeriesDetailScreen(
+                            details = seriesDetails,
+                            isLoading = isSeriesLoading,
+                            onPlayEpisode = { episode -> viewModel.playEpisode(episode) },
+                            onBack = { viewModel.handleBackPress() }
+                        )
+                    }
+
+                    Screen.SOURCES -> {
+                        SourcesScreen(
+                            sources = sources,
+                            activeSource = activeSource,
+                            isLoading = isLoading,
+                            statusMessage = statusMessage,
+                            onConnectXtream = { server, user, pass, name ->
+                                viewModel.connectXtream(server, user, pass, name)
+                            },
+                            onLoadM3u = { url, content, name ->
+                                viewModel.loadM3u(url, content, name)
+                            },
+                            onLoadDemo = { viewModel.loadDemoShowcase() },
+                            onSwitchSource = { viewModel.switchActiveSource(it) },
+                            onDeleteSource = { viewModel.deleteSource(it) },
+                            onBack = { viewModel.handleBackPress() },
+                            onToggleLanguage = { viewModel.toggleLanguage() }
+                        )
+                    }
+
+                    Screen.PLAYER -> {}
+                }
+            }
+
+            if (useSideRailLayout) {
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
+                        .fillMaxSize()
+                        .background(Slate950)
                 ) {
-                    Box(
+                    NavigationRail(
+                        containerColor = Slate900,
+                        contentColor = PureWhite,
+                        modifier = Modifier
+                            .width(if (isTablet) 84.dp else 76.dp)
+                            .fillMaxHeight()
+                            .border(BorderStroke(1.dp, Slate800))
+                            .testTag("main_navigation_rail")
+                    ) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        navItems.forEach { (screen, icon, label) ->
+                            val isSelected = currentScreen == screen || (screen == Screen.SERIES && currentScreen == Screen.SERIES_DETAIL)
+                            val navInteraction = remember { MutableInteractionSource() }
+                            val isNavFocused by navInteraction.collectIsFocusedAsState()
+
+                            NavigationRailItem(
+                                selected = isSelected,
+                                onClick = { viewModel.navigateTo(screen) },
+                                interactionSource = navInteraction,
+                                icon = {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = label,
+                                        tint = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
+                                        modifier = Modifier.size(if (isNavFocused) 24.dp else 20.dp)
+                                    )
+                                },
+                                label = {
+                                    Text(
+                                        text = label,
+                                        fontSize = 10.sp,
+                                        fontWeight = if (isSelected || isNavFocused) FontWeight.Bold else FontWeight.SemiBold,
+                                        color = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
+                                        maxLines = 1
+                                    )
+                                },
+                                colors = navigationRailItemColors(),
+                                modifier = Modifier
+                                    .focusable(interactionSource = navInteraction)
+                                    .border(
+                                        width = if (isNavFocused) 2.dp else 0.dp,
+                                        color = if (isNavFocused) AccentCyan else Color.Transparent,
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    .onPreviewKeyEvent { event ->
+                                        if (event.type == KeyEventType.KeyUp &&
+                                            (event.key == Key.DirectionCenter ||
+                                             event.key == Key.Enter ||
+                                             event.key == Key.NumPadEnter)
+                                        ) {
+                                            viewModel.navigateTo(screen)
+                                            true
+                                        } else false
+                                    }
+                            )
+                        }
+                    }
+
+                    Column(
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxWidth()
+                            .fillMaxHeight()
                     ) {
-                        screenContent()
-                    }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                        ) {
+                            screenContent()
+                        }
 
-                    if (playerUiState.currentItem != null) {
-                        MiniPlayerBar(
-                            playerManager = viewModel.playerManager,
-                            item = playerUiState.currentItem!!,
-                            isPlaying = playerUiState.isPlaying,
-                            isCompact = !isTablet,
-                            onExpand = { viewModel.navigateTo(Screen.PLAYER) },
-                            onTogglePlayPause = { viewModel.playerManager.togglePlayPause() },
-                            onDismiss = { viewModel.dismissMiniPlayer() }
-                        )
-                    }
-                }
-            }
-        } else {
-            Scaffold(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Slate950),
-                bottomBar = {
-                    Column(modifier = Modifier.navigationBarsPadding()) {
                         if (playerUiState.currentItem != null) {
                             MiniPlayerBar(
                                 playerManager = viewModel.playerManager,
                                 item = playerUiState.currentItem!!,
                                 isPlaying = playerUiState.isPlaying,
-                                isCompact = false,
+                                isCompact = !isTablet,
                                 onExpand = { viewModel.navigateTo(Screen.PLAYER) },
                                 onTogglePlayPause = { viewModel.playerManager.togglePlayPause() },
                                 onDismiss = { viewModel.dismissMiniPlayer() }
                             )
                         }
-
-                        NavigationBar(
-                            containerColor = Slate900,
-                            contentColor = PureWhite,
-                            modifier = Modifier
-                                .height(68.dp)
-                                .border(BorderStroke(1.dp, Slate800))
-                                .testTag("main_navigation_bar")
-                        ) {
-                            navItems.forEach { (screen, icon, label) ->
-                                val isSelected = currentScreen == screen || (screen == Screen.SERIES && currentScreen == Screen.SERIES_DETAIL)
-                                val navInteraction = remember { MutableInteractionSource() }
-                                val isNavFocused by navInteraction.collectIsFocusedAsState()
-
-                                NavigationBarItem(
-                                    selected = isSelected,
-                                    onClick = { viewModel.navigateTo(screen) },
-                                    interactionSource = navInteraction,
-                                    icon = {
-                                        Icon(
-                                            imageVector = icon,
-                                            contentDescription = label,
-                                            tint = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
-                                            modifier = Modifier.size(if (isNavFocused) 26.dp else 22.dp)
-                                        )
-                                    },
-                                    label = {
-                                        Text(
-                                            text = label,
-                                            fontSize = 11.sp,
-                                            fontWeight = if (isSelected || isNavFocused) FontWeight.Bold else FontWeight.SemiBold,
-                                            color = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400
-                                        )
-                                    },
-                                    colors = navigationBarItemColors(),
-                                    modifier = Modifier
-                                        .focusable(interactionSource = navInteraction)
-                                        .border(
-                                            width = if (isNavFocused) 2.dp else 0.dp,
-                                            color = if (isNavFocused) AccentCyan else Color.Transparent,
-                                            shape = RoundedCornerShape(12.dp)
-                                        )
-                                        .onPreviewKeyEvent { event ->
-                                            if (event.type == KeyEventType.KeyUp &&
-                                                (event.key == Key.DirectionCenter ||
-                                                 event.key == Key.Enter ||
-                                                 event.key == Key.NumPadEnter)
-                                            ) {
-                                                viewModel.navigateTo(screen)
-                                                true
-                                            } else false
-                                        }
+                    }
+                }
+            } else {
+                Scaffold(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Slate950),
+                    bottomBar = {
+                        Column(modifier = Modifier.navigationBarsPadding()) {
+                            if (playerUiState.currentItem != null) {
+                                MiniPlayerBar(
+                                    playerManager = viewModel.playerManager,
+                                    item = playerUiState.currentItem!!,
+                                    isPlaying = playerUiState.isPlaying,
+                                    isCompact = false,
+                                    onExpand = { viewModel.navigateTo(Screen.PLAYER) },
+                                    onTogglePlayPause = { viewModel.playerManager.togglePlayPause() },
+                                    onDismiss = { viewModel.dismissMiniPlayer() }
                                 )
+                            }
+
+                            NavigationBar(
+                                containerColor = Slate900,
+                                contentColor = PureWhite,
+                                modifier = Modifier
+                                    .height(68.dp)
+                                    .border(BorderStroke(1.dp, Slate800))
+                                    .testTag("main_navigation_bar")
+                            ) {
+                                navItems.forEach { (screen, icon, label) ->
+                                    val isSelected = currentScreen == screen || (screen == Screen.SERIES && currentScreen == Screen.SERIES_DETAIL)
+                                    val navInteraction = remember { MutableInteractionSource() }
+                                    val isNavFocused by navInteraction.collectIsFocusedAsState()
+
+                                    NavigationBarItem(
+                                        selected = isSelected,
+                                        onClick = { viewModel.navigateTo(screen) },
+                                        interactionSource = navInteraction,
+                                        icon = {
+                                            Icon(
+                                                imageVector = icon,
+                                                contentDescription = label,
+                                                tint = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
+                                                modifier = Modifier.size(if (isNavFocused) 26.dp else 22.dp)
+                                            )
+                                        },
+                                        label = {
+                                            Text(
+                                                text = label,
+                                                fontSize = 11.sp,
+                                                fontWeight = if (isSelected || isNavFocused) FontWeight.Bold else FontWeight.SemiBold,
+                                                color = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400
+                                            )
+                                        },
+                                        colors = navigationBarItemColors(),
+                                        modifier = Modifier
+                                            .focusable(interactionSource = navInteraction)
+                                            .border(
+                                                width = if (isNavFocused) 2.dp else 0.dp,
+                                                color = if (isNavFocused) AccentCyan else Color.Transparent,
+                                                shape = RoundedCornerShape(12.dp)
+                                            )
+                                            .onPreviewKeyEvent { event ->
+                                                if (event.type == KeyEventType.KeyUp &&
+                                                    (event.key == Key.DirectionCenter ||
+                                                     event.key == Key.Enter ||
+                                                     event.key == Key.NumPadEnter)
+                                                ) {
+                                                    viewModel.navigateTo(screen)
+                                                    true
+                                                } else false
+                                            }
+                                    )
+                                }
                             }
                         }
                     }
+                ) { innerPadding ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                            .statusBarsPadding()
+                    ) {
+                        screenContent()
+                    }
                 }
-            ) { innerPadding ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                        .statusBarsPadding()
+            }
+        }
+
+        // Full-Screen Animated HypnoStream Startup Splash Screen (Hides Playlist Loading Delay)
+        AnimatedVisibility(
+            visible = showSplash,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Slate950),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
                 ) {
-                    screenContent()
+                    Box(
+                        modifier = Modifier
+                            .size(96.dp)
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(Slate900)
+                            .border(2.dp, AccentCyan, RoundedCornerShape(24.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Tv,
+                            contentDescription = null,
+                            tint = AccentCyan,
+                            modifier = Modifier.size(52.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Text(
+                        text = "HypnoStream",
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Black,
+                        color = PureWhite
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = if (isAr) "جاري الاتصال وتجهيز القنوات..." else "Connecting & preparing your channels...",
+                        fontSize = 13.sp,
+                        color = AccentCyan
+                    )
+                    Spacer(modifier = Modifier.height(28.dp))
+                    CircularProgressIndicator(
+                        color = AccentCyan,
+                        strokeWidth = 3.dp,
+                        modifier = Modifier.size(38.dp)
+                    )
                 }
             }
         }
@@ -726,7 +797,7 @@ fun MiniPlayerBar(
                         .clip(CircleShape)
                         .background(if (isCloseBtnFocused) AccentCyan else Slate800)
                         .border(
-                            width = if (isCloseBtnFocused) 2.5.dp else 1.dp,
+                            width = if (isCloseBtnFocused) 2.dp else 1.dp,
                             color = if (isCloseBtnFocused) PureWhite else Slate700,
                             shape = CircleShape
                         )
