@@ -56,8 +56,12 @@ import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.NavigationBar
@@ -66,9 +70,11 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationRailItemDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -81,6 +87,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -136,10 +144,12 @@ import com.example.ui.theme.Slate300
 import com.example.ui.theme.Slate400
 import com.example.ui.theme.Slate700
 import com.example.ui.theme.Slate800
+import com.example.ui.theme.Slate850
 import com.example.ui.theme.Slate900
 import com.example.ui.theme.Slate950
 import com.example.util.DeviceUtils
 import com.example.util.LocalIsTelevision
+import java.util.Locale
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
@@ -261,22 +271,36 @@ fun HypnoStreamApp(
     val isAr = LocalAppLanguage.current == "ar"
     val context = LocalContext.current
 
+    // State for "Resume vs Start from Beginning" Dialog
+    var pendingResumeItem by remember { mutableStateOf<IptvItem?>(null) }
+    var pendingResumePosMs by remember { mutableLongStateOf(0L) }
+
+    // Smart Play Trigger: Checks if Movie/Episode has saved progress (> 5 seconds)
+    val handlePlayWithResumePrompt = { item: IptvItem ->
+        val savedPos = viewModel.playerManager.getSavedPosition(item)
+        if (savedPos > 5_000L && item.type != IptvType.LIVE_TV) {
+            pendingResumeItem = item
+            pendingResumePosMs = savedPos
+        } else {
+            viewModel.playStream(item)
+        }
+    }
+
     // Smart Startup Splash: Stays visible until the initial playlist connection finishes!
     val totalLoadedItems = totalLiveCount + totalMoviesCount + totalSeriesCount
     var minSplashTimePassed by remember { mutableStateOf(false) }
     var initialLoadCompleted by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        delay(2000L) // Minimum 2s for smooth intro animation
+        delay(2000L)
         minSplashTimePassed = true
-        // Safety fallback: if server takes more than 12s or is offline, unlock screen
         delay(10000L)
         initialLoadCompleted = true
     }
 
     LaunchedEffect(minSplashTimePassed, isLoading, totalLoadedItems) {
         if (minSplashTimePassed && (!isLoading && (totalLoadedItems > 0 || activeSource == null))) {
-            delay(250L) // Brief pause after items index so numbers are 100% ready
+            delay(250L)
             initialLoadCompleted = true
         }
     }
@@ -286,7 +310,9 @@ fun HypnoStreamApp(
     var lastBackPressTime by remember { mutableLongStateOf(0L) }
 
     BackHandler {
-        if (!viewModel.handleBackPress()) {
+        if (pendingResumeItem != null) {
+            pendingResumeItem = null
+        } else if (!viewModel.handleBackPress()) {
             val now = System.currentTimeMillis()
             if (now - lastBackPressTime < 2000L) {
                 onFinishApp()
@@ -299,7 +325,6 @@ fun HypnoStreamApp(
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Slate950)) {
-        // Main App UI
         if (currentScreen == Screen.PLAYER || isInPipMode) {
             val activeItem = playerUiState.currentItem
             val sideDrawerItems = when (activeItem?.type) {
@@ -315,7 +340,7 @@ fun HypnoStreamApp(
                 onBack = { viewModel.handleBackPress() },
                 onPlayNext = { viewModel.playNextChannel() },
                 onPlayPrevious = { viewModel.playPreviousChannel() },
-                onSelectChannel = { viewModel.playStream(it) },
+                onSelectChannel = { handlePlayWithResumePrompt(it) },
                 modifier = Modifier.fillMaxSize()
             )
         } else {
@@ -339,10 +364,16 @@ fun HypnoStreamApp(
                             recentlyWatched = recentlyWatched,
                             onNavigate = { viewModel.navigateTo(it) },
                             onPlayItem = { item ->
-                                if (item.type == IptvType.SERIES) {
+                                // In Continue Watching: if it's a specific episode or movie with a streamUrl, offer Resume/Restart!
+                                val isPlayableEpisode = item.seasonNumber != null ||
+                                        item.episodeNumber != null ||
+                                        item.name.contains(Regex("""S\d{1,2}E\d{1,3}""", RegexOption.IGNORE_CASE)) ||
+                                        viewModel.playerManager.getSavedPosition(item) > 5_000L
+
+                                if (item.type == IptvType.SERIES && !isPlayableEpisode) {
                                     viewModel.openSeriesDetail(item)
                                 } else {
-                                    viewModel.playStream(item)
+                                    handlePlayWithResumePrompt(item)
                                 }
                             },
                             onToggleLanguage = { viewModel.toggleLanguage() }
@@ -366,7 +397,7 @@ fun HypnoStreamApp(
                             onSearchChange = { viewModel.setSearchQuery(it) },
                             onCategoryChange = { viewModel.setSelectedCategory(it) },
                             onLoadMore = { viewModel.loadMoreItems() },
-                            onPlayItem = { viewModel.playStream(it) },
+                            onPlayItem = { handlePlayWithResumePrompt(it) },
                             onOpenSeries = { seriesItem -> viewModel.openSeriesDetail(seriesItem) },
                             onToggleFavorite = { viewModel.toggleFavorite(it) },
                             onBack = { viewModel.handleBackPress() }
@@ -377,7 +408,17 @@ fun HypnoStreamApp(
                         SeriesDetailScreen(
                             details = seriesDetails,
                             isLoading = isSeriesLoading,
-                            onPlayEpisode = { episode -> viewModel.playEpisode(episode) },
+                            onPlayEpisode = { episode ->
+                                val series = viewModel.selectedSeries.value
+                                val seriesTitle = seriesDetails?.title ?: series?.seriesTitle ?: series?.name ?: if (isAr) "مسلسل" else "TV Series"
+                                val group = if (isAr) "الموسم ${episode.seasonNumber}" else "Season ${episode.seasonNumber}"
+                                val epItem = episode.toIptvItem(seriesTitle, group).copy(
+                                    type = IptvType.SERIES,
+                                    seasonNumber = episode.seasonNumber,
+                                    episodeNumber = episode.episodeNumber
+                                )
+                                handlePlayWithResumePrompt(epItem)
+                            },
                             onBack = { viewModel.handleBackPress() }
                         )
                     }
@@ -584,7 +625,169 @@ fun HypnoStreamApp(
             }
         }
 
-        // Full-Screen 3D Orbital HypnoStream Splash Screen (Stays until playlist finishes loading!)
+        // Resume vs Start from Beginning Dialog (Touch + Android TV D-Pad Ready!)
+        if (pendingResumeItem != null) {
+            val targetItem = pendingResumeItem!!
+            val formattedTime = remember(pendingResumePosMs) {
+                val totalSeconds = (pendingResumePosMs / 1000).coerceAtLeast(0)
+                val minutes = totalSeconds / 60
+                val seconds = totalSeconds % 60
+                val hours = minutes / 60
+                if (hours > 0) {
+                    String.format(Locale.US, "%d:%02d:%02d", hours, minutes % 60, seconds)
+                } else {
+                    String.format(Locale.US, "%02d:%02d", minutes, seconds)
+                }
+            }
+
+            val resumeFocusRequester = remember { FocusRequester() }
+            val resumeInteraction = remember { MutableInteractionSource() }
+            val isResumeFocused by resumeInteraction.collectIsFocusedAsState()
+
+            val restartInteraction = remember { MutableInteractionSource() }
+            val isRestartFocused by restartInteraction.collectIsFocusedAsState()
+
+            LaunchedEffect(targetItem.id) {
+                try {
+                    delay(80L)
+                    resumeFocusRequester.requestFocus()
+                } catch (_: Exception) {}
+            }
+
+            AlertDialog(
+                onDismissRequest = { pendingResumeItem = null },
+                containerColor = Slate900,
+                shape = RoundedCornerShape(20.dp),
+                title = {
+                    Text(
+                        text = if (isAr) "استئناف المشاهدة؟" else "Resume Playback?",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PureWhite
+                    )
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            text = targetItem.name,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = AccentCyan,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = if (isAr) {
+                                "توقفت عند الدقيقة $formattedTime. هل تريد إكمال المشاهدة أو البدء من البداية؟"
+                            } else {
+                                "You left off at $formattedTime. Would you like to resume or start from the beginning?"
+                            },
+                            fontSize = 13.sp,
+                            color = Slate300
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        // 1. Resume Button (Default Focused for TV Remote OK)
+                        Button(
+                            onClick = {
+                                val itemToPlay = targetItem
+                                pendingResumeItem = null
+                                viewModel.playStream(itemToPlay)
+                            },
+                            interactionSource = resumeInteraction,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isResumeFocused) PureWhite else AccentCyan,
+                                contentColor = Slate950
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .focusRequester(resumeFocusRequester)
+                                .border(
+                                    width = if (isResumeFocused) 3.dp else 0.dp,
+                                    color = PureWhite,
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .focusable(interactionSource = resumeInteraction)
+                                .onPreviewKeyEvent { event ->
+                                    if (event.type == KeyEventType.KeyUp &&
+                                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                    ) {
+                                        val itemToPlay = targetItem
+                                        pendingResumeItem = null
+                                        viewModel.playStream(itemToPlay)
+                                        true
+                                    } else false
+                                }
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (isAr) "استئناف من $formattedTime" else "Resume from $formattedTime",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                        }
+
+                        // 2. Start from Beginning Button (00:00)
+                        OutlinedButton(
+                            onClick = {
+                                val itemToPlay = targetItem
+                                pendingResumeItem = null
+                                viewModel.playerManager.clearSavedPosition(itemToPlay)
+                                viewModel.playStream(itemToPlay)
+                            },
+                            interactionSource = restartInteraction,
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(
+                                width = if (isRestartFocused) 2.5.dp else 1.dp,
+                                color = if (isRestartFocused) AccentCyan else Slate700
+                            ),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = if (isRestartFocused) Slate800 else Slate850,
+                                contentColor = PureWhite
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .focusable(interactionSource = restartInteraction)
+                                .onPreviewKeyEvent { event ->
+                                    if (event.type == KeyEventType.KeyUp &&
+                                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                    ) {
+                                        val itemToPlay = targetItem
+                                        pendingResumeItem = null
+                                        viewModel.playerManager.clearSavedPosition(itemToPlay)
+                                        viewModel.playStream(itemToPlay)
+                                        true
+                                    } else false
+                                }
+                        ) {
+                            Icon(Icons.Default.Replay, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (isAr) "البدء من البداية (00:00)" else "Start from Beginning (00:00)",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { pendingResumeItem = null }) {
+                        Text(
+                            text = if (isAr) "إلغاء" else "Cancel",
+                            color = Slate400,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            )
+        }
+
+        // Full-Screen 3D Orbital HypnoStream Splash Screen
         AnimatedVisibility(
             visible = showSplash,
             enter = fadeIn(tween(300)),
@@ -599,11 +802,6 @@ fun HypnoStreamApp(
     }
 }
 
-/**
- * Custom Animated HypnoStream Orbital Splash Screen
- * Matches the glowing 3D orbital ring, 3 neon top bars (Red, Purple, Cyan),
- * breathing gradient play button, and two-tone "HypnoStream" typography.
- */
 @Composable
 fun HypnoOrbitalSplashOverlay(
     isAr: Boolean,
@@ -612,7 +810,6 @@ fun HypnoOrbitalSplashOverlay(
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "hypnoSplash")
 
-    // Continuous 360-degree orbital ring glow rotation
     val orbitAngle by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
@@ -623,7 +820,6 @@ fun HypnoOrbitalSplashOverlay(
         label = "orbitRotation"
     )
 
-    // Breathing Play button & glow pulse
     val pulseScale by infiniteTransition.animateFloat(
         initialValue = 0.94f,
         targetValue = 1.06f,
@@ -634,7 +830,6 @@ fun HypnoOrbitalSplashOverlay(
         label = "pulseScale"
     )
 
-    // Sequential neon bar shimmer
     val barPhase by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 3f,
@@ -651,9 +846,9 @@ fun HypnoOrbitalSplashOverlay(
             .background(
                 Brush.radialGradient(
                     colors = listOf(
-                        Color(0xFF071A3E), // Deep royal navy center glow
+                        Color(0xFF071A3E),
                         Color(0xFF030917),
-                        Color(0xFF000000)  // Pure black outer edge
+                        Color(0xFF000000)
                     ),
                     radius = 950f
                 )
@@ -665,7 +860,6 @@ fun HypnoOrbitalSplashOverlay(
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.padding(horizontal = 32.dp)
         ) {
-            // Glowing App Icon Container with Animated Orbital TV Emblem
             Box(
                 modifier = Modifier
                     .size(210.dp)
@@ -698,7 +892,6 @@ fun HypnoOrbitalSplashOverlay(
                     val cx = w / 2f
                     val cy = h / 2f
 
-                    // Subtle inner cyan radial aura
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
@@ -712,7 +905,6 @@ fun HypnoOrbitalSplashOverlay(
                         center = Offset(cx, cy)
                     )
 
-                    // 1. Back half of the tilted 3D Orbital Ring (behind the TV monitor)
                     rotate(degrees = -18f, pivot = Offset(cx, cy)) {
                         val ovalTopLeft = Offset(w * 0.04f, h * 0.30f)
                         val ovalSize = Size(w * 0.92f, h * 0.40f)
@@ -728,13 +920,11 @@ fun HypnoOrbitalSplashOverlay(
                         )
                     }
 
-                    // 2. TV Monitor Frame
                     val tvWidth = w * 0.62f
                     val tvHeight = h * 0.48f
                     val tvLeft = cx - (tvWidth / 2f)
                     val tvTop = cy - (tvHeight / 2f) - 6.dp.toPx()
 
-                    // Monitor dark screen fill
                     drawRoundRect(
                         color = Color(0xFF020712),
                         topLeft = Offset(tvLeft, tvTop),
@@ -742,7 +932,6 @@ fun HypnoOrbitalSplashOverlay(
                         cornerRadius = CornerRadius(14.dp.toPx(), 14.dp.toPx())
                     )
 
-                    // Monitor glowing cyan-blue border
                     drawRoundRect(
                         brush = Brush.linearGradient(
                             colors = listOf(Color(0xFF00E5FF), Color(0xFF2979FF), Color(0xFF00E5FF))
@@ -753,7 +942,6 @@ fun HypnoOrbitalSplashOverlay(
                         style = Stroke(width = 5.5.dp.toPx())
                     )
 
-                    // 3. Top 3 Neon Bars inside TV (Red = Live, Purple = Movies, Cyan = Series)
                     val barY = tvTop + 13.dp.toPx()
                     val barWidth = tvWidth * 0.22f
                     val barSpacing = tvWidth * 0.06f
@@ -763,7 +951,6 @@ fun HypnoOrbitalSplashOverlay(
                     val purpleAlpha = if (barPhase.toInt() == 1) 1f else 0.72f
                     val cyanAlpha = if (barPhase.toInt() == 2) 1f else 0.72f
 
-                    // Red Bar
                     drawLine(
                         color = Color(0xFFFF2A54).copy(alpha = redAlpha),
                         start = Offset(startX, barY),
@@ -771,7 +958,6 @@ fun HypnoOrbitalSplashOverlay(
                         strokeWidth = 6.dp.toPx(),
                         cap = StrokeCap.Round
                     )
-                    // Purple Bar
                     drawLine(
                         color = Color(0xFF8B5CF6).copy(alpha = purpleAlpha),
                         start = Offset(startX + barWidth + barSpacing, barY),
@@ -779,7 +965,6 @@ fun HypnoOrbitalSplashOverlay(
                         strokeWidth = 6.dp.toPx(),
                         cap = StrokeCap.Round
                     )
-                    // Cyan Bar
                     drawLine(
                         color = Color(0xFF00E5FF).copy(alpha = cyanAlpha),
                         start = Offset(startX + (barWidth + barSpacing) * 2, barY),
@@ -788,7 +973,6 @@ fun HypnoOrbitalSplashOverlay(
                         cap = StrokeCap.Round
                     )
 
-                    // 4. Center Breathing Play Triangle
                     val playCenterY = tvTop + (tvHeight * 0.58f)
                     scale(scale = pulseScale, pivot = Offset(cx, playCenterY)) {
                         val triSize = 24.dp.toPx()
@@ -811,7 +995,6 @@ fun HypnoOrbitalSplashOverlay(
                         )
                     }
 
-                    // 5. TV Monitor Stand (Neck & Base)
                     val standTop = tvTop + tvHeight
                     val standBottom = standTop + 11.dp.toPx()
                     drawLine(
@@ -831,12 +1014,10 @@ fun HypnoOrbitalSplashOverlay(
                         cap = StrokeCap.Round
                     )
 
-                    // 6. Front Half of Tilted 3D Orbital Ring + Rotating Comet Highlight
                     rotate(degrees = -18f, pivot = Offset(cx, cy)) {
                         val ovalTopLeft = Offset(w * 0.04f, h * 0.30f)
                         val ovalSize = Size(w * 0.92f, h * 0.40f)
 
-                        // Front bright cyan swoosh
                         drawArc(
                             brush = Brush.horizontalGradient(
                                 colors = listOf(
@@ -853,7 +1034,6 @@ fun HypnoOrbitalSplashOverlay(
                             style = Stroke(width = 8.5.dp.toPx(), cap = StrokeCap.Round)
                         )
 
-                        // Spinning energy highlight along the orbital ring
                         drawArc(
                             color = Color.White,
                             startAngle = orbitAngle,
@@ -869,7 +1049,6 @@ fun HypnoOrbitalSplashOverlay(
 
             Spacer(modifier = Modifier.height(28.dp))
 
-            // Two-Tone "HypnoStream" Logo Typography (White + Glowing Cyan)
             Text(
                 text = buildAnnotatedString {
                     withStyle(SpanStyle(color = PureWhite, fontWeight = FontWeight.Black)) {
@@ -885,7 +1064,6 @@ fun HypnoOrbitalSplashOverlay(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Live Dynamic Status Text
             val displayStatus = when {
                 totalLoadedItems > 0 -> if (isAr) {
                     "تم تجهيز %,d قناة وفيلم ومسلسل...".format(totalLoadedItems)
@@ -911,7 +1089,6 @@ fun HypnoOrbitalSplashOverlay(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Sleek Glowing Cyan Progress Pill
             LinearProgressIndicator(
                 color = Color(0xFF00E5FF),
                 trackColor = Slate800,
