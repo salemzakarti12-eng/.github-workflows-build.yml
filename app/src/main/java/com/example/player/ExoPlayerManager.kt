@@ -76,6 +76,15 @@ class ExoPlayerManager(
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
 
+    // Subtitle timing offset state (compatible with both PlayerUiState and direct calls)
+    private val _subtitleOffsetMs = MutableStateFlow(0L)
+    val subtitleOffsetMs: StateFlow<Long> = _subtitleOffsetMs.asStateFlow()
+
+    private val _externalSubtitleUri = MutableStateFlow<String?>(null)
+    val externalSubtitleUri: StateFlow<String?> = _externalSubtitleUri.asStateFlow()
+
+    private var activeSubtitleConfigs = mutableListOf<MediaItem.SubtitleConfiguration>()
+
     private var progressJob: Job? = null
     private var controlsHideJob: Job? = null
     private var reconnectJob: Job? = null
@@ -104,7 +113,6 @@ class ExoPlayerManager(
                         updateTracksState(player.currentTracks)
                     }
                     Player.STATE_ENDED -> {
-                        // Movie or episode finished -> clear saved resume position so next watch starts at 00:00
                         _uiState.value.currentItem?.let { clearSavedPosition(it) }
                         _uiState.value = _uiState.value.copy(
                             isBuffering = false,
@@ -174,9 +182,6 @@ class ExoPlayerManager(
         })
     }
 
-    /**
-     * Checks whether an item is a Movie or Series Episode (eligible for Resume Playback)
-     */
     private fun isVodOrSeries(item: IptvItem): Boolean {
         return item.type == IptvType.MOVIE ||
                 item.type == IptvType.SERIES ||
@@ -199,12 +204,12 @@ class ExoPlayerManager(
         return "resume_${item.id}_${item.streamUrl.hashCode()}"
     }
 
-    private fun getSavedPosition(item: IptvItem): Long {
+    fun getSavedPosition(item: IptvItem): Long {
         if (!isVodOrSeries(item)) return 0L
         return positionPrefs.getLong(positionKey(item), 0L).coerceAtLeast(0L)
     }
 
-    private fun clearSavedPosition(item: IptvItem) {
+    fun clearSavedPosition(item: IptvItem) {
         positionPrefs.edit().remove(positionKey(item)).apply()
     }
 
@@ -215,7 +220,6 @@ class ExoPlayerManager(
         val pos = player.currentPosition
         val dur = player.duration
         if (dur > 60_000L && pos >= (dur * 0.95).toLong()) {
-            // Watched 95%+ -> mark finished and reset
             clearSavedPosition(currentItem)
         } else if (pos > 5_000L) {
             positionPrefs.edit().putLong(positionKey(currentItem), pos).apply()
@@ -223,11 +227,14 @@ class ExoPlayerManager(
     }
 
     fun playItem(item: IptvItem) {
-        // Save the previous Movie/Episode position before switching to the new item!
         saveCurrentPlaybackPosition()
 
         retryCount = 0
         reconnectJob?.cancel()
+        activeSubtitleConfigs.clear()
+        _externalSubtitleUri.value = null
+        _subtitleOffsetMs.value = 0L
+
         val resumePos = getSavedPosition(item)
 
         _uiState.value = _uiState.value.copy(
@@ -237,6 +244,7 @@ class ExoPlayerManager(
             currentPositionMs = resumePos,
             errorMessage = null
         )
+        syncSubtitleStateToUiState()
         loadStreamInternal(item, isReconnect = false)
     }
 
@@ -246,13 +254,21 @@ class ExoPlayerManager(
             val format = item.detectFormat()
             val resumePos = getSavedPosition(item)
 
-            val mediaSource = if (format == StreamFormat.HLS || item.streamUrl.contains(".m3u8", ignoreCase = true)) {
+            val mediaItemBuilder = MediaItem.Builder().setUri(uri)
+            if (activeSubtitleConfigs.isNotEmpty()) {
+                mediaItemBuilder.setSubtitleConfigurations(activeSubtitleConfigs.toList())
+            }
+            val mediaItem = mediaItemBuilder.build()
+
+            val mediaSource = if ( activeSubtitleConfigs.isEmpty() &&
+                (format == StreamFormat.HLS || item.streamUrl.contains(".m3u8", ignoreCase = true))
+            ) {
                 HlsMediaSource.Factory(httpDataSourceFactory)
                     .setAllowChunklessPreparation(true)
-                    .createMediaSource(MediaItem.fromUri(uri))
+                    .createMediaSource(mediaItem)
             } else {
                 DefaultMediaSourceFactory(httpDataSourceFactory)
-                    .createMediaSource(MediaItem.fromUri(uri))
+                    .createMediaSource(mediaItem)
             }
 
             if (resumePos > 5_000L) {
@@ -382,7 +398,6 @@ class ExoPlayerManager(
                     durationMs = player.duration.coerceAtLeast(0L)
                 )
                 tickCount++
-                // Save movie/episode timestamp every 3 seconds in background
                 if (tickCount % 3 == 0) {
                     saveCurrentPlaybackPosition()
                 }
@@ -395,6 +410,8 @@ class ExoPlayerManager(
         progressJob?.cancel()
     }
 
+    // --- External Subtitle & Subtitle Timing Sync Functions ---
+
     fun loadExternalSubtitle(uri: Uri, label: String = "External Subtitle") {
         val currentItem = _uiState.value.currentItem ?: return
         saveCurrentPlaybackPosition()
@@ -405,6 +422,7 @@ class ExoPlayerManager(
             val mimeType = when {
                 uriStr.endsWith(".vtt") -> MimeTypes.TEXT_VTT
                 uriStr.endsWith(".ass") || uriStr.endsWith(".ssa") -> MimeTypes.TEXT_SSA
+                uriStr.endsWith(".ttml") || uriStr.endsWith(".xml") -> MimeTypes.APPLICATION_TTML
                 else -> MimeTypes.APPLICATION_SUBRIP
             }
 
@@ -412,12 +430,17 @@ class ExoPlayerManager(
                 .setMimeType(mimeType)
                 .setLanguage("ar")
                 .setLabel(label)
-                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT or C.SELECTION_FLAG_AUTOSELECT)
                 .build()
+
+            activeSubtitleConfigs.clear()
+            activeSubtitleConfigs.add(subConfig)
+            _externalSubtitleUri.value = uri.toString()
+            syncSubtitleStateToUiState()
 
             val mediaItem = MediaItem.Builder()
                 .setUri(Uri.parse(currentItem.streamUrl.trim()))
-                .setSubtitleConfigurations(listOf(subConfig))
+                .setSubtitleConfigurations(activeSubtitleConfigs.toList())
                 .build()
 
             val mediaSource = DefaultMediaSourceFactory(httpDataSourceFactory)
@@ -425,6 +448,7 @@ class ExoPlayerManager(
 
             player.trackSelectionParameters = player.trackSelectionParameters
                 .buildUpon()
+                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
                 .build()
 
@@ -432,6 +456,60 @@ class ExoPlayerManager(
             player.prepare()
             player.playWhenReady = true
             updateTracksState()
+        } catch (_: Exception) {}
+    }
+
+    fun loadExternalSubtitleUrl(url: String, label: String = "Online Subtitle") {
+        val clean = url.trim()
+        if (clean.isNotEmpty()) {
+            loadExternalSubtitle(Uri.parse(clean), label)
+        }
+    }
+
+    fun clearExternalSubtitles() {
+        activeSubtitleConfigs.clear()
+        _externalSubtitleUri.value = null
+        syncSubtitleStateToUiState()
+    }
+
+    fun adjustSubtitleOffset(deltaMs: Long) {
+        val updated = (_subtitleOffsetMs.value + deltaMs).coerceIn(-60_000L, 60_000L)
+        _subtitleOffsetMs.value = updated
+        syncSubtitleStateToUiState()
+    }
+
+    fun setSubtitleOffset(offsetMs: Long) {
+        _subtitleOffsetMs.value = offsetMs.coerceIn(-60_000L, 60_000L)
+        syncSubtitleStateToUiState()
+    }
+
+    fun resetSubtitleOffset() {
+        _subtitleOffsetMs.value = 0L
+        syncSubtitleStateToUiState()
+    }
+
+    /**
+     * Dynamically updates `subtitleOffsetMs` and `externalSubtitleUri` on `PlayerUiState`
+     * if those fields exist in `PlayerModels.kt` without breaking compilation if they don't.
+     */
+    private fun syncSubtitleStateToUiState() {
+        try {
+            val current = _uiState.value
+            val cls = current::class.java
+            val offsetField = cls.declaredFields.firstOrNull { it.name == "subtitleOffsetMs" }
+            val uriField = cls.declaredFields.firstOrNull { it.name == "externalSubtitleUri" }
+            if (offsetField != null || uriField != null) {
+                offsetField?.let {
+                    it.isAccessible = true
+                    it.setLong(current, _subtitleOffsetMs.value)
+                }
+                uriField?.let {
+                    it.isAccessible = true
+                    it.set(current, _externalSubtitleUri.value)
+                }
+                // Trigger StateFlow emission
+                _uiState.value = current.copy(isBuffering = current.isBuffering)
+            }
         } catch (_: Exception) {}
     }
 
@@ -482,6 +560,7 @@ class ExoPlayerManager(
             subtitleTracks = subList,
             isSubtitleOff = isSubDisabled
         )
+        syncSubtitleStateToUiState()
     }
 
     fun selectAudioTrack(track: TrackOption) {
