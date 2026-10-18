@@ -19,11 +19,11 @@ jobs:
           git fetch --depth 1 origin ${{ github.sha }}
           git checkout FETCH_HEAD
 
-      - name: Auto-Configure Old Sony TV Compatibility & Sharp TV Banner
+      - name: Auto-Configure Sony TV Compatibility & Sharp TV Banner
         run: |
-          echo "Setting minSdk = 21 for older Sony Android TVs..."
-          sed -i 's/minSdk = [0-9]*/minSdk = 21/g' app/build.gradle.kts || true
-          sed -i 's/minSdkVersion([0-9]*)/minSdkVersion(21)/g' app/build.gradle.kts || true
+          echo "Setting minSdk = 24 (Android 7.0+) for older Sony Android TVs & modern libraries..."
+          sed -i 's/minSdk = [0-9]*/minSdk = 24/g' app/build.gradle.kts || true
+          sed -i 's/minSdkVersion([0-9]*)/minSdkVersion(24)/g' app/build.gradle.kts || true
 
           echo "Generating debug.keystore..."
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
@@ -60,8 +60,8 @@ jobs:
           fi
 
           echo "Generating Sharp 1280x720 HD Android TV Banner PNG..."
-          rm -f app/src/main/res/drawable/ic_banner.xml app/src/main/res/drawable-v24/ic_banner.xml || true
-          mkdir -p app/src/main/res/drawable-xhdpi app/src/main/res/drawable-nodpi app/src/main/res/drawable
+          find app/src/main/res -name "ic_banner.*" -delete || true
+          mkdir -p app/src/main/res/drawable-xhdpi
 
           cat << 'EOF' > GenerateBanner.java
           import java.awt.*;
@@ -171,8 +171,6 @@ jobs:
                   g.draw(new Line2D.Float(textX + 6, textY + 88, textX + 620, textY + 88));
 
                   ImageIO.write(img, "PNG", new File("app/src/main/res/drawable-xhdpi/ic_banner.png"));
-                  ImageIO.write(img, "PNG", new File("app/src/main/res/drawable-nodpi/ic_banner.png"));
-                  ImageIO.write(img, "PNG", new File("app/src/main/res/drawable/ic_banner.png"));
               }
           }
           EOF
