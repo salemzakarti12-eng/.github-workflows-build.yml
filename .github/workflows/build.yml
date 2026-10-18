@@ -19,14 +19,18 @@ jobs:
           git fetch --depth 1 origin ${{ github.sha }}
           git checkout FETCH_HEAD
 
-      - name: Generate Missing Keystore, Config, and Razor-Sharp 1280x720 HD TV Banner PNG
+      - name: Auto-Configure Old Sony TV Compatibility & Sharp TV Banner
         run: |
+          echo "Setting minSdk = 21 for older Sony Android TVs..."
+          sed -i 's/minSdk = [0-9]*/minSdk = 21/g' app/build.gradle.kts || true
+          sed -i 's/minSdkVersion([0-9]*)/minSdkVersion(21)/g' app/build.gradle.kts || true
+
           echo "Generating debug.keystore..."
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           cp debug.keystore app/debug.keystore || true
 
           echo "Generating dummy google-services.json if missing..."
-          PKG_NAME=$(grep -oP 'applicationId\s*=\s*"\K[^"]+' app/build.gradle.kts || grep -oP 'namespace\s*=\s*"\K[^"]+' app/build.gradle.kts || echo "com.example.iptv")
+          PKG_NAME=$(grep -oP 'applicationId\s*=\s*"\K[^"]+' app/build.gradle.kts || grep -oP 'namespace\s*=\s*"\K[^"]+' app/build.gradle.kts || echo "com.example")
           if [ ! -f "app/google-services.json" ]; then
             cat <<EOF > app/google-services.json
           {
@@ -55,9 +59,9 @@ jobs:
           EOF
           fi
 
-          echo "Generating True 1280x720 HD Android TV Banner PNG..."
+          echo "Generating Sharp 1280x720 HD Android TV Banner PNG..."
           rm -f app/src/main/res/drawable/ic_banner.xml app/src/main/res/drawable-v24/ic_banner.xml || true
-          mkdir -p app/src/main/res/drawable-xhdpi app/src/main/res/drawable-nodpi
+          mkdir -p app/src/main/res/drawable-xhdpi app/src/main/res/drawable-nodpi app/src/main/res/drawable
 
           cat << 'EOF' > GenerateBanner.java
           import java.awt.*;
@@ -76,12 +80,10 @@ jobs:
                   g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
                   g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
 
-                  // 1. Deep Midnight Navy-to-Black Gradient Background
                   GradientPaint bg = new GradientPaint(0, 0, new Color(4, 12, 28), w, h, new Color(2, 6, 15));
                   g.setPaint(bg);
                   g.fillRect(0, 0, w, h);
 
-                  // Radial Cyan/Blue Glow behind icon & text
                   RadialGradientPaint glow = new RadialGradientPaint(
                       new Point2D.Float(340, 360), 420f,
                       new float[]{0f, 0.55f, 1f},
@@ -92,7 +94,6 @@ jobs:
 
                   float cx = 270f, cy = 350f;
 
-                  // 2. Back half of Tilted 3D Orbital Ring
                   AffineTransform old = g.getTransform();
                   g.rotate(Math.toRadians(-16), cx, cy);
                   g.setStroke(new BasicStroke(16f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
@@ -100,7 +101,6 @@ jobs:
                   g.draw(new Arc2D.Float(cx - 210f, cy - 82f, 420f, 164f, 0f, 180f, Arc2D.OPEN));
                   g.setTransform(old);
 
-                  // 3. TV Monitor Outer Frame
                   float tvW = 260f, tvH = 190f;
                   float tvX = cx - tvW / 2f, tvY = cy - tvH / 2f - 12f;
                   RoundRectangle2D tvRect = new RoundRectangle2D.Float(tvX, tvY, tvW, tvH, 42f, 42f);
@@ -112,7 +112,6 @@ jobs:
                   g.setStroke(new BasicStroke(15f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
                   g.draw(tvRect);
 
-                  // 4. Top 3 Neon Pill Bars (Red, Purple, Cyan)
                   float barY = tvY + 36f;
                   g.setStroke(new BasicStroke(14f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
                   g.setColor(new Color(255, 42, 84));
@@ -122,7 +121,6 @@ jobs:
                   g.setColor(new Color(0, 229, 255));
                   g.draw(new Line2D.Float(tvX + 174f, barY, tvX + 226f, barY));
 
-                  // 5. Center Play Triangle
                   Path2D play = new Path2D.Float();
                   float py = tvY + tvH * 0.58f;
                   play.moveTo(cx - 26f, py - 34f);
@@ -132,7 +130,6 @@ jobs:
                   g.setPaint(new GradientPaint(cx - 26f, py - 34f, Color.WHITE, cx + 38f, py + 34f, new Color(128, 216, 255)));
                   g.fill(play);
 
-                  // 6. TV Stand
                   float standTop = tvY + tvH;
                   float standBot = standTop + 34f;
                   g.setColor(new Color(0, 210, 255));
@@ -140,7 +137,6 @@ jobs:
                   g.draw(new Line2D.Float(cx, standTop, cx, standBot));
                   g.draw(new Line2D.Float(cx - 64f, standBot, cx + 64f, standBot));
 
-                  // 7. Front Half of Tilted 3D Orbital Ring
                   g.rotate(Math.toRadians(-16), cx, cy);
                   GradientPaint ringGrad = new GradientPaint(cx - 210f, cy, new Color(0, 229, 255), cx + 210f, cy, new Color(124, 232, 255));
                   g.setPaint(ringGrad);
@@ -148,7 +144,6 @@ jobs:
                   g.draw(new Arc2D.Float(cx - 210f, cy - 82f, 420f, 164f, 180f, 180f, Arc2D.OPEN));
                   g.setTransform(old);
 
-                  // 8. Razor-Sharp Anti-Aliased Typography: "Hypno" (White) + "Stream" (Cyan)
                   Font titleFont = new Font("SansSerif", Font.BOLD, 104);
                   g.setFont(titleFont);
                   FontMetrics fm = g.getFontMetrics();
@@ -165,7 +160,6 @@ jobs:
                   g.setPaint(textCyan);
                   g.drawString(part2, textX + part1Width + 4, textY);
 
-                  // Subtitle & Accent Neon Line
                   Font subFont = new Font("SansSerif", Font.PLAIN, 30);
                   g.setFont(subFont);
                   g.setColor(new Color(148, 163, 184));
@@ -178,6 +172,7 @@ jobs:
 
                   ImageIO.write(img, "PNG", new File("app/src/main/res/drawable-xhdpi/ic_banner.png"));
                   ImageIO.write(img, "PNG", new File("app/src/main/res/drawable-nodpi/ic_banner.png"));
+                  ImageIO.write(img, "PNG", new File("app/src/main/res/drawable/ic_banner.png"));
               }
           }
           EOF
