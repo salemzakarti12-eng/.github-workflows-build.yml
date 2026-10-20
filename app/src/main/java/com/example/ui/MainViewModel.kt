@@ -38,6 +38,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _currentScreen = MutableStateFlow(Screen.DASHBOARD)
     val currentScreen: StateFlow<Screen> = _currentScreen.asStateFlow()
 
+    // Tracks the active main tab underneath PLAYER or SERIES_DETAIL so scroll position & category are never lost!
+    private val _lastBrowseScreen = MutableStateFlow(Screen.DASHBOARD)
+    val lastBrowseScreen: StateFlow<Screen> = _lastBrowseScreen.asStateFlow()
+
     private val _screenHistory = mutableListOf<Screen>()
 
     private val _searchQuery = MutableStateFlow("")
@@ -84,7 +88,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isSeriesLoading = MutableStateFlow(false)
     val isSeriesLoading: StateFlow<Boolean> = _isSeriesLoading.asStateFlow()
 
-    // Flattened list of all episodes for the currently opened TV Series (explicitly tagged as IptvType.SERIES)
     val currentSeriesEpisodes: StateFlow<List<IptvItem>> = combine(
         _seriesDetails,
         _selectedSeries,
@@ -120,11 +123,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val currentCategories: StateFlow<List<CategoryInfo>> = combine(
         _currentScreen,
+        _lastBrowseScreen,
         repository.liveCategories,
         repository.movieCategories,
         repository.seriesCategories
-    ) { screen, liveCats, movCats, serCats ->
-        when (screen) {
+    ) { screen, lastBrowse, liveCats, movCats, serCats ->
+        val effectiveScreen = if (screen == Screen.PLAYER || screen == Screen.SERIES_DETAIL) lastBrowse else screen
+        when (effectiveScreen) {
             Screen.LIVE_CHANNELS -> liveCats
             Screen.MOVIES -> movCats
             Screen.SERIES -> serCats
@@ -143,12 +148,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val currentFilteredItems: StateFlow<List<IptvItem>> = combine(
         _currentScreen,
+        _lastBrowseScreen,
         _selectedCategory,
         _searchQuery,
-        _displayLimit,
-        _dataRefreshTrigger
-    ) { screen, category, query, limit, _ ->
-        val type = when (screen) {
+        combine(_displayLimit, _dataRefreshTrigger) { limit, _ -> limit }
+    ) { screen, lastBrowse, category, query, limit ->
+        val effectiveScreen = if (screen == Screen.PLAYER || screen == Screen.SERIES_DETAIL) lastBrowse else screen
+        val type = when (effectiveScreen) {
             Screen.LIVE_CHANNELS -> IptvType.LIVE_TV
             Screen.MOVIES -> IptvType.MOVIE
             Screen.SERIES -> IptvType.SERIES
@@ -165,11 +171,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun navigateTo(screen: Screen) {
         if (_currentScreen.value != screen) {
-            _screenHistory.add(_currentScreen.value)
+            val previousScreen = _currentScreen.value
+            _screenHistory.add(previousScreen)
             _currentScreen.value = screen
-            _searchQuery.value = ""
-            _selectedCategory.value = "All"
-            _displayLimit.value = 120
+
+            // CRITICAL FIX: Only reset category/search when switching between different main tabs!
+            // NEVER reset category, search query, or display limit when opening PLAYER or SERIES_DETAIL!
+            val isMainBrowseTab = screen == Screen.LIVE_CHANNELS || screen == Screen.MOVIES || screen == Screen.SERIES || screen == Screen.DASHBOARD || screen == Screen.SOURCES
+            if (isMainBrowseTab && screen != _lastBrowseScreen.value) {
+                _lastBrowseScreen.value = screen
+                _searchQuery.value = ""
+                _selectedCategory.value = "All"
+                _displayLimit.value = 120
+            }
         }
     }
 
@@ -179,13 +193,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 playerManager.closeQuickChannelList()
                 return true
             }
-            val previous = _screenHistory.removeLastOrNull() ?: Screen.DASHBOARD
+            val previous = _screenHistory.removeLastOrNull() ?: _lastBrowseScreen.value
             _currentScreen.value = previous
             return true
         }
 
         if (_screenHistory.isNotEmpty()) {
-            _currentScreen.value = _screenHistory.removeLast()
+            val prev = _screenHistory.removeLast()
+            _currentScreen.value = prev
+            if (prev == Screen.LIVE_CHANNELS || prev == Screen.MOVIES || prev == Screen.SERIES || prev == Screen.DASHBOARD || prev == Screen.SOURCES) {
+                _lastBrowseScreen.value = prev
+            }
             return true
         }
         return false
@@ -206,11 +224,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun playStream(item: IptvItem) {
-        // Ensure accurate IptvType based on screen and group/URL so Movies & Series NEVER get treated as Live TV!
         val resolvedType = when {
             item.type == IptvType.MOVIE || item.type == IptvType.SERIES -> item.type
-            _currentScreen.value == Screen.MOVIES -> IptvType.MOVIE
-            _currentScreen.value == Screen.SERIES || _currentScreen.value == Screen.SERIES_DETAIL -> IptvType.SERIES
+            _currentScreen.value == Screen.MOVIES || _lastBrowseScreen.value == Screen.MOVIES -> IptvType.MOVIE
+            _currentScreen.value == Screen.SERIES || _currentScreen.value == Screen.SERIES_DETAIL || _lastBrowseScreen.value == Screen.SERIES -> IptvType.SERIES
             item.group.contains("Series", ignoreCase = true) ||
             item.group.contains("مسلسل", ignoreCase = true) ||
             item.name.contains(Regex("""S\d{1,2}E\d{1,3}""", RegexOption.IGNORE_CASE)) -> IptvType.SERIES
@@ -227,7 +244,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             playerManager.closeQuickChannelList()
         }
 
-        // If user played a Series episode directly (e.g. from Recently Watched or M3U), ensure episodes list is populated
         if (resolvedType == IptvType.SERIES && _seriesDetails.value == null) {
             _selectedSeries.value = normalizedItem
             viewModelScope.launch {
@@ -259,7 +275,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val isAr = currentLanguage.value == "ar"
         val seriesTitle = _seriesDetails.value?.title ?: series?.seriesTitle ?: series?.name ?: if (isAr) "مسلسل" else "TV Series"
         val group = if (isAr) "الموسم ${episode.seasonNumber}" else "Season ${episode.seasonNumber}"
-        // Force type = IptvType.SERIES so the player knows this is a Series Episode, NOT a Live Channel!
         val item = episode.toIptvItem(seriesTitle, group).copy(
             type = IptvType.SERIES,
             seasonNumber = episode.seasonNumber,
@@ -276,7 +291,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val current = playerUiState.value.currentItem ?: return
         when (current.type) {
             IptvType.LIVE_TV -> {
-                val list = repository.getAllLiveChannels()
+                val list = currentFilteredItems.value.ifEmpty { repository.getAllLiveChannels() }
                 if (list.isEmpty()) return
                 val currentIndex = list.indexOfFirst { it.id == current.id }
                 val nextIndex = if (currentIndex in 0 until list.lastIndex) currentIndex + 1 else 0
@@ -299,7 +314,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val current = playerUiState.value.currentItem ?: return
         when (current.type) {
             IptvType.LIVE_TV -> {
-                val list = repository.getAllLiveChannels()
+                val list = currentFilteredItems.value.ifEmpty { repository.getAllLiveChannels() }
                 if (list.isEmpty()) return
                 val currentIndex = list.indexOfFirst { it.id == current.id }
                 val prevIndex = if (currentIndex > 0) currentIndex - 1 else list.lastIndex
