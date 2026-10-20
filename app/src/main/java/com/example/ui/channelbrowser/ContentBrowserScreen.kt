@@ -1,11 +1,14 @@
 package com.example.ui.channelbrowser
 
 import android.content.res.Configuration
+import android.widget.Toast
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -31,7 +34,9 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -60,10 +65,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,9 +86,8 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -99,7 +103,6 @@ import com.example.model.StreamFormat
 import com.example.ui.Screen
 import com.example.ui.locale.LocalAppLanguage
 import com.example.ui.locale.LocalAppStrings
-import com.example.ui.locale.LocalMiniPlayerActive
 import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.AccentRed
 import com.example.ui.theme.PureWhite
@@ -113,10 +116,6 @@ import com.example.ui.theme.Slate900
 import com.example.ui.theme.Slate950
 import java.util.Locale
 
-/**
- * Custom Non-Clipping Search Box that centers Arabic and English text vertically
- * without getting cut off by Material3 OutlinedTextField internal padding.
- */
 @Composable
 fun CompactSearchField(
     value: String,
@@ -216,6 +215,7 @@ fun ContentBrowserScreen(
 ) {
     val strings = LocalAppStrings.current
     val isAr = LocalAppLanguage.current == "ar"
+    val context = LocalContext.current
 
     val (title, icon, accentColor) = when (screen) {
         Screen.LIVE_CHANNELS -> Triple(
@@ -244,11 +244,12 @@ fun ContentBrowserScreen(
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val isVOD = screen == Screen.MOVIES || screen == Screen.SERIES
 
-    // Live TV Landscape View Mode: true = Square Logo Grid, false = Full-Width 1-Column List
-    var isLiveGridView by remember { mutableStateOf(true) }
+    var isLiveGridView by rememberSaveable { mutableStateOf(true) }
 
-    val isMiniPlayerActive = LocalMiniPlayerActive.current
-    val contentBottomPadding = if (isMiniPlayerActive) 140.dp else 48.dp
+    // Remember scroll states so returning from the video player keeps you on the exact same channel/movie row!
+    val vodGridState = rememberLazyGridState()
+    val liveGridState = rememberLazyGridState()
+    val liveListState = rememberLazyListState()
 
     val handleItemClick = { item: IptvItem ->
         if (item.type == IptvType.SERIES) {
@@ -258,27 +259,33 @@ fun ContentBrowserScreen(
         }
     }
 
-    val layoutDirection = if (isAr) LayoutDirection.Rtl else LayoutDirection.Ltr
+    val handleToggleFavoriteWithToast = { item: IptvItem ->
+        val willBeFav = !item.isFavorite
+        onToggleFavorite(item)
+        val msg = if (willBeFav) {
+            if (isAr) "تمت الإضافة إلى المفضلة ❤️: ${item.name}" else "Added to Favorites ❤️: ${item.name}"
+        } else {
+            if (isAr) "تمت الإزالة من المفضلة: ${item.name}" else "Removed from Favorites: ${item.name}"
+        }
+        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+    }
 
-    CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
-        BoxWithConstraints(
-            modifier = modifier
-                .fillMaxSize()
-                .background(Slate950)
-                .statusBarsPadding()
-                .testTag("content_browser_screen")
-        ) {
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Slate950)
+            .statusBarsPadding()
+            .testTag("content_browser_screen")
+    ) {
         val isTv = com.example.util.LocalIsTelevision.current
         val isWideScreen = maxWidth >= 600.dp || isTv || isLandscape
 
         if (isWideScreen) {
-            // Master-Detail Split Layout in Landscape / Tablet / TV
             Row(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(top = 4.dp)
             ) {
-                // Dedicated Vertical Category Sidebar (230.dp width)
                 CategorySidebar(
                     categories = categories,
                     selectedCategory = selectedCategory,
@@ -288,7 +295,6 @@ fun ContentBrowserScreen(
                     onCategoryChange = onCategoryChange
                 )
 
-                // Divider line between sidebar and content
                 Box(
                     modifier = Modifier
                         .width(1.dp)
@@ -296,13 +302,11 @@ fun ContentBrowserScreen(
                         .background(Slate800)
                 )
 
-                // Main Content Area
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
                 ) {
-                    // Unified Top Row with plenty of breathing room so nothing clips
                     CompactLandscapeHeader(
                         title = title,
                         icon = icon,
@@ -317,14 +321,14 @@ fun ContentBrowserScreen(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                     )
 
-                    // Content Area
                     if (isVOD) {
                         LazyVerticalGrid(
+                            state = vodGridState,
                             columns = GridCells.Adaptive(minSize = 130.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f),
-                            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = contentBottomPadding),
+                            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 28.dp),
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
@@ -338,7 +342,7 @@ fun ContentBrowserScreen(
                                         item = item,
                                         accentColor = accentColor,
                                         onPlay = { handleItemClick(item) },
-                                        onToggleFavorite = { onToggleFavorite(item) }
+                                        onToggleFavorite = { handleToggleFavoriteWithToast(item) }
                                     )
                                 }
 
@@ -347,18 +351,16 @@ fun ContentBrowserScreen(
                                         LoadMoreButton(onLoadMore = onLoadMore, accentColor = accentColor)
                                     }
                                 }
-                                item(span = { GridItemSpan(maxLineSpan) }) {
-                                    Spacer(modifier = Modifier.height(70.dp))
-                                }
                             }
                         }
                     } else if (isLiveGridView) {
                         LazyVerticalGrid(
+                            state = liveGridState,
                             columns = GridCells.Adaptive(minSize = 135.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f),
-                            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = contentBottomPadding),
+                            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 28.dp),
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
@@ -372,7 +374,7 @@ fun ContentBrowserScreen(
                                         item = item,
                                         accentColor = accentColor,
                                         onPlay = { handleItemClick(item) },
-                                        onToggleFavorite = { onToggleFavorite(item) }
+                                        onToggleFavorite = { handleToggleFavoriteWithToast(item) }
                                     )
                                 }
 
@@ -381,17 +383,15 @@ fun ContentBrowserScreen(
                                         LoadMoreButton(onLoadMore = onLoadMore, accentColor = accentColor)
                                     }
                                 }
-                                item(span = { GridItemSpan(maxLineSpan) }) {
-                                    Spacer(modifier = Modifier.height(70.dp))
-                                }
                             }
                         }
                     } else {
                         LazyColumn(
+                            state = liveListState,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f),
-                            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = contentBottomPadding),
+                            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 28.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             if (items.isEmpty()) {
@@ -404,7 +404,7 @@ fun ContentBrowserScreen(
                                         item = item,
                                         accentColor = accentColor,
                                         onPlay = { handleItemClick(item) },
-                                        onToggleFavorite = { onToggleFavorite(item) }
+                                        onToggleFavorite = { handleToggleFavoriteWithToast(item) }
                                     )
                                 }
 
@@ -413,16 +413,12 @@ fun ContentBrowserScreen(
                                         LoadMoreButton(onLoadMore = onLoadMore, accentColor = accentColor)
                                     }
                                 }
-                                item {
-                                    Spacer(modifier = Modifier.height(70.dp))
-                                }
                             }
                         }
                     }
                 }
             }
         } else {
-            // Portrait Phone Layout
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -451,11 +447,12 @@ fun ContentBrowserScreen(
 
                 if (isVOD) {
                     LazyVerticalGrid(
+                        state = vodGridState,
                         columns = GridCells.Adaptive(minSize = 105.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f),
-                        contentPadding = PaddingValues(top = 4.dp, bottom = contentBottomPadding),
+                        contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
@@ -469,7 +466,7 @@ fun ContentBrowserScreen(
                                     item = item,
                                     accentColor = accentColor,
                                     onPlay = { handleItemClick(item) },
-                                    onToggleFavorite = { onToggleFavorite(item) }
+                                    onToggleFavorite = { handleToggleFavoriteWithToast(item) }
                                 )
                             }
 
@@ -478,17 +475,15 @@ fun ContentBrowserScreen(
                                     LoadMoreButton(onLoadMore = onLoadMore, accentColor = accentColor)
                                 }
                             }
-                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                Spacer(modifier = Modifier.height(70.dp))
-                            }
                         }
                     }
                 } else {
                     LazyColumn(
+                        state = liveListState,
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f),
-                        contentPadding = PaddingValues(top = 4.dp, bottom = contentBottomPadding),
+                        contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         if (items.isEmpty()) {
@@ -501,7 +496,7 @@ fun ContentBrowserScreen(
                                     item = item,
                                     accentColor = accentColor,
                                     onPlay = { handleItemClick(item) },
-                                    onToggleFavorite = { onToggleFavorite(item) }
+                                    onToggleFavorite = { handleToggleFavoriteWithToast(item) }
                                 )
                             }
 
@@ -510,16 +505,12 @@ fun ContentBrowserScreen(
                                     LoadMoreButton(onLoadMore = onLoadMore, accentColor = accentColor)
                                 }
                             }
-                            item {
-                                Spacer(modifier = Modifier.height(70.dp))
-                            }
                         }
                     }
                 }
             }
         }
     }
-}
 }
 
 @Composable
@@ -532,9 +523,10 @@ fun CategorySidebar(
     onCategoryChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var searchCategoryQuery by remember { mutableStateOf("") }
+    var searchCategoryQuery by rememberSaveable { mutableStateOf("") }
     val strings = LocalAppStrings.current
     val isAr = LocalAppLanguage.current == "ar"
+    val sidebarListState = rememberLazyListState()
 
     val filteredCategories = remember(categories, searchCategoryQuery) {
         if (searchCategoryQuery.isBlank()) {
@@ -552,7 +544,6 @@ fun CategorySidebar(
             .padding(vertical = 6.dp)
             .testTag("category_sidebar")
     ) {
-        // Non-clipping category search bar
         CompactSearchField(
             value = searchCategoryQuery,
             onValueChange = { searchCategoryQuery = it },
@@ -567,14 +558,12 @@ fun CategorySidebar(
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        val isMiniPlayerActive = LocalMiniPlayerActive.current
-        val sidebarBottomPadding = if (isMiniPlayerActive) 100.dp else 28.dp
-
         LazyColumn(
+            state = sidebarListState,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
-            contentPadding = PaddingValues(start = 6.dp, top = 2.dp, end = 6.dp, bottom = sidebarBottomPadding),
+            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
             verticalArrangement = Arrangement.spacedBy(3.dp)
         ) {
             item {
@@ -605,9 +594,6 @@ fun CategorySidebar(
                     accentColor = accentColor,
                     onClick = { onCategoryChange(cat.name) }
                 )
-            }
-            item {
-                Spacer(modifier = Modifier.height(70.dp))
             }
         }
     }
@@ -692,6 +678,10 @@ fun SidebarCategoryRow(
     }
 }
 
+/**
+ * Live TV Grid Card with Long-Press to Toggle Favorite (Touch + TV D-Pad Remote)
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LiveTvGridCard(
     item: IptvItem,
@@ -702,6 +692,7 @@ fun LiveTvGridCard(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
+    var longPressConsumed by remember { mutableStateOf(false) }
 
     val scale by animateFloatAsState(
         targetValue = if (isFocused) 1.05f else 1f,
@@ -712,7 +703,7 @@ fun LiveTvGridCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .aspectRatio(1f)
+            .aspectRatio(1.15f)
             .scale(scale)
             .shadow(
                 elevation = if (isFocused) 10.dp else 2.dp,
@@ -727,14 +718,31 @@ fun LiveTvGridCard(
             )
             .focusable(interactionSource = interactionSource)
             .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyUp &&
-                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                ) {
-                    onPlay()
-                    true
+                val isSelectKey = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
+                if (isSelectKey) {
+                    if (event.type == KeyEventType.KeyDown) {
+                        if (event.nativeKeyEvent.repeatCount == 1 || event.nativeKeyEvent.isLongPress) {
+                            longPressConsumed = true
+                            onToggleFavorite()
+                        }
+                        event.nativeKeyEvent.repeatCount > 0
+                    } else if (event.type == KeyEventType.KeyUp) {
+                        if (longPressConsumed) {
+                            longPressConsumed = false
+                            true
+                        } else {
+                            onPlay()
+                            true
+                        }
+                    } else false
                 } else false
             }
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onPlay)
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onPlay,
+                onLongClick = onToggleFavorite
+            )
             .testTag("stream_card_${item.id}"),
         colors = CardDefaults.cardColors(containerColor = if (isFocused) Slate850 else Slate900),
         shape = RoundedCornerShape(12.dp)
@@ -809,6 +817,10 @@ fun LiveTvGridCard(
     }
 }
 
+/**
+ * Movie & Series Vertical Poster Card with Long-Press to Toggle Favorite (Touch + TV D-Pad Remote)
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun VerticalPosterCard(
     item: IptvItem,
@@ -819,6 +831,7 @@ fun VerticalPosterCard(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
+    var longPressConsumed by remember { mutableStateOf(false) }
 
     val scale by animateFloatAsState(
         targetValue = if (isFocused) 1.05f else 1f,
@@ -850,14 +863,31 @@ fun VerticalPosterCard(
             )
             .focusable(interactionSource = interactionSource)
             .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyUp &&
-                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                ) {
-                    onPlay()
-                    true
+                val isSelectKey = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
+                if (isSelectKey) {
+                    if (event.type == KeyEventType.KeyDown) {
+                        if (event.nativeKeyEvent.repeatCount == 1 || event.nativeKeyEvent.isLongPress) {
+                            longPressConsumed = true
+                            onToggleFavorite()
+                        }
+                        event.nativeKeyEvent.repeatCount > 0
+                    } else if (event.type == KeyEventType.KeyUp) {
+                        if (longPressConsumed) {
+                            longPressConsumed = false
+                            true
+                        } else {
+                            onPlay()
+                            true
+                        }
+                    } else false
                 } else false
             }
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onPlay)
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onPlay,
+                onLongClick = onToggleFavorite
+            )
             .testTag("stream_card_${item.id}"),
         colors = CardDefaults.cardColors(containerColor = Slate900),
         shape = RoundedCornerShape(12.dp)
@@ -1055,7 +1085,6 @@ fun CompactLandscapeHeader(
 
         Spacer(modifier = Modifier.width(12.dp))
 
-        // Non-clipping compact search field
         CompactSearchField(
             value = searchQuery,
             onValueChange = onSearchChange,
@@ -1393,6 +1422,10 @@ fun LoadMoreButton(
     }
 }
 
+/**
+ * List View Stream Card with Long-Press to Toggle Favorite (Touch + TV D-Pad Remote)
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun StreamItemCard(
     item: IptvItem,
@@ -1402,6 +1435,7 @@ fun StreamItemCard(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
+    var longPressConsumed by remember { mutableStateOf(false) }
 
     val scale by animateFloatAsState(
         targetValue = if (isFocused) 1.02f else 1f,
@@ -1426,14 +1460,31 @@ fun StreamItemCard(
             )
             .focusable(interactionSource = interactionSource)
             .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyUp &&
-                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                ) {
-                    onPlay()
-                    true
+                val isSelectKey = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
+                if (isSelectKey) {
+                    if (event.type == KeyEventType.KeyDown) {
+                        if (event.nativeKeyEvent.repeatCount == 1 || event.nativeKeyEvent.isLongPress) {
+                            longPressConsumed = true
+                            onToggleFavorite()
+                        }
+                        event.nativeKeyEvent.repeatCount > 0
+                    } else if (event.type == KeyEventType.KeyUp) {
+                        if (longPressConsumed) {
+                            longPressConsumed = false
+                            true
+                        } else {
+                            onPlay()
+                            true
+                        }
+                    } else false
                 } else false
             }
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onPlay)
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onPlay,
+                onLongClick = onToggleFavorite
+            )
             .testTag("stream_card_${item.id}"),
         colors = CardDefaults.cardColors(containerColor = if (isFocused) Slate850 else Slate900),
         shape = RoundedCornerShape(14.dp)
