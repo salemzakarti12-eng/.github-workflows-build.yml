@@ -402,6 +402,7 @@ fun VideoPlayerScreen(
                         useController = false
                         isFocusable = false
                         isFocusableInTouchMode = false
+                        keepScreenOn = true
                         layoutParams = FrameLayout.LayoutParams(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT
@@ -414,6 +415,7 @@ fun VideoPlayerScreen(
                     }
                 },
                 update = { playerView ->
+                    playerView.keepScreenOn = true
                     playerView.player = playerManager.player
                     playerView.resizeMode = when (uiState.aspectRatioMode) {
                         AspectRatioMode.FILL -> AspectRatioFrameLayout.RESIZE_MODE_FILL

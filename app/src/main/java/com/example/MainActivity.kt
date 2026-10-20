@@ -158,6 +158,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val isTvDevice = try {
             DeviceUtils.isTelevision(this)
         } catch (_: Exception) {
@@ -1182,6 +1183,7 @@ fun MiniPlayerBar(
                                 useController = false
                                 isFocusable = false
                                 isFocusableInTouchMode = false
+                                keepScreenOn = true
                                 resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                                 layoutParams = FrameLayout.LayoutParams(
                                     ViewGroup.LayoutParams.MATCH_PARENT,
@@ -1190,6 +1192,7 @@ fun MiniPlayerBar(
                             }
                         },
                         update = { playerView ->
+                            playerView.keepScreenOn = true
                             if (playerView.player !== playerManager.player) {
                                 playerView.player = playerManager.player
                             }

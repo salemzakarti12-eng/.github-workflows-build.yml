@@ -71,7 +71,10 @@ class ExoPlayerManager(
     val player: ExoPlayer = ExoPlayer.Builder(context, renderersFactory)
         .setMediaSourceFactory(DefaultMediaSourceFactory(httpDataSourceFactory))
         .setLoadControl(loadControl)
-        .build()
+        .build().apply {
+            setWakeMode(C.WAKE_MODE_NETWORK)
+            setHandleAudioBecomingNoisy(true)
+        }
 
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
