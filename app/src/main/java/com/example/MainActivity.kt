@@ -5,9 +5,10 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.util.Rational
+import android.view.KeyEvent
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.FrameLayout
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -49,6 +50,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Home
@@ -106,7 +108,6 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.SpanStyle
@@ -155,10 +156,14 @@ class MainActivity : ComponentActivity() {
 
     private val mainViewModel: MainViewModel by viewModels()
     private var isInPipModeState by mutableStateOf(false)
+    private var showExitDialogState by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        // Keep TV Box and Phone screen awake so screensaver never interrupts playback
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
         val isTvDevice = try {
             DeviceUtils.isTelevision(this)
         } catch (_: Exception) {
@@ -191,21 +196,74 @@ class MainActivity : ComponentActivity() {
                     HypnoStreamApp(
                         viewModel = mainViewModel,
                         isInPipMode = isInPipModeState,
-                        onFinishApp = { finish() }
+                        showExitDialog = showExitDialogState,
+                        onShowExitDialogChange = { showExitDialogState = it },
+                        onFinishApp = {
+                            // Stop all streams & release audio before closing app so it never runs in background
+                            mainViewModel.playerManager.stop()
+                            finishAndRemoveTask()
+                        }
                     )
                 }
             }
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+
+    /**
+     * Intercept Home / Exit keys on TV Boxes that pass key events to the foreground activity
+     */
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_HOME) {
+            showExitDialogState = true
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    /**
+     * Triggered when user presses the physical Home button:
+     * - On Android TV: Immediately stop playback so audio/video NEVER keeps running in the background!
+     * - On Phone / Tablet: Enter floating Picture-in-Picture (PiP) mode if a stream is playing.
+     */
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         try {
             val isTv = DeviceUtils.isTelevision(this)
             val hasActiveStream = mainViewModel.playerUiState.value.currentItem != null
             val isPlaying = mainViewModel.playerUiState.value.isPlaying
-            if (!isTv && hasActiveStream && isPlaying) {
+
+            if (isTv) {
+                // On TV: Stop playback immediately when Home button is pressed so it never runs in background
+                if (hasActiveStream) {
+                    mainViewModel.playerManager.saveCurrentPlaybackPosition()
+                    mainViewModel.playerManager.stop()
+                }
+            } else if (hasActiveStream && isPlaying) {
                 enterPipMode()
+            }
+        } catch (_: Exception) {}
+    }
+
+    /**
+     * Extra safeguard: When the app goes into background on Android TV (or when non-PiP on mobile),
+     * stop the player so audio never continues playing behind the TV home launcher.
+     */
+    override fun onStop() {
+        super.onStop()
+        try {
+            val isTv = DeviceUtils.isTelevision(this)
+            if (isTv || !isInPictureInPictureMode) {
+                mainViewModel.playerManager.saveCurrentPlaybackPosition()
+                if (isTv) {
+                    mainViewModel.playerManager.stop()
+                } else if (!isChangingConfigurations) {
+                    mainViewModel.playerManager.player.pause()
+                }
             }
         } catch (_: Exception) {}
     }
@@ -238,6 +296,8 @@ class MainActivity : ComponentActivity() {
 fun HypnoStreamApp(
     viewModel: MainViewModel = viewModel(),
     isInPipMode: Boolean = false,
+    showExitDialog: Boolean = false,
+    onShowExitDialogChange: (Boolean) -> Unit = {},
     onFinishApp: () -> Unit = {}
 ) {
     val currentScreen by viewModel.currentScreen.collectAsState()
@@ -270,9 +330,7 @@ fun HypnoStreamApp(
 
     val strings = LocalAppStrings.current
     val isAr = LocalAppLanguage.current == "ar"
-    val context = LocalContext.current
 
-    // State for "Resume vs Start from Beginning" Dialog
     var pendingResumeItem by remember { mutableStateOf<IptvItem?>(null) }
     var pendingResumePosMs by remember { mutableLongStateOf(0L) }
 
@@ -306,20 +364,12 @@ fun HypnoStreamApp(
 
     val showSplash = !initialLoadCompleted
 
-    var lastBackPressTime by remember { mutableLongStateOf(0L) }
-
+    // Back button handler: Shows Exit Confirmation Dialog when at root screen on Phone, Tablet, or TV
     BackHandler {
-        if (pendingResumeItem != null) {
-            pendingResumeItem = null
-        } else if (!viewModel.handleBackPress()) {
-            val now = System.currentTimeMillis()
-            if (now - lastBackPressTime < 2000L) {
-                onFinishApp()
-            } else {
-                lastBackPressTime = now
-                val exitMsg = if (isAr) "اضغط رجوع مرة أخرى للخروج من التطبيق" else "Press back again to exit"
-                Toast.makeText(context, exitMsg, Toast.LENGTH_SHORT).show()
-            }
+        when {
+            showExitDialog -> onShowExitDialogChange(false)
+            pendingResumeItem != null -> pendingResumeItem = null
+            !viewModel.handleBackPress() -> onShowExitDialogChange(true)
         }
     }
 
@@ -327,7 +377,6 @@ fun HypnoStreamApp(
     val displayedBrowseScreen = if (currentScreen == Screen.PLAYER) lastBrowseScreen else currentScreen
 
     Box(modifier = Modifier.fillMaxSize().background(Slate950)) {
-        // Keep the main browse screen composed in memory underneath the player so category & scroll position are NEVER lost!
         val navItems = listOf(
             Triple(Screen.DASHBOARD, Icons.Default.Home, if (isAr) "الرئيسية" else strings.home),
             Triple(Screen.LIVE_CHANNELS, Icons.Default.LiveTv, if (isAr) "البث المباشر" else strings.liveTv),
@@ -383,7 +432,11 @@ fun HypnoStreamApp(
                         onPlayItem = { handlePlayWithResumePrompt(it) },
                         onOpenSeries = { seriesItem -> viewModel.openSeriesDetail(seriesItem) },
                         onToggleFavorite = { viewModel.toggleFavorite(it) },
-                        onBack = { viewModel.handleBackPress() }
+                        onBack = {
+                            if (!viewModel.handleBackPress()) {
+                                onShowExitDialogChange(true)
+                            }
+                        }
                     )
                 }
 
@@ -421,7 +474,11 @@ fun HypnoStreamApp(
                         onLoadDemo = { viewModel.loadDemoShowcase() },
                         onSwitchSource = { viewModel.switchActiveSource(it) },
                         onDeleteSource = { viewModel.deleteSource(it) },
-                        onBack = { viewModel.handleBackPress() },
+                        onBack = {
+                            if (!viewModel.handleBackPress()) {
+                                onShowExitDialogChange(true)
+                            }
+                        },
                         onToggleLanguage = { viewModel.toggleLanguage() }
                     )
                 }
@@ -507,7 +564,6 @@ fun HypnoStreamApp(
                         screenContent()
                     }
 
-                    // Show MiniPlayerBar with Live Video Preview whenever player is minimized!
                     if (!isPlayerOpen && playerUiState.currentItem != null) {
                         MiniPlayerBar(
                             playerManager = viewModel.playerManager,
@@ -608,7 +664,6 @@ fun HypnoStreamApp(
             }
         }
 
-        // Fullscreen Video Player Overlay (Rendered on top so underlying list scroll state stays intact!)
         if (isPlayerOpen) {
             val activeItem = playerUiState.currentItem
             val sideDrawerItems = when (activeItem?.type) {
@@ -789,7 +844,143 @@ fun HypnoStreamApp(
             )
         }
 
-        // Full-Screen 3D Orbital HypnoStream Splash Screen
+        // Exit Application Confirmation Dialog (Phone, Tablet & Android TV Remote Ready!)
+        if (showExitDialog) {
+            val stayFocusRequester = remember { FocusRequester() }
+            val stayInteraction = remember { MutableInteractionSource() }
+            val isStayFocused by stayInteraction.collectIsFocusedAsState()
+
+            val exitInteraction = remember { MutableInteractionSource() }
+            val isExitFocused by exitInteraction.collectIsFocusedAsState()
+
+            LaunchedEffect(Unit) {
+                try {
+                    delay(80L)
+                    stayFocusRequester.requestFocus()
+                } catch (_: Exception) {}
+            }
+
+            AlertDialog(
+                onDismissRequest = { onShowExitDialogChange(false) },
+                containerColor = Slate900,
+                shape = RoundedCornerShape(20.dp),
+                title = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                            contentDescription = null,
+                            tint = AccentRed,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = if (isAr) "الخروج من التطبيق؟" else "Exit HypnoStream?",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = PureWhite
+                        )
+                    }
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            text = if (isAr) {
+                                "هل أنت متأكد من إغلاق التطبيق وإيقاف البث؟"
+                            } else {
+                                "Are you sure you want to exit the application and stop playback?"
+                            },
+                            fontSize = 14.sp,
+                            color = Slate300
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // 1. Stay in App Button (Default Focused so accidental remote clicks stay in app)
+                        Button(
+                            onClick = { onShowExitDialogChange(false) },
+                            interactionSource = stayInteraction,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isStayFocused) PureWhite else AccentCyan,
+                                contentColor = Slate950
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .focusRequester(stayFocusRequester)
+                                .border(
+                                    width = if (isStayFocused) 3.dp else 0.dp,
+                                    color = PureWhite,
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .focusable(interactionSource = stayInteraction)
+                                .onPreviewKeyEvent { event ->
+                                    if (event.type == KeyEventType.KeyUp &&
+                                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                    ) {
+                                        onShowExitDialogChange(false)
+                                        true
+                                    } else false
+                                }
+                        ) {
+                            Text(
+                                text = if (isAr) "البقاء في التطبيق" else "Stay in App",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                        }
+
+                        // 2. Confirm Exit & Stop Background Stream Button
+                        OutlinedButton(
+                            onClick = {
+                                onShowExitDialogChange(false)
+                                onFinishApp()
+                            },
+                            interactionSource = exitInteraction,
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(
+                                width = if (isExitFocused) 2.5.dp else 1.5.dp,
+                                color = if (isExitFocused) PureWhite else AccentRed
+                            ),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = if (isExitFocused) AccentRed else Slate850,
+                                contentColor = PureWhite
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .focusable(interactionSource = exitInteraction)
+                                .onPreviewKeyEvent { event ->
+                                    if (event.type == KeyEventType.KeyUp &&
+                                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                    ) {
+                                        onShowExitDialogChange(false)
+                                        onFinishApp()
+                                        true
+                                    } else false
+                                }
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                                contentDescription = null,
+                                tint = PureWhite,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (isAr) "خروج وإيقاف البث" else "Exit & Stop Playback",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
+                },
+                confirmButton = {}
+            )
+        }
+
         AnimatedVisibility(
             visible = showSplash,
             enter = fadeIn(tween(300)),
@@ -1103,10 +1294,6 @@ fun HypnoOrbitalSplashOverlay(
     }
 }
 
-/**
- * Restored Live Video Mini-Preview Bar:
- * Always shows the live 16:9 ExoPlayer video preview right inside the bottom bar!
- */
 @OptIn(UnstableApi::class)
 @Composable
 fun MiniPlayerBar(
@@ -1166,7 +1353,6 @@ fun MiniPlayerBar(
                     }
                     .clickable(interactionSource = barInteraction, indication = null, onClick = onExpand)
             ) {
-                // Live 16:9 Mini Video Preview Box (Always enabled!)
                 Box(
                     modifier = Modifier
                         .width(previewWidth)
