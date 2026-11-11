@@ -21,26 +21,20 @@ jobs:
 
       - name: Auto-Configure App Name, Version Number & Sharp TV Banner
         run: |
-          echo "Setting minSdk = 24 (Android 7.0+) for older Sony Android TVs..."
           sed -i 's/minSdk = [0-9]*/minSdk = 24/g' app/build.gradle.kts || true
           sed -i 's/minSdkVersion([0-9]*)/minSdkVersion(24)/g' app/build.gradle.kts || true
-
-          echo "Auto-incrementing versionCode to ${{ github.run_number }} and versionName to 1.${{ github.run_number }}..."
           sed -i 's/versionCode = [0-9]*/versionCode = ${{ github.run_number }}/g' app/build.gradle.kts || true
           sed -i 's/versionCode([0-9]*)/versionCode(${{ github.run_number }})/g' app/build.gradle.kts || true
           sed -i 's/versionName = "[^"]*"/versionName = "1.${{ github.run_number }}"/g' app/build.gradle.kts || true
           sed -i 's/versionName("[^"]*")/versionName("1.${{ github.run_number }}")/g' app/build.gradle.kts || true
 
-          echo "Setting app_name in strings.xml to HypnoStream..."
           if [ -f "app/src/main/res/values/strings.xml" ]; then
             sed -i 's/<string name="app_name">[^<]*<\/string>/<string name="app_name">HypnoStream<\/string>/g' app/src/main/res/values/strings.xml || true
           fi
 
-          echo "Generating debug.keystore..."
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           cp debug.keystore app/debug.keystore || true
 
-          echo "Generating dummy google-services.json if missing..."
           PKG_NAME=$(grep -oP 'applicationId\s*=\s*"\K[^"]+' app/build.gradle.kts || grep -oP 'namespace\s*=\s*"\K[^"]+' app/build.gradle.kts || echo "com.example")
           if [ ! -f "app/google-services.json" ]; then
             cat <<EOF > app/google-services.json
@@ -70,7 +64,6 @@ jobs:
           EOF
           fi
 
-          echo "Generating Sharp 1280x720 HD Android TV Banner PNG..."
           find app/src/main/res -name "ic_banner.*" -delete || true
           mkdir -p app/src/main/res/drawable-xhdpi
 
@@ -191,15 +184,10 @@ jobs:
 
       - name: Build APK Using Gradle 9.3.1
         run: |
-          echo "Downloading Gradle 9.3.1..."
           wget -q https://services.gradle.org/distributions/gradle-9.3.1-bin.zip
           unzip -q gradle-9.3.1-bin.zip
           export PATH=$PWD/gradle-9.3.1/bin:$PATH
-          
-          echo "Accepting Android SDK Licenses..."
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
-          
-          echo "Building Debug APK..."
           gradle assembleDebug --stacktrace
 
       - name: Upload HypnoStream APK to GitHub Releases
@@ -208,9 +196,5 @@ jobs:
         run: |
           RAW_APK=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
           APP_APK="HypnoStream-v1.${{ github.run_number }}.apk"
-          mv "$RAW_APK" "$APP_APK"
-          gh release create "v1.${{ github.run_number }}" "$APP_APK" \
-            --title "HypnoStream v1.${{ github.run_number }}" \
-            --notes "### HypnoStream v1.${{ github.run_number }} (Build #${{ github.run_number }})
-          - **Download File:** \`HypnoStream-v1.${{ github.run_number }}.apk\`
-          - **Version:** 1.${{ github.run_number }} (Code ${{ github.run_number }})"
+          cp "$RAW_APK" "$APP_APK"
+          gh release create "v1.${{ github.run_number }}" "$APP_APK" --title "HypnoStream v1.${{ github.run_number }}" --notes "HypnoStream v1.${{ github.run_number }} (Build #${{ github.run_number }})"
