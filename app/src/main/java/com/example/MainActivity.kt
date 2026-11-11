@@ -161,7 +161,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Keep TV Box and Phone screen awake so screensaver never interrupts playback
+        // Keep screen awake so screensaver never interrupts playback
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         val isTvDevice = try {
@@ -199,7 +199,6 @@ class MainActivity : ComponentActivity() {
                         showExitDialog = showExitDialogState,
                         onShowExitDialogChange = { showExitDialogState = it },
                         onFinishApp = {
-                            // Stop all streams & release audio before closing app so it never runs in background
                             mainViewModel.playerManager.stop()
                             finishAndRemoveTask()
                         }
@@ -214,9 +213,6 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
-    /**
-     * Intercept Home / Exit keys on TV Boxes that pass key events to the foreground activity
-     */
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (keyCode == KeyEvent.KEYCODE_HOME) {
             showExitDialogState = true
@@ -225,11 +221,6 @@ class MainActivity : ComponentActivity() {
         return super.onKeyDown(keyCode, event)
     }
 
-    /**
-     * Triggered when user presses the physical Home button:
-     * - On Android TV: Immediately stop playback so audio/video NEVER keeps running in the background!
-     * - On Phone / Tablet: Enter floating Picture-in-Picture (PiP) mode if a stream is playing.
-     */
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         try {
@@ -238,7 +229,6 @@ class MainActivity : ComponentActivity() {
             val isPlaying = mainViewModel.playerUiState.value.isPlaying
 
             if (isTv) {
-                // On TV: Stop playback immediately when Home button is pressed so it never runs in background
                 if (hasActiveStream) {
                     mainViewModel.playerManager.saveCurrentPlaybackPosition()
                     mainViewModel.playerManager.stop()
@@ -249,10 +239,6 @@ class MainActivity : ComponentActivity() {
         } catch (_: Exception) {}
     }
 
-    /**
-     * Extra safeguard: When the app goes into background on Android TV (or when non-PiP on mobile),
-     * stop the player so audio never continues playing behind the TV home launcher.
-     */
     override fun onStop() {
         super.onStop()
         try {
@@ -301,7 +287,14 @@ fun HypnoStreamApp(
     onFinishApp: () -> Unit = {}
 ) {
     val currentScreen by viewModel.currentScreen.collectAsState()
-    val lastBrowseScreen by viewModel.lastBrowseScreen.collectAsState()
+    var lastBrowseScreen by remember { mutableStateOf(Screen.DASHBOARD) }
+
+    LaunchedEffect(currentScreen) {
+        if (currentScreen != Screen.PLAYER && currentScreen != Screen.SERIES_DETAIL) {
+            lastBrowseScreen = currentScreen
+        }
+    }
+
     val activeSource by viewModel.activeSource.collectAsState()
     val sources by viewModel.sources.collectAsState()
     val totalLiveCount by viewModel.totalLiveCount.collectAsState()
@@ -364,7 +357,6 @@ fun HypnoStreamApp(
 
     val showSplash = !initialLoadCompleted
 
-    // Back button handler: Shows Exit Confirmation Dialog when at root screen on Phone, Tablet, or TV
     BackHandler {
         when {
             showExitDialog -> onShowExitDialogChange(false)
@@ -684,7 +676,6 @@ fun HypnoStreamApp(
             )
         }
 
-        // Resume vs Start from Beginning Dialog
         if (pendingResumeItem != null) {
             val targetItem = pendingResumeItem!!
             val formattedTime = remember(pendingResumePosMs) {
@@ -844,7 +835,6 @@ fun HypnoStreamApp(
             )
         }
 
-        // Exit Application Confirmation Dialog (Phone, Tablet & Android TV Remote Ready!)
         if (showExitDialog) {
             val stayFocusRequester = remember { FocusRequester() }
             val stayInteraction = remember { MutableInteractionSource() }
@@ -897,7 +887,6 @@ fun HypnoStreamApp(
 
                         Spacer(modifier = Modifier.height(6.dp))
 
-                        // 1. Stay in App Button (Default Focused so accidental remote clicks stay in app)
                         Button(
                             onClick = { onShowExitDialogChange(false) },
                             interactionSource = stayInteraction,
@@ -932,7 +921,6 @@ fun HypnoStreamApp(
                             )
                         }
 
-                        // 2. Confirm Exit & Stop Background Stream Button
                         OutlinedButton(
                             onClick = {
                                 onShowExitDialogChange(false)
