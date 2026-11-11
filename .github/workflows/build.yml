@@ -19,7 +19,7 @@ jobs:
           git fetch --depth 1 origin ${{ github.sha }}
           git checkout FETCH_HEAD
 
-      - name: Auto-Configure Version Number, Sony TV Compatibility & Sharp TV Banner
+      - name: Auto-Configure App Name, Version Number & Sharp TV Banner
         run: |
           echo "Setting minSdk = 24 (Android 7.0+) for older Sony Android TVs..."
           sed -i 's/minSdk = [0-9]*/minSdk = 24/g' app/build.gradle.kts || true
@@ -30,6 +30,11 @@ jobs:
           sed -i 's/versionCode([0-9]*)/versionCode(${{ github.run_number }})/g' app/build.gradle.kts || true
           sed -i 's/versionName = "[^"]*"/versionName = "1.${{ github.run_number }}"/g' app/build.gradle.kts || true
           sed -i 's/versionName("[^"]*")/versionName("1.${{ github.run_number }}")/g' app/build.gradle.kts || true
+
+          echo "Setting app_name in strings.xml to HypnoStream..."
+          if [ -f "app/src/main/res/values/strings.xml" ]; then
+            sed -i 's/<string name="app_name">[^<]*<\/string>/<string name="app_name">HypnoStream<\/string>/g' app/src/main/res/values/strings.xml || true
+          fi
 
           echo "Generating debug.keystore..."
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
@@ -197,16 +202,15 @@ jobs:
           echo "Building Debug APK..."
           gradle assembleDebug --stacktrace
 
-      - name: Upload Versioned APK to GitHub Releases
+      - name: Upload HypnoStream APK to GitHub Releases
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           RAW_APK=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
-          VERSIONED_APK="HypnoStream-v1.${{ github.run_number }}.apk"
-          cp "$RAW_APK" "$VERSIONED_APK"
-          gh release create "v1.${{ github.run_number }}" "$VERSIONED_APK" "$RAW_APK" \
-            --title "HypnoStream v1.${{ github.run_number }} (Build #${{ github.run_number }})" \
-            --notes "### HypnoStream v1.${{ github.run_number }}
-          - **Version Name:** 1.${{ github.run_number }}
-          - **Version Code:** ${{ github.run_number }}
-          - **Download:** Install **HypnoStream-v1.${{ github.run_number }}.apk** to upgrade over your existing app without losing your playlists or favorites."
+          APP_APK="HypnoStream-v1.${{ github.run_number }}.apk"
+          mv "$RAW_APK" "$APP_APK"
+          gh release create "v1.${{ github.run_number }}" "$APP_APK" \
+            --title "HypnoStream v1.${{ github.run_number }}" \
+            --notes "### HypnoStream v1.${{ github.run_number }} (Build #${{ github.run_number }})
+          - **Download File:** \`HypnoStream-v1.${{ github.run_number }}.apk\`
+          - **Version:** 1.${{ github.run_number }} (Code ${{ github.run_number }})"
