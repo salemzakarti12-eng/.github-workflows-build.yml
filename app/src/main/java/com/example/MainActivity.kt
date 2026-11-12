@@ -30,6 +30,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -365,7 +366,7 @@ fun HypnoStreamApp(
         }
     }
 
-    val isPlayerOpen = currentScreen == Screen.PLAYER || isInPipMode
+    val isPlayerOpen = (currentScreen == Screen.PLAYER && playerUiState.currentItem != null) || isInPipMode
     val displayedBrowseScreen = if (currentScreen == Screen.PLAYER) lastBrowseScreen else currentScreen
 
     Box(modifier = Modifier.fillMaxSize().background(Slate950)) {
@@ -489,8 +490,9 @@ fun HypnoStreamApp(
                     containerColor = Slate900,
                     contentColor = PureWhite,
                     modifier = Modifier
-                        .width(if (isTablet) 84.dp else 76.dp)
+                        .width(if (isTablet || isTv) 88.dp else 76.dp)
                         .fillMaxHeight()
+                        .focusGroup()
                         .border(BorderStroke(1.dp, Slate800))
                         .testTag("main_navigation_rail")
                 ) {
@@ -504,6 +506,7 @@ fun HypnoStreamApp(
                             selected = isSelected,
                             onClick = { viewModel.navigateTo(screen) },
                             interactionSource = navInteraction,
+                            alwaysShowLabel = true,
                             icon = {
                                 Icon(
                                     imageVector = icon,
@@ -523,22 +526,12 @@ fun HypnoStreamApp(
                             },
                             colors = navigationRailItemColors(),
                             modifier = Modifier
-                                .focusable(interactionSource = navInteraction)
+                                .padding(vertical = 2.dp)
                                 .border(
                                     width = if (isNavFocused) 2.dp else 0.dp,
                                     color = if (isNavFocused) AccentCyan else Color.Transparent,
                                     shape = RoundedCornerShape(12.dp)
                                 )
-                                .onPreviewKeyEvent { event ->
-                                    if (event.type == KeyEventType.KeyUp &&
-                                        (event.key == Key.DirectionCenter ||
-                                         event.key == Key.Enter ||
-                                         event.key == Key.NumPadEnter)
-                                    ) {
-                                        viewModel.navigateTo(screen)
-                                        true
-                                    } else false
-                                }
                         )
                     }
                 }
@@ -593,6 +586,7 @@ fun HypnoStreamApp(
                             contentColor = PureWhite,
                             modifier = Modifier
                                 .height(68.dp)
+                                .focusGroup()
                                 .border(BorderStroke(1.dp, Slate800))
                                 .testTag("main_navigation_bar")
                         ) {
@@ -605,6 +599,7 @@ fun HypnoStreamApp(
                                     selected = isSelected,
                                     onClick = { viewModel.navigateTo(screen) },
                                     interactionSource = navInteraction,
+                                    alwaysShowLabel = true,
                                     icon = {
                                         Icon(
                                             imageVector = icon,
@@ -623,22 +618,11 @@ fun HypnoStreamApp(
                                     },
                                     colors = navigationBarItemColors(),
                                     modifier = Modifier
-                                        .focusable(interactionSource = navInteraction)
                                         .border(
                                             width = if (isNavFocused) 2.dp else 0.dp,
                                             color = if (isNavFocused) AccentCyan else Color.Transparent,
                                             shape = RoundedCornerShape(12.dp)
                                         )
-                                        .onPreviewKeyEvent { event ->
-                                            if (event.type == KeyEventType.KeyUp &&
-                                                (event.key == Key.DirectionCenter ||
-                                                 event.key == Key.Enter ||
-                                                 event.key == Key.NumPadEnter)
-                                            ) {
-                                                viewModel.navigateTo(screen)
-                                                true
-                                            } else false
-                                        }
                                 )
                             }
                         }
