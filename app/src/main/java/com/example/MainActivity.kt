@@ -5,7 +5,6 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.util.Rational
-import android.view.KeyEvent
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
@@ -200,6 +199,7 @@ class MainActivity : ComponentActivity() {
                         showExitDialog = showExitDialogState,
                         onShowExitDialogChange = { showExitDialogState = it },
                         onFinishApp = {
+                            mainViewModel.playerManager.saveCurrentPlaybackPosition()
                             mainViewModel.playerManager.stop()
                             finishAndRemoveTask()
                         }
@@ -214,22 +214,15 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_HOME) {
-            showExitDialogState = true
-            return true
-        }
-        return super.onKeyDown(keyCode, event)
-    }
-
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         try {
-            val isTv = DeviceUtils.isTelevision(this)
+            val isTvOrBox = DeviceUtils.isTelevision(this) ||
+                resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
             val hasActiveStream = mainViewModel.playerUiState.value.currentItem != null
             val isPlaying = mainViewModel.playerUiState.value.isPlaying
 
-            if (isTv) {
+            if (isTvOrBox) {
                 if (hasActiveStream) {
                     mainViewModel.playerManager.saveCurrentPlaybackPosition()
                     mainViewModel.playerManager.stop()
@@ -243,14 +236,9 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         try {
-            val isTv = DeviceUtils.isTelevision(this)
-            if (isTv || !isInPictureInPictureMode) {
+            if (!isInPictureInPictureMode && !isChangingConfigurations) {
                 mainViewModel.playerManager.saveCurrentPlaybackPosition()
-                if (isTv) {
-                    mainViewModel.playerManager.stop()
-                } else if (!isChangingConfigurations) {
-                    mainViewModel.playerManager.player.pause()
-                }
+                mainViewModel.playerManager.stop()
             }
         } catch (_: Exception) {}
     }
@@ -357,15 +345,6 @@ fun HypnoStreamApp(
     }
 
     val showSplash = !initialLoadCompleted
-
-    BackHandler {
-        when {
-            showExitDialog -> onShowExitDialogChange(false)
-            pendingResumeItem != null -> pendingResumeItem = null
-            !viewModel.handleBackPress() -> onShowExitDialogChange(true)
-        }
-    }
-
     val isPlayerOpen = (currentScreen == Screen.PLAYER && playerUiState.currentItem != null) || isInPipMode
     val displayedBrowseScreen = if (currentScreen == Screen.PLAYER) lastBrowseScreen else currentScreen
 
@@ -658,6 +637,16 @@ fun HypnoStreamApp(
                 onSelectChannel = { handlePlayWithResumePrompt(it) },
                 modifier = Modifier.fillMaxSize()
             )
+        }
+
+        // Priority BackHandler ensures Back button always triggers navigation or Exit Confirmation
+        BackHandler(enabled = true) {
+            when {
+                showExitDialog -> onShowExitDialogChange(false)
+                pendingResumeItem != null -> pendingResumeItem = null
+                currentScreen == Screen.DASHBOARD -> onShowExitDialogChange(true)
+                !viewModel.handleBackPress() -> onShowExitDialogChange(true)
+            }
         }
 
         if (pendingResumeItem != null) {
