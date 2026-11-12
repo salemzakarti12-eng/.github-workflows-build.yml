@@ -42,7 +42,6 @@ import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -68,6 +67,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -76,6 +76,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -84,7 +86,6 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -128,6 +129,8 @@ fun VideoPlayerScreen(
 ) {
     val isAr = LocalAppLanguage.current == "ar"
     val localView = LocalView.current
+    val playerRootFocus = remember { FocusRequester() }
+    val playPauseFocus = remember { FocusRequester() }
 
     // Keep screen awake on Android TV boxes & mobile during playback
     DisposableEffect(localView) {
@@ -135,6 +138,26 @@ fun VideoPlayerScreen(
         localView.keepScreenOn = true
         onDispose {
             localView.keepScreenOn = prevKeepScreenOn
+        }
+    }
+
+    // Grab initial D-pad focus on the player surface when opened
+    LaunchedEffect(Unit) {
+        try {
+            playerRootFocus.requestFocus()
+        } catch (_: Exception) {}
+    }
+
+    // Automatically focus Play/Pause when HUD opens so OK/Enter works immediately
+    LaunchedEffect(uiState.isControlsVisible) {
+        if (uiState.isControlsVisible) {
+            try {
+                playPauseFocus.requestFocus()
+            } catch (_: Exception) {}
+        } else {
+            try {
+                playerRootFocus.requestFocus()
+            } catch (_: Exception) {}
         }
     }
 
@@ -155,32 +178,55 @@ fun VideoPlayerScreen(
 
     val currentItem = uiState.currentItem
     val isLive = currentItem?.type == IptvType.LIVE_TV
-    val hasDrawerItems = allChannels.isNotEmpty() && ! isLive.not().and(currentItem?.type == IptvType.MOVIE)
+    val hasDrawerItems = allChannels.isNotEmpty() && currentItem?.type != IptvType.MOVIE
 
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
+            .focusRequester(playerRootFocus)
             .focusable()
             .onPreviewKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown) {
-                    playerManager.showControlsTemporarily()
                     when (event.key) {
-                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.MediaPlayPause -> {
-                            if (!uiState.isControlsVisible) {
+                        Key.MediaPlayPause -> {
+                            playerManager.togglePlayPause()
+                            playerManager.showControlsTemporarily()
+                            true
+                        }
+                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+                            if (!uiState.isControlsVisible && !uiState.isQuickChannelListOpen) {
                                 playerManager.showControlsTemporarily()
                                 true
                             } else false
                         }
+                        Key.DirectionUp -> {
+                            if (isLive && !uiState.isControlsVisible && !uiState.isQuickChannelListOpen) {
+                                onPlayPrevious()
+                                true
+                            } else false
+                        }
+                        Key.DirectionDown -> {
+                            if (isLive && !uiState.isControlsVisible && !uiState.isQuickChannelListOpen) {
+                                onPlayNext()
+                                true
+                            } else false
+                        }
                         Key.DirectionLeft -> {
-                            if (!isLive && !uiState.isControlsVisible) {
-                                playerManager.seekTo(uiState.currentPositionMs - 10_000L)
+                            if (!uiState.isControlsVisible && !uiState.isQuickChannelListOpen) {
+                                if (isLive && hasDrawerItems) {
+                                    playerManager.toggleQuickChannelList()
+                                } else if (!isLive) {
+                                    playerManager.seekTo((uiState.currentPositionMs - 10_000L).coerceAtLeast(0L))
+                                    playerManager.showControlsTemporarily()
+                                }
                                 true
                             } else false
                         }
                         Key.DirectionRight -> {
-                            if (!isLive && !uiState.isControlsVisible) {
-                                playerManager.seekTo(uiState.currentPositionMs + 10_000L)
+                            if (!uiState.isControlsVisible && !uiState.isQuickChannelListOpen && !isLive) {
+                                playerManager.seekTo((uiState.currentPositionMs + 10_000L).coerceAtMost(uiState.durationMs))
+                                playerManager.showControlsTemporarily()
                                 true
                             } else false
                         }
@@ -192,7 +238,10 @@ fun VideoPlayerScreen(
                             onPlayPrevious()
                             true
                         }
-                        else -> false
+                        else -> {
+                            playerManager.showControlsTemporarily()
+                            false
+                        }
                     }
                 } else false
             }
@@ -211,6 +260,8 @@ fun VideoPlayerScreen(
                 PlayerView(ctx).apply {
                     player = playerManager.player
                     useController = false
+                    isFocusable = false
+                    isFocusableInTouchMode = false
                     keepScreenOn = true
                     layoutParams = FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
@@ -353,7 +404,6 @@ fun VideoPlayerScreen(
                         )
                     }
 
-                    // Audio Tracks Button
                     PlayerCircleButton(
                         icon = Icons.Default.Audiotrack,
                         contentDescription = "Audio Tracks",
@@ -362,7 +412,6 @@ fun VideoPlayerScreen(
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    // Subtitles & Timing Sync Button
                     PlayerCircleButton(
                         icon = Icons.Default.Subtitles,
                         contentDescription = "Subtitles",
@@ -371,7 +420,6 @@ fun VideoPlayerScreen(
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    // Aspect Ratio Button
                     PlayerCircleButton(
                         icon = Icons.Default.AspectRatio,
                         contentDescription = "Aspect Ratio",
@@ -388,7 +436,7 @@ fun VideoPlayerScreen(
                     }
                 }
 
-                // Bottom Bar Controls & Seekbar
+                // Bottom Bar Controls & D-Pad Focusable Seekbar
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -401,6 +449,9 @@ fun VideoPlayerScreen(
                         .padding(horizontal = 16.dp, vertical = 14.dp)
                 ) {
                     if (!isLive && uiState.durationMs > 0L) {
+                        val sliderInteraction = remember { MutableInteractionSource() }
+                        val isSliderFocused by sliderInteraction.collectIsFocusedAsState()
+
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()
@@ -415,14 +466,37 @@ fun VideoPlayerScreen(
                                 value = uiState.currentPositionMs.toFloat(),
                                 onValueChange = { playerManager.seekTo(it.toLong()) },
                                 valueRange = 0f..uiState.durationMs.toFloat().coerceAtLeast(1f),
+                                interactionSource = sliderInteraction,
                                 colors = SliderDefaults.colors(
-                                    thumbColor = AccentCyan,
+                                    thumbColor = if (isSliderFocused) PureWhite else AccentCyan,
                                     activeTrackColor = AccentCyan,
                                     inactiveTrackColor = Slate700
                                 ),
                                 modifier = Modifier
                                     .weight(1f)
                                     .padding(horizontal = 10.dp)
+                                    .border(
+                                        width = if (isSliderFocused) 2.dp else 0.dp,
+                                        color = if (isSliderFocused) PureWhite else Color.Transparent,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .focusable(interactionSource = sliderInteraction)
+                                    .onPreviewKeyEvent { event ->
+                                        if (event.type == KeyEventType.KeyDown) {
+                                            playerManager.showControlsTemporarily()
+                                            when (event.key) {
+                                                Key.DirectionLeft -> {
+                                                    playerManager.seekTo((uiState.currentPositionMs - 15_000L).coerceAtLeast(0L))
+                                                    true
+                                                }
+                                                Key.DirectionRight -> {
+                                                    playerManager.seekTo((uiState.currentPositionMs + 15_000L).coerceAtMost(uiState.durationMs))
+                                                    true
+                                                }
+                                                else -> false
+                                            }
+                                        } else false
+                                    }
                             )
                             Text(
                                 text = formatPlayerTime(uiState.durationMs),
@@ -443,7 +517,7 @@ fun VideoPlayerScreen(
                             contentDescription = "Previous / Rewind 10s",
                             onClick = {
                                 if (isLive) onPlayPrevious()
-                                else playerManager.seekTo(uiState.currentPositionMs - 10_000L)
+                                else playerManager.seekTo((uiState.currentPositionMs - 10_000L).coerceAtLeast(0L))
                             }
                         )
 
@@ -453,6 +527,7 @@ fun VideoPlayerScreen(
                             icon = if (uiState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = "Play/Pause",
                             isPrimary = true,
+                            focusRequester = playPauseFocus,
                             onClick = { playerManager.togglePlayPause() }
                         )
 
@@ -463,7 +538,7 @@ fun VideoPlayerScreen(
                             contentDescription = "Next / Forward 10s",
                             onClick = {
                                 if (isLive) onPlayNext()
-                                else playerManager.seekTo(uiState.currentPositionMs + 10_000L)
+                                else playerManager.seekTo((uiState.currentPositionMs + 10_000L).coerceAtMost(uiState.durationMs))
                             }
                         )
                     }
@@ -650,7 +725,6 @@ fun VideoPlayerScreen(
                 },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        // Timing Offset Controls (-0.5s / Reset / +0.5s)
                         Text(
                             text = if (isAr) {
                                 "مزامنة الترجمة: ${String.format(Locale.US, "%+.1f", subtitleOffsetMs / 1000f)} ثانية"
@@ -685,7 +759,6 @@ fun VideoPlayerScreen(
                             }
                         }
 
-                        // Load External Subtitle File or URL
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxWidth()
@@ -737,7 +810,6 @@ fun VideoPlayerScreen(
                             }
                         }
 
-                        // Disable Subtitles Option
                         Surface(
                             color = if (uiState.isSubtitleOff) AccentCyan.copy(alpha = 0.2f) else Slate850,
                             shape = RoundedCornerShape(10.dp),
@@ -761,7 +833,6 @@ fun VideoPlayerScreen(
                             }
                         }
 
-                        // Available Tracks
                         uiState.subtitleTracks.forEach { track ->
                             Surface(
                                 color = if (track.isSelected && !uiState.isSubtitleOff) AccentCyan.copy(alpha = 0.2f) else Slate850,
@@ -803,6 +874,7 @@ private fun PlayerCircleButton(
     icon: ImageVector,
     contentDescription: String,
     isPrimary: Boolean = false,
+    focusRequester: FocusRequester? = null,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -814,6 +886,7 @@ private fun PlayerCircleButton(
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .size(btnSize)
             .clip(CircleShape)
             .background(
