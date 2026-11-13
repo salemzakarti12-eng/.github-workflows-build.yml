@@ -16,6 +16,12 @@ jobs:
       - name: Clone Repository
         uses: actions/checkout@v4
 
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
       - name: Generate Permanent Signing Key (One-Time)
         run: |
           keytool -genkeypair -v -keystore hypnostream.jks -keyalg RSA -keysize 2048 -validity 9125 -alias hypnostream -storepass hypno1234 -keypass hypno1234 -dname "CN=HypnoStream, OU=Media, O=Personal, L=Jubail, S=Eastern, C=SA"
@@ -23,12 +29,6 @@ jobs:
           base64 -w 0 hypnostream.jks
           echo ""
           echo "========================================="
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
 
       - name: Auto-Configure Sony TV Compatibility & Sharp TV Banner
         run: |
