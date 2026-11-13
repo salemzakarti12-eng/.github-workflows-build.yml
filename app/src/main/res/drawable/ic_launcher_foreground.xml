@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
-    android:width="108dp"
-    android:height="108dp"
+    android:width="432dp"
+    android:height="432dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
@@ -58,15 +58,12 @@
     </path>
 
     <!-- 4. Three Top Neon Indicator Pills (Red #FF2A54, Purple #8B5CF6, Cyan #00E5FF) -->
-    <!-- Red Pill (Live TV) -->
     <path
         android:fillColor="#FF2A54"
         android:pathData="M 36.6,35.5 L 43.4,35.5 C 44,35.5 44.5,36 44.5,36.65 C 44.5,37.3 44,37.8 43.4,37.8 L 36.6,37.8 C 36,37.8 35.5,37.3 35.5,36.65 C 35.5,36 36,35.5 36.6,35.5 Z" />
-    <!-- Purple Pill (Movies) -->
     <path
         android:fillColor="#8B5CF6"
         android:pathData="M 50.6,35.5 L 57.4,35.5 C 58,35.5 58.5,36 58.5,36.65 C 58.5,37.3 58,37.8 57.4,37.8 L 50.6,37.8 C 50,37.8 49.5,37.3 49.5,36.65 C 49.5,36 50,35.5 50.6,35.5 Z" />
-    <!-- Cyan Pill (Series) -->
     <path
         android:fillColor="#00E5FF"
         android:pathData="M 64.6,35.5 L 71.4,35.5 C 72,35.5 72.5,36 72.5,36.65 C 72.5,37.3 72,37.8 71.4,37.8 L 64.6,37.8 C 64,37.8 63.5,37.3 63.5,36.65 C 63.5,36 64,35.5 64.6,35.5 Z" />
@@ -98,7 +95,6 @@
             android:strokeWidth="2.5"
             android:strokeLineCap="round"
             android:pathData="M 92,50 C 92,57 75,62.5 54,62.5 C 33,62.5 16,57 16,50" />
-        <!-- Front orbital glowing comet highlight -->
         <path
             android:fillColor="#FFFFFF"
             android:pathData="M 68,61.2 C 68,60.5 76,60.5 76,61.2 C 76,61.9 68,61.9 68,61.2 Z" />
