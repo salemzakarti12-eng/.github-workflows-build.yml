@@ -25,6 +25,12 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Decode Permanent Keystore
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+        run: |
+          echo "$SIGNING_KEY" | base64 -d > debug.keystore
+
       - name: Auto-Configure Sony TV Compatibility
         run: |
           sed -i 's/minSdk = [0-9]*/minSdk = 24/g' app/build.gradle.kts
@@ -35,16 +41,14 @@ jobs:
       - name: Build APK Using Gradle
         run: gradle assembleDebug
 
-      - name: Sign APK with Permanent Keystore
+      - name: Sign & Align APK with Permanent Keystore
         env:
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          echo "$SIGNING_KEY" | base64 -d > hypnostream.jks
           APK_PATH=$(find app/build/outputs/apk -name "*.apk" | head -n 1)
           BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -maxdepth 1 -mindepth 1 | sort -V | tail -n 1)
           "$BUILD_TOOLS/zipalign" -f -p 4 "$APK_PATH" aligned.apk
-          "$BUILD_TOOLS/apksigner" sign --ks hypnostream.jks --ks-key-alias hypnostream --ks-pass "pass:$KEY_PASSWORD" --key-pass "pass:$KEY_PASSWORD" --out "HypnoStream-v1.${{ github.run_number }}.apk" aligned.apk
+          "$BUILD_TOOLS/apksigner" sign --ks debug.keystore --ks-key-alias hypnostream --ks-pass "pass:$KEY_PASSWORD" --key-pass "pass:$KEY_PASSWORD" --out "HypnoStream-v1.${{ github.run_number }}.apk" aligned.apk
 
       - name: Upload APK to GitHub Releases
         uses: softprops/action-gh-release@v2
