@@ -376,6 +376,7 @@ fun HypnoStreamApp(
             Triple(Screen.LIVE_CHANNELS, Icons.Default.LiveTv, if (isAr) "البث المباشر" else strings.liveTv),
             Triple(Screen.MOVIES, Icons.Default.Movie, if (isAr) "الأفلام" else strings.movies),
             Triple(Screen.SERIES, Icons.Default.VideoLibrary, if (isAr) "المسلسلات" else strings.series),
+            Triple(Screen.HISTORY, Icons.Default.History, if (isAr) "السجل" else "History"),
             Triple(Screen.SOURCES, Icons.Default.Settings, if (isAr) "المصادر" else strings.sources)
         )
 
@@ -498,7 +499,7 @@ fun HypnoStreamApp(
                 ) {
                     Spacer(modifier = Modifier.height(10.dp))
                     navItems.forEach { (screen, icon, label) ->
-                        val isSelected = displayedBrowseScreen == screen || (screen == Screen.SERIES && displayedBrowseScreen == Screen.SERIES_DETAIL) || (screen == Screen.DASHBOARD && displayedBrowseScreen == Screen.HISTORY)
+                        val isSelected = displayedBrowseScreen == screen || (screen == Screen.SERIES && displayedBrowseScreen == Screen.SERIES_DETAIL)
                         val navInteraction = remember { MutableInteractionSource() }
                         val isNavFocused by navInteraction.collectIsFocusedAsState()
 
@@ -591,7 +592,7 @@ fun HypnoStreamApp(
                                 .testTag("main_navigation_bar")
                         ) {
                             navItems.forEach { (screen, icon, label) ->
-                                val isSelected = displayedBrowseScreen == screen || (screen == Screen.SERIES && displayedBrowseScreen == Screen.SERIES_DETAIL) || (screen == Screen.DASHBOARD && displayedBrowseScreen == Screen.HISTORY)
+                                val isSelected = displayedBrowseScreen == screen || (screen == Screen.SERIES && displayedBrowseScreen == Screen.SERIES_DETAIL)
                                 val navInteraction = remember { MutableInteractionSource() }
                                 val isNavFocused by navInteraction.collectIsFocusedAsState()
 
@@ -605,15 +606,16 @@ fun HypnoStreamApp(
                                             imageVector = icon,
                                             contentDescription = label,
                                             tint = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
-                                            modifier = Modifier.size(if (isNavFocused) 26.dp else 22.dp)
+                                            modifier = Modifier.size(if (isNavFocused) 24.dp else 20.dp)
                                         )
                                     },
                                     label = {
                                         Text(
                                             text = label,
-                                            fontSize = 11.sp,
+                                            fontSize = 10.sp,
                                             fontWeight = if (isSelected || isNavFocused) FontWeight.Bold else FontWeight.SemiBold,
-                                            color = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400
+                                            color = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
+                                            maxLines = 1
                                         )
                                     },
                                     colors = navigationBarItemColors(),
@@ -987,20 +989,22 @@ fun WatchHistoryScreen(
     val isAr = LocalAppLanguage.current == "ar"
     var selectedFilter by remember { mutableStateOf("ALL") }
 
-    val filteredItems = remember(items, selectedFilter) {
+    val vodItems = remember(items) {
+        items.filter { it.type != IptvType.LIVE_TV }
+    }
+
+    val filteredItems = remember(vodItems, selectedFilter) {
         when (selectedFilter) {
-            "LIVE" -> items.filter { it.type == IptvType.LIVE_TV }
-            "MOVIES" -> items.filter { it.type == IptvType.MOVIE }
-            "SERIES" -> items.filter { it.type == IptvType.SERIES }
-            else -> items
+            "MOVIES" -> vodItems.filter { it.type == IptvType.MOVIE }
+            "SERIES" -> vodItems.filter { it.type == IptvType.SERIES }
+            else -> vodItems
         }
     }
 
     val filterTabs = listOf(
-        "ALL" to (if (isAr) "الكل (${items.size})" else "All (${items.size})"),
+        "ALL" to (if (isAr) "الكل (${vodItems.size})" else "All (${vodItems.size})"),
         "SERIES" to (if (isAr) "مسلسلات" else "Series"),
-        "MOVIES" to (if (isAr) "أفلام" else "Movies"),
-        "LIVE" to (if (isAr) "بث مباشر" else "Live TV")
+        "MOVIES" to (if (isAr) "أفلام" else "Movies")
     )
 
     Column(
@@ -1046,7 +1050,7 @@ fun WatchHistoryScreen(
                 )
             }
 
-            if (items.isNotEmpty()) {
+            if (vodItems.isNotEmpty()) {
                 OutlinedButton(
                     onClick = onClearAll,
                     border = BorderStroke(1.dp, AccentRed),
@@ -1094,7 +1098,7 @@ fun WatchHistoryScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = if (isAr) "لا يوجد سجل مشاهدة بعد" else "No watch history yet",
+                    text = if (isAr) "لا يوجد سجل مشاهدة للأفلام أو المسلسلات بعد" else "No movie or series watch history yet",
                     color = Slate400,
                     fontSize = 15.sp
                 )
