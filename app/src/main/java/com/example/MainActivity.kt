@@ -178,14 +178,13 @@ class MainActivity : ComponentActivity() {
     private var isInPipModeState by mutableStateOf(false)
     private var showExitDialogState by mutableStateOf(false)
     private var lastBrowseScreenState by mutableStateOf(Screen.DASHBOARD)
+    private var previousScreenBeforeSeriesDetailState by mutableStateOf(Screen.SERIES)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        // Intercept ALL system back presses (TV remote Back, gesture back, hardware back)
-        // at the Activity level so the app NEVER exits without confirmation.
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 handleSystemBackNavigation()
@@ -227,6 +226,9 @@ class MainActivity : ComponentActivity() {
                         showExitDialog = showExitDialogState,
                         onShowExitDialogChange = { showExitDialogState = it },
                         onLastBrowseScreenChange = { lastBrowseScreenState = it },
+                        onSeriesDetailOpenedFrom = { origin ->
+                            previousScreenBeforeSeriesDetailState = origin
+                        },
                         onNavigateBack = { handleSystemBackNavigation() },
                         onFinishApp = {
                             mainViewModel.playerManager.saveCurrentPlaybackPosition()
@@ -251,7 +253,11 @@ class MainActivity : ComponentActivity() {
                 mainViewModel.navigateTo(target)
             }
             screen == Screen.SERIES_DETAIL -> {
-                mainViewModel.navigateTo(Screen.SERIES)
+                val returnTarget = when (previousScreenBeforeSeriesDetailState) {
+                    Screen.HISTORY, Screen.DASHBOARD, Screen.SERIES -> previousScreenBeforeSeriesDetailState
+                    else -> Screen.SERIES
+                }
+                mainViewModel.navigateTo(returnTarget)
             }
             screen != Screen.DASHBOARD -> {
                 mainViewModel.navigateTo(Screen.DASHBOARD)
@@ -346,6 +352,7 @@ fun HypnoStreamApp(
     showExitDialog: Boolean = false,
     onShowExitDialogChange: (Boolean) -> Unit = {},
     onLastBrowseScreenChange: (Screen) -> Unit = {},
+    onSeriesDetailOpenedFrom: (Screen) -> Unit = {},
     onNavigateBack: () -> Unit = {},
     onFinishApp: () -> Unit = {}
 ) {
@@ -411,6 +418,7 @@ fun HypnoStreamApp(
 
     val handleOpenHistoryOrDashboardItem = { item: IptvItem ->
         if (item.type == IptvType.SERIES) {
+            onSeriesDetailOpenedFrom(currentScreen)
             val matchedSeries = viewModel.repository.getAllSeries().firstOrNull {
                 it.name.equals(item.name, ignoreCase = true) ||
                 (!item.seriesTitle.isNullOrBlank() && it.seriesTitle?.equals(item.seriesTitle, ignoreCase = true) == true)
@@ -501,7 +509,10 @@ fun HypnoStreamApp(
                         onCategoryChange = { viewModel.setSelectedCategory(it) },
                         onLoadMore = { viewModel.loadMoreItems() },
                         onPlayItem = { handlePlayWithResumePrompt(it) },
-                        onOpenSeries = { seriesItem -> viewModel.openSeriesDetail(seriesItem) },
+                        onOpenSeries = { seriesItem ->
+                            onSeriesDetailOpenedFrom(Screen.SERIES)
+                            viewModel.openSeriesDetail(seriesItem)
+                        },
                         onToggleFavorite = { viewModel.toggleFavorite(it) },
                         onBack = { performBack() }
                     )
