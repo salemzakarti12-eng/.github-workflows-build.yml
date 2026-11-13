@@ -31,9 +31,18 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           echo "$SIGNING_KEY" | base64 -d > my-upload-key.jks
-          sed -i "s/storePassword = \"[^\"]*\"/storePassword = \"$KEY_PASSWORD\"/g" app/build.gradle.kts
-          sed -i "s/keyPassword = \"[^\"]*\"/keyPassword = \"$KEY_PASSWORD\"/g" app/build.gradle.kts
-          sed -i 's/keyAlias = "[^"]*"/keyAlias = "hypnostream"/g' app/build.gradle.kts
+          cp my-upload-key.jks app/my-upload-key.jks
+          python3 -c '
+          import os, re
+          pw = os.environ["KEY_PASSWORD"]
+          with open("app/build.gradle.kts", "r") as f:
+              text = f.read()
+          text = re.sub(r"storePassword\s*=\s*.*", f"storePassword = \"{pw}\"", text)
+          text = re.sub(r"keyPassword\s*=\s*.*", f"keyPassword = \"{pw}\"", text)
+          text = re.sub(r"keyAlias\s*=\s*.*", "keyAlias = \"hypnostream\"", text)
+          with open("app/build.gradle.kts", "w") as f:
+              f.write(text)
+          '
 
       - name: Auto-Configure Sony TV Compatibility
         run: |
