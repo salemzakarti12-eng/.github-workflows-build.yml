@@ -270,7 +270,7 @@ class MainActivity : ComponentActivity() {
                 val params = PictureInPictureParams.Builder()
                     .setAspectRatio(Rational(16, 9))
                     .build()
-                enterPictureInPictureInMode(params)
+                enterPictureInPictureMode(params)
             } catch (_: Exception) {}
         }
     }
