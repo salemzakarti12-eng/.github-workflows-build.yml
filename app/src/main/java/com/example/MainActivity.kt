@@ -1213,7 +1213,6 @@ fun HistoryPosterCard(
                 }
             }
 
-            // Bottom gradient overlay for legible poster title
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1229,7 +1228,6 @@ fun HistoryPosterCard(
                     )
             )
 
-            // Top-left SERIES / MOVIE badge
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
@@ -1247,7 +1245,6 @@ fun HistoryPosterCard(
                 )
             }
 
-            // Top-right remove button
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
@@ -1266,7 +1263,6 @@ fun HistoryPosterCard(
                 )
             }
 
-            // Center play indicator on focus
             if (isCardFocused) {
                 Box(
                     contentAlignment = Alignment.Center,
@@ -1285,7 +1281,6 @@ fun HistoryPosterCard(
                 }
             }
 
-            // Bottom poster title & category
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
