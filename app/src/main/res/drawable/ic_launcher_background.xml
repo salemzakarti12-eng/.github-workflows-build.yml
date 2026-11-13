@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
-    android:width="108dp"
-    android:height="108dp"
+    android:width="432dp"
+    android:height="432dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <!-- Rich deep midnight-blue gradient: #030914 to #071A3E -->
