@@ -27,6 +27,7 @@ enum class Screen {
     SERIES,
     SERIES_DETAIL,
     SOURCES,
+    HISTORY,
     PLAYER
 }
 
@@ -38,7 +39,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _currentScreen = MutableStateFlow(Screen.DASHBOARD)
     val currentScreen: StateFlow<Screen> = _currentScreen.asStateFlow()
 
-    // Tracks the active main tab underneath PLAYER or SERIES_DETAIL so scroll position & category are never lost!
     private val _lastBrowseScreen = MutableStateFlow(Screen.DASHBOARD)
     val lastBrowseScreen: StateFlow<Screen> = _lastBrowseScreen.asStateFlow()
 
@@ -78,7 +78,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         repository.toggleAppLanguage()
     }
 
-    // Series detail state
+    fun removeFromHistory(itemId: String) {
+        repository.removeFromHistory(itemId)
+    }
+
+    fun clearHistory() {
+        repository.clearHistory()
+    }
+
     private val _selectedSeries = MutableStateFlow<IptvItem?>(null)
     val selectedSeries: StateFlow<IptvItem?> = _selectedSeries.asStateFlow()
 
@@ -175,9 +182,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _screenHistory.add(previousScreen)
             _currentScreen.value = screen
 
-            // CRITICAL FIX: Only reset category/search when switching between different main tabs!
-            // NEVER reset category, search query, or display limit when opening PLAYER or SERIES_DETAIL!
-            val isMainBrowseTab = screen == Screen.LIVE_CHANNELS || screen == Screen.MOVIES || screen == Screen.SERIES || screen == Screen.DASHBOARD || screen == Screen.SOURCES
+            val isMainBrowseTab = screen == Screen.LIVE_CHANNELS || screen == Screen.MOVIES || screen == Screen.SERIES || screen == Screen.DASHBOARD || screen == Screen.SOURCES || screen == Screen.HISTORY
             if (isMainBrowseTab && screen != _lastBrowseScreen.value) {
                 _lastBrowseScreen.value = screen
                 _searchQuery.value = ""
@@ -201,7 +206,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (_screenHistory.isNotEmpty()) {
             val prev = _screenHistory.removeLast()
             _currentScreen.value = prev
-            if (prev == Screen.LIVE_CHANNELS || prev == Screen.MOVIES || prev == Screen.SERIES || prev == Screen.DASHBOARD || prev == Screen.SOURCES) {
+            if (prev == Screen.LIVE_CHANNELS || prev == Screen.MOVIES || prev == Screen.SERIES || prev == Screen.DASHBOARD || prev == Screen.SOURCES || prev == Screen.HISTORY) {
                 _lastBrowseScreen.value = prev
             }
             return true
