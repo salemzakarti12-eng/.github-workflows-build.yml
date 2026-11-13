@@ -1,5 +1,6 @@
 package com.example.ui.dashboard
 
+import android.widget.ImageView
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -35,7 +36,6 @@ import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -45,6 +45,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -61,15 +62,15 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.LayoutDirection
 import com.example.model.IptvItem
 import com.example.model.IptvSource
 import com.example.ui.Screen
@@ -123,46 +124,84 @@ fun DashboardScreen(
                     .testTag("dashboard_screen"),
                 contentPadding = PaddingValues(bottom = if (isMiniPlayerActive) 160.dp else 80.dp)
             ) {
-            // Top App Bar / Provider Status Header
-            item {
-                DashboardHeader(
-                    activeSource = activeSource,
-                    onOpenSources = { onNavigate(Screen.SOURCES) },
-                    onToggleLanguage = onToggleLanguage
-                )
-            }
-
-            // Active Status Pill Banner
-            item {
-                SourceInfoBanner(
-                    activeSource = activeSource,
-                    onSwitchSource = { onNavigate(Screen.SOURCES) }
-                )
-            }
-
-            // Section Label
-            item {
-                Text(
-                    text = strings.exploreEntertainment,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.2.sp,
-                    color = Slate400,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-                )
-            }
-
-            // 3 Hypnotix Gradient Cards:
-            // Wide Screen (TV / Tablet / Landscape Phone): Row layout (side-by-side 3 columns)
-            // Portrait Screen (Phones upright): Column layout (stacked vertically)
-            if (isWideScreen) {
+                // Top App Bar / Provider Status Header
                 item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
+                    DashboardHeader(
+                        activeSource = activeSource,
+                        onOpenSources = { onNavigate(Screen.SOURCES) },
+                        onToggleLanguage = onToggleLanguage
+                    )
+                }
+
+                // Active Status Pill Banner
+                item {
+                    SourceInfoBanner(
+                        activeSource = activeSource,
+                        onSwitchSource = { onNavigate(Screen.SOURCES) }
+                    )
+                }
+
+                // Section Label
+                item {
+                    Text(
+                        text = strings.exploreEntertainment,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp,
+                        color = Slate400,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                    )
+                }
+
+                // 3 Hypnotix Gradient Cards:
+                if (isWideScreen) {
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            HypnotixGradientCard(
+                                title = strings.liveTv,
+                                subtitle = strings.liveTvSubtitle,
+                                countText = "%,d %s".format(Locale.US, liveCount, strings.channelsAvailable),
+                                icon = Icons.Default.LiveTv,
+                                gradient = TvChannelsGradient,
+                                testTag = "card_tv_channels",
+                                badgeText = strings.liveStreamingBadge,
+                                isLandscapeCard = true,
+                                onClick = { onNavigate(Screen.LIVE_CHANNELS) },
+                                modifier = Modifier.weight(1f)
+                            )
+                            HypnotixGradientCard(
+                                title = strings.movies,
+                                subtitle = strings.moviesSubtitle,
+                                countText = "%,d %s".format(Locale.US, moviesCount, strings.vodTitles),
+                                icon = Icons.Default.Movie,
+                                gradient = MoviesGradient,
+                                testTag = "card_movies",
+                                badgeText = strings.cinemaVodBadge,
+                                isLandscapeCard = true,
+                                onClick = { onNavigate(Screen.MOVIES) },
+                                modifier = Modifier.weight(1f)
+                            )
+                            HypnotixGradientCard(
+                                title = strings.series,
+                                subtitle = strings.seriesSubtitle,
+                                countText = "%,d %s".format(Locale.US, seriesCount, strings.showsCatalog),
+                                icon = Icons.Default.VideoLibrary,
+                                gradient = SeriesGradient,
+                                testTag = "card_series",
+                                badgeText = strings.episodicTvBadge,
+                                isLandscapeCard = true,
+                                onClick = { onNavigate(Screen.SERIES) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                } else {
+                    item {
                         HypnotixGradientCard(
                             title = strings.liveTv,
                             subtitle = strings.liveTvSubtitle,
@@ -171,10 +210,12 @@ fun DashboardScreen(
                             gradient = TvChannelsGradient,
                             testTag = "card_tv_channels",
                             badgeText = strings.liveStreamingBadge,
-                            isLandscapeCard = true,
-                            onClick = { onNavigate(Screen.LIVE_CHANNELS) },
-                            modifier = Modifier.weight(1f)
+                            isLandscapeCard = false,
+                            onClick = { onNavigate(Screen.LIVE_CHANNELS) }
                         )
+                    }
+
+                    item {
                         HypnotixGradientCard(
                             title = strings.movies,
                             subtitle = strings.moviesSubtitle,
@@ -183,10 +224,12 @@ fun DashboardScreen(
                             gradient = MoviesGradient,
                             testTag = "card_movies",
                             badgeText = strings.cinemaVodBadge,
-                            isLandscapeCard = true,
-                            onClick = { onNavigate(Screen.MOVIES) },
-                            modifier = Modifier.weight(1f)
+                            isLandscapeCard = false,
+                            onClick = { onNavigate(Screen.MOVIES) }
                         )
+                    }
+
+                    item {
                         HypnotixGradientCard(
                             title = strings.series,
                             subtitle = strings.seriesSubtitle,
@@ -195,96 +238,52 @@ fun DashboardScreen(
                             gradient = SeriesGradient,
                             testTag = "card_series",
                             badgeText = strings.episodicTvBadge,
-                            isLandscapeCard = true,
-                            onClick = { onNavigate(Screen.SERIES) },
-                            modifier = Modifier.weight(1f)
+                            isLandscapeCard = false,
+                            onClick = { onNavigate(Screen.SERIES) }
                         )
                     }
                 }
-            } else {
-                item {
-                    HypnotixGradientCard(
-                        title = strings.liveTv,
-                        subtitle = strings.liveTvSubtitle,
-                        countText = "%,d %s".format(Locale.US, liveCount, strings.channelsAvailable),
-                        icon = Icons.Default.LiveTv,
-                        gradient = TvChannelsGradient,
-                        testTag = "card_tv_channels",
-                        badgeText = strings.liveStreamingBadge,
-                        isLandscapeCard = false,
-                        onClick = { onNavigate(Screen.LIVE_CHANNELS) }
-                    )
+
+                // Favorites Row
+                if (favorites.isNotEmpty()) {
+                    item {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SectionHeader(
+                            icon = Icons.Default.Favorite,
+                            title = strings.favoriteChannelsAndShows,
+                            count = favorites.size,
+                            accentColor = Color(0xFFEF4444)
+                        )
+                        HorizontalItemList(
+                            items = favorites,
+                            onPlayItem = onPlayItem
+                        )
+                    }
+                }
+
+                // Recently Watched Row
+                if (recentlyWatched.isNotEmpty()) {
+                    item {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SectionHeader(
+                            icon = Icons.Default.History,
+                            title = strings.continueWatching,
+                            count = recentlyWatched.size,
+                            accentColor = AccentCyan
+                        )
+                        HorizontalItemList(
+                            items = recentlyWatched,
+                            onPlayItem = onPlayItem
+                        )
+                    }
                 }
 
                 item {
-                    HypnotixGradientCard(
-                        title = strings.movies,
-                        subtitle = strings.moviesSubtitle,
-                        countText = "%,d %s".format(Locale.US, moviesCount, strings.vodTitles),
-                        icon = Icons.Default.Movie,
-                        gradient = MoviesGradient,
-                        testTag = "card_movies",
-                        badgeText = strings.cinemaVodBadge,
-                        isLandscapeCard = false,
-                        onClick = { onNavigate(Screen.MOVIES) }
-                    )
+                    Spacer(modifier = Modifier.height(70.dp))
                 }
-
-                item {
-                    HypnotixGradientCard(
-                        title = strings.series,
-                        subtitle = strings.seriesSubtitle,
-                        countText = "%,d %s".format(Locale.US, seriesCount, strings.showsCatalog),
-                        icon = Icons.Default.VideoLibrary,
-                        gradient = SeriesGradient,
-                        testTag = "card_series",
-                        badgeText = strings.episodicTvBadge,
-                        isLandscapeCard = false,
-                        onClick = { onNavigate(Screen.SERIES) }
-                    )
-                }
-            }
-
-            // Favorites Row
-            if (favorites.isNotEmpty()) {
-                item {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    SectionHeader(
-                        icon = Icons.Default.Favorite,
-                        title = strings.favoriteChannelsAndShows,
-                        count = favorites.size,
-                        accentColor = Color(0xFFEF4444)
-                    )
-                    HorizontalItemList(
-                        items = favorites,
-                        onPlayItem = onPlayItem
-                    )
-                }
-            }
-
-            // Recently Watched Row
-            if (recentlyWatched.isNotEmpty()) {
-                item {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    SectionHeader(
-                        icon = Icons.Default.History,
-                        title = strings.continueWatching,
-                        count = recentlyWatched.size,
-                        accentColor = AccentCyan
-                    )
-                    HorizontalItemList(
-                        items = recentlyWatched,
-                        onPlayItem = onPlayItem
-                    )
-                }
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(70.dp))
             }
         }
     }
-}
 }
 
 @Composable
@@ -307,20 +306,17 @@ fun DashboardHeader(
         Row(
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
+            AndroidView(
+                factory = { ctx ->
+                    ImageView(ctx).apply {
+                        scaleType = ImageView.ScaleType.FIT_CENTER
+                        setImageDrawable(ctx.packageManager.getApplicationIcon(ctx.applicationInfo))
+                    }
+                },
                 modifier = Modifier
                     .size(44.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Brush.linearGradient(listOf(Color(0xFFE11D48), Color(0xFF38BDF8)))),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Tv,
-                    contentDescription = null,
-                    tint = PureWhite,
-                    modifier = Modifier.size(26.dp)
-                )
-            }
+            )
             Spacer(modifier = Modifier.width(12.dp))
             Column {
                 Text(
