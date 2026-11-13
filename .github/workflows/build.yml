@@ -22,46 +22,28 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Generate Permanent Signing Key (One-Time)
-        run: |
-          keytool -genkeypair -v -keystore hypnostream.jks -keyalg RSA -keysize 2048 -validity 9125 -alias hypnostream -storepass hypno1234 -keypass hypno1234 -dname "CN=HypnoStream, OU=Media, O=Personal, L=Jubail, S=Eastern, C=SA"
-          echo "=== COPY EVERYTHING BETWEEN THE LINES ==="
-          base64 -w 0 hypnostream.jks
-          echo ""
-          echo "========================================="
-
-      - name: Auto-Configure Sony TV Compatibility & Sharp TV Banner
+      - name: Auto-Configure Sony TV Compatibility
         run: |
           sed -i 's/minSdk = [0-9]*/minSdk = 24/g' app/build.gradle.kts
-
           RUN_NUM=${{ github.run_number }}
           sed -i "s/versionCode = [0-9]*/versionCode = $RUN_NUM/g" app/build.gradle.kts
           sed -i "s/versionName = \"[^\"]*\"/versionName = \"1.$RUN_NUM\"/g" app/build.gradle.kts
-
-          mkdir -p app/src/main/res/drawable-xhdpi
-          python3 -c '
-          from PIL import Image, ImageDraw
-          img = Image.new("RGB", (1280, 720), color=(4, 12, 30))
-          draw = ImageDraw.Draw(img)
-          draw.rounded_rectangle([390, 170, 890, 490], radius=45, outline=(0, 229, 255), width=14, fill=(6, 18, 42))
-          draw.polygon([(605, 265), (605, 395), (715, 330)], fill=(255, 255, 255))
-          draw.line([(640, 490), (640, 540)], fill=(0, 176, 255), width=16)
-          draw.line([(530, 540), (750, 540)], fill=(0, 229, 255), width=14)
-          img.save("app/src/main/res/drawable-xhdpi/ic_banner.png")
-          '
 
       - name: Build APK Using Gradle
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Sign APK with Temporary Keystore
+      - name: Sign APK with Permanent Keystore
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          keytool -genkeypair -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          echo "$SIGNING_KEY" | base64 -d > hypnostream.jks
           APK_PATH=$(find app/build/outputs/apk -name "*.apk" | head -n 1)
           BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -maxdepth 1 -mindepth 1 | sort -V | tail -n 1)
           "$BUILD_TOOLS/zipalign" -f -p 4 "$APK_PATH" aligned.apk
-          "$BUILD_TOOLS/apksigner" sign --ks debug.keystore --ks-pass pass:android --key-pass pass:android --out "HypnoStream-v1.${{ github.run_number }}.apk" aligned.apk
+          "$BUILD_TOOLS/apksigner" sign --ks hypnostream.jks --ks-key-alias hypnostream --ks-pass "pass:$KEY_PASSWORD" --key-pass "pass:$KEY_PASSWORD" --out "HypnoStream-v1.${{ github.run_number }}.apk" aligned.apk
 
       - name: Upload APK to GitHub Releases
         uses: softprops/action-gh-release@v2
