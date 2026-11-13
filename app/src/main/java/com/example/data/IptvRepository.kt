@@ -126,6 +126,8 @@ class IptvRepository(context: Context) {
         val favStrings = prefs.getStringSet("favorites", emptySet()) ?: emptySet()
         _favorites.value = favStrings
 
+        loadPersistedHistory()
+
         val sourcesJson = prefs.getString("saved_sources", null)
         val loadedSources = mutableListOf<IptvSource>()
         if (!sourcesJson.isNullOrEmpty()) {
@@ -210,6 +212,54 @@ class IptvRepository(context: Context) {
         }
     }
 
+    private fun loadPersistedHistory() {
+        val historyJson = prefs.getString("watch_history", null) ?: return
+        try {
+            val array = JSONArray(historyJson)
+            val list = mutableListOf<IptvItem>()
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                val typeStr = obj.optString("type", IptvType.LIVE_TV.name)
+                val type = try { IptvType.valueOf(typeStr) } catch (_: Exception) { IptvType.LIVE_TV }
+                list.add(
+                    IptvItem(
+                        id = obj.getString("id"),
+                        name = obj.getString("name"),
+                        group = obj.optString("group", ""),
+                        logoUrl = obj.optString("logoUrl", "").ifBlank { null },
+                        streamUrl = obj.getString("streamUrl"),
+                        type = type,
+                        seriesTitle = obj.optString("seriesTitle", "").ifBlank { null },
+                        seasonNumber = if (obj.has("seasonNumber")) obj.optInt("seasonNumber") else null,
+                        episodeNumber = if (obj.has("episodeNumber")) obj.optInt("episodeNumber") else null,
+                        rating = obj.optString("rating", "").ifBlank { null }
+                    )
+                )
+            }
+            _recentlyWatched.value = list
+        } catch (_: Exception) {}
+    }
+
+    private fun persistHistory() {
+        val array = JSONArray()
+        for (item in _recentlyWatched.value) {
+            val obj = JSONObject().apply {
+                put("id", item.id)
+                put("name", item.name)
+                put("group", item.group)
+                put("logoUrl", item.logoUrl ?: "")
+                put("streamUrl", item.streamUrl)
+                put("type", item.type.name)
+                put("seriesTitle", item.seriesTitle ?: "")
+                item.seasonNumber?.let { put("seasonNumber", it) }
+                item.episodeNumber?.let { put("episodeNumber", it) }
+                put("rating", item.rating ?: "")
+            }
+            array.put(obj)
+        }
+        prefs.edit().putString("watch_history", array.toString()).apply()
+    }
+
     private fun persistSources() {
         val array = JSONArray()
         for (source in _sources.value) {
@@ -250,12 +300,23 @@ class IptvRepository(context: Context) {
 
     fun recordRecentlyWatched(item: IptvItem) {
         val current = _recentlyWatched.value.toMutableList()
-        current.removeAll { it.id == item.id }
+        current.removeAll { it.id == item.id || it.streamUrl == item.streamUrl }
         current.add(0, item)
-        if (current.size > 15) {
+        if (current.size > 100) {
             current.removeAt(current.lastIndex)
         }
         _recentlyWatched.value = current
+        persistHistory()
+    }
+
+    fun removeFromHistory(itemId: String) {
+        _recentlyWatched.value = _recentlyWatched.value.filterNot { it.id == itemId }
+        persistHistory()
+    }
+
+    fun clearHistory() {
+        _recentlyWatched.value = emptyList()
+        prefs.edit().remove("watch_history").apply()
     }
 
     fun loadDemoContent(source: IptvSource? = null) {
@@ -437,7 +498,6 @@ class IptvRepository(context: Context) {
         _statusMessage.value = if (isAr) "جاري الاتصال بسيرفر Xtream..." else "Connecting to Xtream Codes server..."
 
         try {
-            // Try primary URL, and if it ends with :80 and fails, also test without :80
             var authResult = xtreamClient.authenticateAndLoad(cleanUrl, cleanUser, cleanPass)
             if (!authResult.isSuccess && cleanUrl.endsWith(":80")) {
                 val altUrl = cleanUrl.removeSuffix(":80")
@@ -451,7 +511,6 @@ class IptvRepository(context: Context) {
                 items = authResult.items
                 expDate = authResult.expirationDate
             } else {
-                // Automatic Fallback: Load via Xtream get.php M3U Plus endpoint
                 _statusMessage.value = if (isAr) {
                     "جاري التحميل عبر رابط Xtream المباشر..."
                 } else {
@@ -542,7 +601,6 @@ class IptvRepository(context: Context) {
         _isLoading.value = true
         val cleanM3uUrl = m3uUrl.trim()
 
-        // Smart M3U-to-Xtream Auto-Detection
         if (cleanM3uUrl.isNotBlank()) {
             val detected = XtreamUrlDetector.detect(cleanM3uUrl)
             if (detected != null) {
