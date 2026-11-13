@@ -28,13 +28,16 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
@@ -132,7 +135,6 @@ fun VideoPlayerScreen(
     val playerRootFocus = remember { FocusRequester() }
     val playPauseFocus = remember { FocusRequester() }
 
-    // Keep screen awake on Android TV boxes & mobile during playback
     DisposableEffect(localView) {
         val prevKeepScreenOn = localView.keepScreenOn
         localView.keepScreenOn = true
@@ -141,14 +143,12 @@ fun VideoPlayerScreen(
         }
     }
 
-    // Grab initial D-pad focus on the player surface when opened
     LaunchedEffect(Unit) {
         try {
             playerRootFocus.requestFocus()
         } catch (_: Exception) {}
     }
 
-    // Automatically focus Play/Pause when HUD opens so OK/Enter works immediately
     LaunchedEffect(uiState.isControlsVisible) {
         if (uiState.isControlsVisible) {
             try {
@@ -201,14 +201,22 @@ fun VideoPlayerScreen(
                             } else false
                         }
                         Key.DirectionUp -> {
-                            if (isLive && !uiState.isControlsVisible && !uiState.isQuickChannelListOpen) {
-                                onPlayPrevious()
+                            if (!uiState.isControlsVisible && !uiState.isQuickChannelListOpen) {
+                                if (isLive) {
+                                    onPlayPrevious()
+                                } else {
+                                    playerManager.showControlsTemporarily()
+                                }
                                 true
                             } else false
                         }
                         Key.DirectionDown -> {
-                            if (isLive && !uiState.isControlsVisible && !uiState.isQuickChannelListOpen) {
-                                onPlayNext()
+                            if (!uiState.isControlsVisible && !uiState.isQuickChannelListOpen) {
+                                if (isLive) {
+                                    onPlayNext()
+                                } else {
+                                    playerManager.showControlsTemporarily()
+                                }
                                 true
                             } else false
                         }
@@ -656,7 +664,7 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Audio Tracks Dialog
+        // Scrollable Audio Tracks Dialog (Works in Landscape & TV)
         if (showAudioDialog) {
             AlertDialog(
                 onDismissRequest = { showAudioDialog = false },
@@ -675,7 +683,13 @@ fun VideoPlayerScreen(
                             color = Slate300
                         )
                     } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 260.dp)
+                                .verticalScroll(rememberScrollState())
+                        ) {
                             uiState.audioTracks.forEach { track ->
                                 Surface(
                                     color = if (track.isSelected) AccentCyan.copy(alpha = 0.2f) else Slate850,
@@ -711,7 +725,7 @@ fun VideoPlayerScreen(
             )
         }
 
-        // Subtitles & Timing Sync Dialog
+        // Scrollable Subtitles & Timing Sync Dialog (Works in Landscape & TV)
         if (showSubtitleDialog) {
             AlertDialog(
                 onDismissRequest = { showSubtitleDialog = false },
@@ -724,7 +738,13 @@ fun VideoPlayerScreen(
                     )
                 },
                 text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 280.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
                         Text(
                             text = if (isAr) {
                                 "مزامنة الترجمة: ${String.format(Locale.US, "%+.1f", subtitleOffsetMs / 1000f)} ثانية"
