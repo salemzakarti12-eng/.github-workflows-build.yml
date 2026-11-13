@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="1280dp"
+    android:height="720dp"
+    android:viewportWidth="1280"
+    android:viewportHeight="720">
+
+    <!-- 1. Clean Deep Midnight Navy Background -->
+    <path android:pathData="M0,0h1280v720h-1280z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="0"
+                android:startY="0"
+                android:endX="1280"
+                android:endY="720"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#040B1A" />
+                <item android:offset="0.55" android:color="#081633" />
+                <item android:offset="1.0" android:color="#0D2554" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 2. Bold Rounded TV Screen Card (Left Side) -->
+    <path
+        android:pathData="M150,235 L370,235 A28,28 0 0,1 398,263 L398,405 A28,28 0 0,1 370,433 L150,433 A28,28 0 0,1 122,405 L122,263 A28,28 0 0,1 150,235 Z"
+        android:strokeWidth="16"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="122"
+                android:startY="235"
+                android:endX="398"
+                android:endY="433"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#00E5FF" />
+                <item android:offset="1.0" android:color="#2979FF" />
+            </gradient>
+        </aapt:attr>
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="260"
+                android:startY="235"
+                android:endX="260"
+                android:endY="433"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#030917" />
+                <item android:offset="1.0" android:color="#091938" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- TV Stand Pedestal -->
+    <path
+        android:fillColor="#2979FF"
+        android:pathData="M244,433 L276,433 L276,472 L244,472 Z" />
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M196,472 L324,472 A10,10 0 0,1 334,482 L334,484 A10,10 0 0,1 324,494 L196,494 A10,10 0 0,1 186,484 L186,482 A10,10 0 0,1 196,472 Z" />
+
+    <!-- Bold Solid Center Play Triangle -->
+    <path
+        android:pathData="M226,282 C226,276 233,272 239,276 L318,326 C324,330 324,338 318,342 L239,392 C233,396 226,392 226,386 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="226"
+                android:startY="274"
+                android:endX="322"
+                android:endY="394"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FFFFFF" />
+                <item android:offset="1.0" android:color="#00E5FF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Bold Sweeping Cyan Orbital Swoosh -->
+    <group
+        android:pivotX="260"
+        android:pivotY="334"
+        android:rotation="-16">
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#00E5FF"
+            android:strokeWidth="16"
+            android:strokeLineCap="round"
+            android:pathData="M432,334 C432,374 355,406 260,406 C165,406 88,374 88,334" />
+    </group>
+
+    <!-- ==================== BOLD TYPOGRAPHY (Right Side) ==================== -->
+
+    <!-- "HYPNO" in Thick Pure White (#FFFFFF) -->
+    <!-- H -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M475,268 L497,268 L497,315 L533,315 L533,268 L555,268 L555,386 L533,386 L533,335 L497,335 L497,386 L475,386 Z" />
+    <!-- Y -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M572,268 L596,268 L615,317 L634,268 L658,268 L626,338 L626,386 L604,386 L604,338 Z" />
+    <!-- P -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M674,268 L722,268 C744,268 756,281 756,304 C756,327 744,340 722,340 L696,340 L696,386 L674,386 Z M696,287 L696,321 L719,321 C729,321 734,315 734,304 C734,293 729,287 719,287 Z" />
+    <!-- N -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M775,268 L797,268 L835,346 L835,268 L857,268 L857,386 L835,386 L797,308 L797,386 L775,386 Z" />
+    <!-- O -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M918,266 C948,266 965,288 965,327 C965,366 948,388 918,388 C888,388 871,366 871,327 C871,288 888,266 918,266 Z M918,286 C900,286 893,301 893,327 C893,353 900,368 918,368 C936,368 943,353 943,327 C943,301 936,286 918,286 Z" />
+
+    <!-- "STREAM" in Bold Cyan (#00E5FF) -->
+    <!-- S -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M500,414 C515,414 525,420 527,431 L512,431 C510,426 506,424 500,424 C493,424 489,427 489,432 C489,437 494,439 504,441 C519,444 528,449 528,461 C528,474 517,482 501,482 C484,482 473,475 472,463 L487,463 C488,469 493,472 501,472 C509,472 513,469 513,463 C513,458 509,455 498,453 C483,450 474,445 474,433 C474,421 484,414 500,414 Z" />
+    <!-- T -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M542,415 L598,415 L598,427 L578,427 L578,481 L562,481 L562,427 L542,427 Z" />
+    <!-- R -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M614,415 L648,415 C663,415 672,423 672,436 C672,446 666,453 656,456 L674,481 L656,481 L640,458 L630,458 L630,481 L614,481 Z M630,427 L630,447 L646,447 C653,447 657,443 657,437 C657,431 653,427 646,427 Z" />
+    <!-- E -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M690,415 L740,415 L740,427 L706,427 L706,442 L736,442 L736,453 L706,453 L706,469 L741,469 L741,481 L690,481 Z" />
+    <!-- A -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M782,415 L799,415 L824,481 L807,481 L802,466 L778,466 L773,481 L757,481 Z M790,431 L782,455 L798,455 Z" />
+    <!-- M -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M840,415 L858,415 L877,457 L896,415 L914,415 L914,481 L899,481 L899,437 L882,473 L872,473 L855,437 L855,481 L840,481 Z" />
+
+    <!-- Bold Rounded Accent Bar Below STREAM -->
+    <path
+        android:pathData="M936,442 L1130,442 A6,6 0 0,1 1136,448 L1136,450 A6,6 0 0,1 1130,456 L936,456 A6,6 0 0,1 930,450 L930,448 A6,6 0 0,1 936,442 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="930"
+                android:startY="449"
+                android:endX="1136"
+                android:endY="449"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#00E5FF" />
+                <item android:offset="1.0" android:color="#2979FF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+</vector>
