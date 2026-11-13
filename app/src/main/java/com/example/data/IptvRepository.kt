@@ -307,25 +307,40 @@ class IptvRepository(context: Context) {
                 .substringBefore(" - ")
                 .trim()
 
+            val catalogSeries = allSeriesList.firstOrNull {
+                it.name.equals(baseSeriesTitle, ignoreCase = true) ||
+                (!it.seriesTitle.isNullOrBlank() && it.seriesTitle.equals(baseSeriesTitle, ignoreCase = true))
+            }
+
             current.removeAll { existing ->
                 existing.type == IptvType.SERIES && (
                     existing.id == item.id ||
+                    (catalogSeries != null && existing.id == catalogSeries.id) ||
                     (!existing.seriesTitle.isNullOrBlank() && existing.seriesTitle.equals(baseSeriesTitle, ignoreCase = true)) ||
                     existing.name.startsWith(baseSeriesTitle, ignoreCase = true)
                 )
             }
 
-            val seriesCardItem = item.copy(
-                name = baseSeriesTitle,
-                seriesTitle = baseSeriesTitle,
+            val seriesCardItem = (catalogSeries ?: item).copy(
+                name = catalogSeries?.name ?: baseSeriesTitle,
+                seriesTitle = catalogSeries?.seriesTitle ?: baseSeriesTitle,
+                logoUrl = catalogSeries?.logoUrl?.takeIf { it.isNotBlank() } ?: item.logoUrl,
                 seasonNumber = null,
                 episodeNumber = null,
-                group = if (isAr) "مسلسل" else "TV Series"
+                type = IptvType.SERIES,
+                group = catalogSeries?.group?.takeIf { it.isNotBlank() && !it.startsWith("Season", true) && !it.startsWith("الموسم") }
+                    ?: if (isAr) "مسلسل" else "TV Series"
             )
             current.add(0, seriesCardItem)
         } else {
+            val catalogMovie = allMoviesList.firstOrNull {
+                it.id == item.id || it.streamUrl == item.streamUrl
+            }
+            val movieCardItem = (catalogMovie ?: item).copy(
+                logoUrl = catalogMovie?.logoUrl?.takeIf { it.isNotBlank() } ?: item.logoUrl
+            )
             current.removeAll { it.id == item.id || it.streamUrl == item.streamUrl }
-            current.add(0, item)
+            current.add(0, movieCardItem)
         }
 
         if (current.size > 100) {
