@@ -336,13 +336,12 @@ fun HypnoStreamApp(
     }
 
     val handleOpenHistoryOrDashboardItem = { item: IptvItem ->
-        val isPlayableEpisode = item.seasonNumber != null ||
-                item.episodeNumber != null ||
-                item.name.contains(Regex("""S\d{1,2}E\d{1,3}""", RegexOption.IGNORE_CASE)) ||
-                viewModel.playerManager.getSavedPosition(item) > 5_000L
-
-        if (item.type == IptvType.SERIES && !isPlayableEpisode) {
-            viewModel.openSeriesDetail(item)
+        if (item.type == IptvType.SERIES) {
+            val matchedSeries = viewModel.repository.getAllSeries().firstOrNull {
+                it.name.equals(item.name, ignoreCase = true) ||
+                (!item.seriesTitle.isNullOrBlank() && it.seriesTitle?.equals(item.seriesTitle, ignoreCase = true) == true)
+            } ?: item
+            viewModel.openSeriesDetail(matchedSeries)
         } else {
             handlePlayWithResumePrompt(item)
         }
