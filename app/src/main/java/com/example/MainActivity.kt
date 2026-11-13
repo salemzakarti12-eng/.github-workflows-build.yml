@@ -5,11 +5,12 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.util.Rational
+import android.view.KeyEvent
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
@@ -176,11 +177,20 @@ class MainActivity : ComponentActivity() {
     private val mainViewModel: MainViewModel by viewModels()
     private var isInPipModeState by mutableStateOf(false)
     private var showExitDialogState by mutableStateOf(false)
+    private var lastBrowseScreenState by mutableStateOf(Screen.DASHBOARD)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        // Intercept ALL system back presses (TV remote Back, gesture back, hardware back)
+        // at the Activity level so the app NEVER exits without confirmation.
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                handleSystemBackNavigation()
+            }
+        })
 
         val isTvDevice = try {
             DeviceUtils.isTelevision(this)
@@ -216,6 +226,8 @@ class MainActivity : ComponentActivity() {
                         isInPipMode = isInPipModeState,
                         showExitDialog = showExitDialogState,
                         onShowExitDialogChange = { showExitDialogState = it },
+                        onLastBrowseScreenChange = { lastBrowseScreenState = it },
+                        onNavigateBack = { handleSystemBackNavigation() },
                         onFinishApp = {
                             mainViewModel.playerManager.saveCurrentPlaybackPosition()
                             mainViewModel.playerManager.stop()
@@ -225,6 +237,48 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun handleSystemBackNavigation() {
+        val screen = mainViewModel.currentScreen.value
+        when {
+            showExitDialogState -> {
+                showExitDialogState = false
+            }
+            screen == Screen.PLAYER -> {
+                mainViewModel.playerManager.closeQuickChannelList()
+                val target = if (lastBrowseScreenState == Screen.PLAYER) Screen.DASHBOARD else lastBrowseScreenState
+                mainViewModel.navigateTo(target)
+            }
+            screen == Screen.SERIES_DETAIL -> {
+                mainViewModel.navigateTo(Screen.SERIES)
+            }
+            screen != Screen.DASHBOARD -> {
+                mainViewModel.navigateTo(Screen.DASHBOARD)
+            }
+            else -> {
+                showExitDialogState = true
+            }
+        }
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_UP) {
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_BACK,
+                KeyEvent.KEYCODE_ESCAPE -> {
+                    handleSystemBackNavigation()
+                    return true
+                }
+                KeyEvent.KEYCODE_HOME -> {
+                    if (mainViewModel.currentScreen.value != Screen.DASHBOARD) {
+                        mainViewModel.navigateTo(Screen.DASHBOARD)
+                        return true
+                    }
+                }
+            }
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     override fun onResume() {
@@ -291,14 +345,17 @@ fun HypnoStreamApp(
     isInPipMode: Boolean = false,
     showExitDialog: Boolean = false,
     onShowExitDialogChange: (Boolean) -> Unit = {},
+    onLastBrowseScreenChange: (Screen) -> Unit = {},
+    onNavigateBack: () -> Unit = {},
     onFinishApp: () -> Unit = {}
 ) {
     val currentScreen by viewModel.currentScreen.collectAsState()
     var lastBrowseScreen by remember { mutableStateOf(Screen.DASHBOARD) }
 
     LaunchedEffect(currentScreen) {
-        if (currentScreen != Screen.PLAYER && currentScreen != Screen.SERIES_DETAIL) {
+        if (currentScreen != Screen.PLAYER) {
             lastBrowseScreen = currentScreen
+            onLastBrowseScreenChange(currentScreen)
         }
     }
 
@@ -334,30 +391,11 @@ fun HypnoStreamApp(
     var pendingResumeItem by remember { mutableStateOf<IptvItem?>(null) }
     var pendingResumePosMs by remember { mutableLongStateOf(0L) }
 
-    // Unified Back Navigation Handler:
-    // 1. Dismiss dialogs first
-    // 2. Step back through screens (PLAYER -> SERIES_DETAIL -> SERIES -> DASHBOARD)
-    // 3. Only show Exit confirmation when already on DASHBOARD (Home)
-    val performUnifiedBackNavigation = {
-        when {
-            showExitDialog -> onShowExitDialogChange(false)
-            pendingResumeItem != null -> pendingResumeItem = null
-            currentScreen == Screen.PLAYER -> {
-                if (!viewModel.handleBackPress()) {
-                    viewModel.navigateTo(lastBrowseScreen)
-                }
-            }
-            currentScreen == Screen.SERIES_DETAIL -> {
-                if (!viewModel.handleBackPress()) {
-                    viewModel.navigateTo(Screen.SERIES)
-                }
-            }
-            currentScreen != Screen.DASHBOARD -> {
-                if (!viewModel.handleBackPress()) {
-                    viewModel.navigateTo(Screen.DASHBOARD)
-                }
-            }
-            else -> onShowExitDialogChange(true)
+    val performBack = {
+        if (pendingResumeItem != null) {
+            pendingResumeItem = null
+        } else {
+            onNavigateBack()
         }
     }
 
@@ -409,23 +447,6 @@ fun HypnoStreamApp(
         modifier = Modifier
             .fillMaxSize()
             .background(Slate950)
-            .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyUp) {
-                    when (event.key) {
-                        Key.Back, Key.Escape -> {
-                            performUnifiedBackNavigation()
-                            true
-                        }
-                        Key.MoveHome -> {
-                            if (currentScreen != Screen.DASHBOARD) {
-                                viewModel.navigateTo(Screen.DASHBOARD)
-                                true
-                            } else false
-                        }
-                        else -> false
-                    }
-                } else false
-            }
     ) {
         val navItems = listOf(
             Triple(Screen.DASHBOARD, Icons.Default.Home, if (isAr) "الرئيسية" else strings.home),
@@ -458,7 +479,7 @@ fun HypnoStreamApp(
                         onPlayItem = handleOpenHistoryOrDashboardItem,
                         onRemoveItem = { viewModel.removeFromHistory(it) },
                         onClearAll = { viewModel.clearHistory() },
-                        onBack = { performUnifiedBackNavigation() }
+                        onBack = { performBack() }
                     )
                 }
 
@@ -482,7 +503,7 @@ fun HypnoStreamApp(
                         onPlayItem = { handlePlayWithResumePrompt(it) },
                         onOpenSeries = { seriesItem -> viewModel.openSeriesDetail(seriesItem) },
                         onToggleFavorite = { viewModel.toggleFavorite(it) },
-                        onBack = { performUnifiedBackNavigation() }
+                        onBack = { performBack() }
                     )
                 }
 
@@ -501,7 +522,7 @@ fun HypnoStreamApp(
                             )
                             handlePlayWithResumePrompt(epItem)
                         },
-                        onBack = { performUnifiedBackNavigation() }
+                        onBack = { performBack() }
                     )
                 }
 
@@ -520,7 +541,7 @@ fun HypnoStreamApp(
                         onLoadDemo = { viewModel.loadDemoShowcase() },
                         onSwitchSource = { viewModel.switchActiveSource(it) },
                         onDeleteSource = { viewModel.deleteSource(it) },
-                        onBack = { performUnifiedBackNavigation() },
+                        onBack = { performBack() },
                         onToggleLanguage = { viewModel.toggleLanguage() }
                     )
                 }
@@ -702,16 +723,12 @@ fun HypnoStreamApp(
                 playerManager = viewModel.playerManager,
                 uiState = playerUiState,
                 allChannels = sideDrawerItems,
-                onBack = { performUnifiedBackNavigation() },
+                onBack = { performBack() },
                 onPlayNext = { viewModel.playNextChannel() },
                 onPlayPrevious = { viewModel.playPreviousChannel() },
                 onSelectChannel = { handlePlayWithResumePrompt(it) },
                 modifier = Modifier.fillMaxSize()
             )
-        }
-
-        BackHandler(enabled = true) {
-            performUnifiedBackNavigation()
         }
 
         if (pendingResumeItem != null) {
