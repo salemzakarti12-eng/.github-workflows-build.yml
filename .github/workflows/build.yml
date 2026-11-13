@@ -25,16 +25,6 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Decode Permanent Keystore & Configure Signing
-        env:
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: |
-          echo "$SIGNING_KEY" | base64 -d > debug.keystore
-          sed -i "s/storePassword = \"[^\"]*\"/storePassword = \"$KEY_PASSWORD\"/g" app/build.gradle.kts
-          sed -i "s/keyPassword = \"[^\"]*\"/keyPassword = \"$KEY_PASSWORD\"/g" app/build.gradle.kts
-          sed -i 's/keyAlias = "[^"]*"/keyAlias = "hypnostream"/g' app/build.gradle.kts
-
       - name: Auto-Configure Sony TV Compatibility
         run: |
           sed -i 's/minSdk = [0-9]*/minSdk = 24/g' app/build.gradle.kts
@@ -42,13 +32,19 @@ jobs:
           sed -i "s/versionCode = [0-9]*/versionCode = $RUN_NUM/g" app/build.gradle.kts
           sed -i "s/versionName = \"[^\"]*\"/versionName = \"1.$RUN_NUM\"/g" app/build.gradle.kts
 
-      - name: Build APK Using Gradle
-        run: gradle assembleDebug
+      - name: Build Release APK Using Gradle
+        run: gradle assembleRelease
 
-      - name: Copy Signed APK for Release
+      - name: Sign & Align Release APK with Permanent Keystore
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          APK_PATH=$(find app/build/outputs/apk -name "*.apk" | head -n 1)
-          cp "$APK_PATH" "HypnoStream-v1.${{ github.run_number }}.apk"
+          echo "$SIGNING_KEY" | base64 -d > hypnostream.jks
+          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -maxdepth 1 -mindepth 1 | sort -V | tail -n 1)
+          "$BUILD_TOOLS/zipalign" -f -p 4 "$APK_PATH" aligned.apk
+          "$BUILD_TOOLS/apksigner" sign --ks hypnostream.jks --ks-key-alias hypnostream --ks-pass "pass:$KEY_PASSWORD" --key-pass "pass:$KEY_PASSWORD" --out "HypnoStream-v1.${{ github.run_number }}.apk" aligned.apk
 
       - name: Upload APK to GitHub Releases
         uses: softprops/action-gh-release@v2
