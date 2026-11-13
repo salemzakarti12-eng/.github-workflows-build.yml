@@ -19,8 +19,10 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -39,6 +41,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -48,8 +51,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -71,6 +76,8 @@ import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -97,6 +104,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
@@ -1103,112 +1112,204 @@ fun WatchHistoryScreen(
                 )
             }
         } else {
-            LazyColumn(
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 145.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxSize()
             ) {
                 items(filteredItems, key = { "${it.id}_${it.streamUrl}" }) { item ->
-                    val cardInteraction = remember { MutableInteractionSource() }
-                    val isCardFocused by cardInteraction.collectIsFocusedAsState()
-
-                    Surface(
-                        color = if (isCardFocused) Slate850 else Slate900,
-                        shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(
-                            width = if (isCardFocused) 2.5.dp else 1.dp,
-                            color = if (isCardFocused) AccentCyan else Slate800
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusable(interactionSource = cardInteraction)
-                            .onPreviewKeyEvent { event ->
-                                if (event.type == KeyEventType.KeyUp &&
-                                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                                ) {
-                                    onPlayItem(item)
-                                    true
-                                } else false
-                            }
-                            .clickable(interactionSource = cardInteraction, indication = null) { onPlayItem(item) }
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .width(96.dp)
-                                    .height(60.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(Slate850),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (!item.logoUrl.isNullOrBlank()) {
-                                    AsyncImage(
-                                        model = item.logoUrl,
-                                        contentDescription = item.name,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .size(28.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xAA000000)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.PlayArrow,
-                                        contentDescription = null,
-                                        tint = PureWhite,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = item.name,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = PureWhite,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                val typeLabel = when (item.type) {
-                                    IptvType.SERIES -> if (isAr) "مسلسل" else "Series"
-                                    IptvType.MOVIE -> if (isAr) "فيلم" else "Movie"
-                                    IptvType.LIVE_TV -> if (isAr) "بث مباشر" else "Live TV"
-                                }
-                                Text(
-                                    text = "$typeLabel • ${item.group}",
-                                    fontSize = 12.sp,
-                                    color = AccentCyan,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-
-                            IconButton(
-                                onClick = { onRemoveItem(item.id) },
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Remove",
-                                    tint = Slate400,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-                    }
+                    HistoryPosterCard(
+                        item = item,
+                        isAr = isAr,
+                        onClick = { onPlayItem(item) },
+                        onRemove = { onRemoveItem(item.id) }
+                    )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun HistoryPosterCard(
+    item: IptvItem,
+    isAr: Boolean,
+    onClick: () -> Unit,
+    onRemove: () -> Unit
+) {
+    val cardInteraction = remember { MutableInteractionSource() }
+    val isCardFocused by cardInteraction.collectIsFocusedAsState()
+
+    val scale by animateFloatAsState(
+        targetValue = if (isCardFocused) 1.05f else 1f,
+        animationSpec = spring(dampingRatio = 0.75f, stiffness = 400f),
+        label = "historyPosterScale"
+    )
+
+    val isSeries = item.type == IptvType.SERIES
+    val badgeText = if (isSeries) {
+        if (isAr) "مسلسل" else "SERIES"
+    } else {
+        if (isAr) "فيلم" else "MOVIE"
+    }
+    val badgeColor = if (isSeries) Color(0xFF0284C7) else Color(0xFF7C3AED)
+
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Slate900),
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(2f / 3f)
+            .scale(scale)
+            .shadow(
+                elevation = if (isCardFocused) 14.dp else 4.dp,
+                shape = RoundedCornerShape(14.dp),
+                spotColor = if (isCardFocused) AccentCyan else Color.Transparent
+            )
+            .clip(RoundedCornerShape(14.dp))
+            .border(
+                width = if (isCardFocused) 3.dp else 1.dp,
+                color = if (isCardFocused) AccentCyan else Slate800,
+                shape = RoundedCornerShape(14.dp)
+            )
+            .focusable(interactionSource = cardInteraction)
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyUp &&
+                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                ) {
+                    onClick()
+                    true
+                } else false
+            }
+            .clickable(interactionSource = cardInteraction, indication = null, onClick = onClick)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (!item.logoUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = item.logoUrl,
+                    contentDescription = item.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Slate800, Slate900, Slate950)
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (isSeries) Icons.Default.VideoLibrary else Icons.Default.Movie,
+                        contentDescription = null,
+                        tint = Slate400,
+                        modifier = Modifier.size(42.dp)
+                    )
+                }
+            }
+
+            // Bottom gradient overlay for legible poster title
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0x44000000),
+                                Color.Transparent,
+                                Color(0xCC060A12),
+                                Color(0xF5060A12)
+                            )
+                        )
+                    )
+            )
+
+            // Top-left SERIES / MOVIE badge
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(8.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(badgeColor.copy(alpha = 0.92f))
+                    .padding(horizontal = 7.dp, vertical = 3.dp)
+            ) {
+                Text(
+                    text = badgeText,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Black,
+                    color = PureWhite,
+                    letterSpacing = 0.5.sp
+                )
+            }
+
+            // Top-right remove button
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xAA000000))
+                    .clickable(onClick = onRemove)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Remove",
+                    tint = PureWhite,
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+
+            // Center play indicator on focus
+            if (isCardFocused) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(AccentCyan)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = Slate950,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+            }
+
+            // Bottom poster title & category
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .padding(10.dp)
+            ) {
+                Text(
+                    text = item.name,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PureWhite,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 16.sp
+                )
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    text = item.group,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = AccentCyan,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
