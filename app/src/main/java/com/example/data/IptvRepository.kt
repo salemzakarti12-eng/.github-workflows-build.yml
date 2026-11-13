@@ -47,7 +47,6 @@ class IptvRepository(context: Context) {
     private val _activeSource = MutableStateFlow<IptvSource?>(null)
     val activeSource: StateFlow<IptvSource?> = _activeSource.asStateFlow()
 
-    // Counts for the 3 Hypnotix Dashboard cards
     private val _totalLiveCount = MutableStateFlow(0)
     val totalLiveCount: StateFlow<Int> = _totalLiveCount.asStateFlow()
 
@@ -57,7 +56,6 @@ class IptvRepository(context: Context) {
     private val _totalSeriesCount = MutableStateFlow(0)
     val totalSeriesCount: StateFlow<Int> = _totalSeriesCount.asStateFlow()
 
-    // Category lists for Category-First UI navigation
     private val _liveCategories = MutableStateFlow<List<CategoryInfo>>(emptyList())
     val liveCategories: StateFlow<List<CategoryInfo>> = _liveCategories.asStateFlow()
 
@@ -67,17 +65,14 @@ class IptvRepository(context: Context) {
     private val _seriesCategories = MutableStateFlow<List<CategoryInfo>>(emptyList())
     val seriesCategories: StateFlow<List<CategoryInfo>> = _seriesCategories.asStateFlow()
 
-    // Memory-protected internal maps (grouped by category in background memory)
     private val liveStreamsByCategory = ConcurrentHashMap<String, MutableList<IptvItem>>()
     private val movieStreamsByCategory = ConcurrentHashMap<String, MutableList<IptvItem>>()
     private val seriesStreamsByCategory = ConcurrentHashMap<String, MutableList<IptvItem>>()
 
-    // All channels flat lists for quick access (e.g. next/prev channel)
     private val allLiveList = ArrayList<IptvItem>()
     private val allMoviesList = ArrayList<IptvItem>()
     private val allSeriesList = ArrayList<IptvItem>()
 
-    // Current displayed channels list (capped and paginated to protect Compose)
     private val _displayedItems = MutableStateFlow<List<IptvItem>>(emptyList())
     val displayedItems: StateFlow<List<IptvItem>> = _displayedItems.asStateFlow()
 
@@ -177,7 +172,6 @@ class IptvRepository(context: Context) {
             ?: loadedSources.first()
         _activeSource.value = active
 
-        // Auto-reconnect saved active playlist on app launch
         when (active.type) {
             SourceType.DEMO -> {
                 loadDemoContent(active)
@@ -303,8 +297,37 @@ class IptvRepository(context: Context) {
     fun recordRecentlyWatched(item: IptvItem) {
         if (item.type == IptvType.LIVE_TV) return
         val current = _recentlyWatched.value.toMutableList()
-        current.removeAll { it.id == item.id || it.streamUrl == item.streamUrl }
-        current.add(0, item)
+
+        if (item.type == IptvType.SERIES) {
+            val baseSeriesTitle = (item.seriesTitle ?: item.name)
+                .substringBefore(" - S")
+                .substringBefore(" S0")
+                .substringBefore(" S1")
+                .substringBefore(" S2")
+                .substringBefore(" - ")
+                .trim()
+
+            current.removeAll { existing ->
+                existing.type == IptvType.SERIES && (
+                    existing.id == item.id ||
+                    (!existing.seriesTitle.isNullOrBlank() && existing.seriesTitle.equals(baseSeriesTitle, ignoreCase = true)) ||
+                    existing.name.startsWith(baseSeriesTitle, ignoreCase = true)
+                )
+            }
+
+            val seriesCardItem = item.copy(
+                name = baseSeriesTitle,
+                seriesTitle = baseSeriesTitle,
+                seasonNumber = null,
+                episodeNumber = null,
+                group = if (isAr) "مسلسل" else "TV Series"
+            )
+            current.add(0, seriesCardItem)
+        } else {
+            current.removeAll { it.id == item.id || it.streamUrl == item.streamUrl }
+            current.add(0, item)
+        }
+
         if (current.size > 100) {
             current.removeAt(current.lastIndex)
         }
