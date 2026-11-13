@@ -73,9 +73,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
 import com.example.model.IptvItem
 import com.example.model.IptvSource
+import com.example.model.IptvType
 import com.example.ui.Screen
 import com.example.ui.components.LanguageToggleButton
-import com.example.ui.components.tvFocusable
 import com.example.ui.locale.LocalAppLanguage
 import com.example.ui.locale.LocalAppStrings
 import com.example.ui.locale.LocalMiniPlayerActive
@@ -112,6 +112,9 @@ fun DashboardScreen(
     val isAr = LocalAppLanguage.current == "ar"
     val isMiniPlayerActive = LocalMiniPlayerActive.current
     val layoutDirection = if (isAr) LayoutDirection.Rtl else LayoutDirection.Ltr
+    val vodHistory = remember(recentlyWatched) {
+        recentlyWatched.filter { it.type != IptvType.LIVE_TV }
+    }
 
     CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
         BoxWithConstraints(modifier = modifier.fillMaxSize().background(Slate950)) {
@@ -124,7 +127,6 @@ fun DashboardScreen(
                     .testTag("dashboard_screen"),
                 contentPadding = PaddingValues(bottom = if (isMiniPlayerActive) 160.dp else 80.dp)
             ) {
-                // Top App Bar / Provider Status Header
                 item {
                     DashboardHeader(
                         activeSource = activeSource,
@@ -133,7 +135,6 @@ fun DashboardScreen(
                     )
                 }
 
-                // Active Status Pill Banner
                 item {
                     SourceInfoBanner(
                         activeSource = activeSource,
@@ -141,7 +142,6 @@ fun DashboardScreen(
                     )
                 }
 
-                // Section Label
                 item {
                     Text(
                         text = strings.exploreEntertainment,
@@ -153,7 +153,6 @@ fun DashboardScreen(
                     )
                 }
 
-                // 3 Hypnotix Gradient Cards:
                 if (isWideScreen) {
                     item {
                         Row(
@@ -261,18 +260,20 @@ fun DashboardScreen(
                     }
                 }
 
-                // Recently Watched Row
-                if (recentlyWatched.isNotEmpty()) {
+                // Recently Watched / History Row (Movies & Series only)
+                if (vodHistory.isNotEmpty()) {
                     item {
                         Spacer(modifier = Modifier.height(16.dp))
                         SectionHeader(
                             icon = Icons.Default.History,
                             title = strings.continueWatching,
-                            count = recentlyWatched.size,
-                            accentColor = AccentCyan
+                            count = vodHistory.size,
+                            accentColor = AccentCyan,
+                            actionLabel = if (isAr) "عرض الكل" else "View All",
+                            onActionClick = { onNavigate(Screen.HISTORY) }
                         )
                         HorizontalItemList(
-                            items = recentlyWatched,
+                            items = vodHistory,
                             onPlayItem = onPlayItem
                         )
                     }
@@ -337,10 +338,8 @@ fun DashboardHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Quick Language Toggle Button (🌐 EN / عربي)
             LanguageToggleButton(onToggleLanguage = onToggleLanguage)
 
-            // Sources Settings Button with TV Focus Support
             IconButton(
                 onClick = onOpenSources,
                 interactionSource = interactionSource,
@@ -528,7 +527,6 @@ fun HypnotixGradientCard(
                 .background(gradient)
                 .padding(if (isLandscapeCard) 16.dp else 20.dp)
         ) {
-            // Large background icon silhouette
             Icon(
                 imageVector = icon,
                 contentDescription = null,
@@ -538,7 +536,6 @@ fun HypnotixGradientCard(
                     .align(Alignment.CenterEnd)
             )
 
-            // Content
             Column(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.SpaceBetween
@@ -584,7 +581,6 @@ fun HypnotixGradientCard(
                         }
                     }
 
-                    // Badge Pill
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
@@ -631,40 +627,87 @@ fun SectionHeader(
     icon: ImageVector,
     title: String,
     count: Int,
-    accentColor: Color
+    accentColor: Color,
+    actionLabel: String? = null,
+    onActionClick: (() -> Unit)? = null
 ) {
+    val actionInteraction = remember { MutableInteractionSource() }
+    val isActionFocused by actionInteraction.collectIsFocusedAsState()
+    val isAr = LocalAppLanguage.current == "ar"
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = accentColor,
-            modifier = Modifier.size(18.dp)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = PureWhite
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Box(
-            modifier = Modifier
-                .clip(CircleShape)
-                .background(Slate800)
-                .padding(horizontal = 6.dp, vertical = 2.dp)
-        ) {
-            Text(
-                text = "$count",
-                fontSize = 11.sp,
-                color = Slate300,
-                fontWeight = FontWeight.SemiBold
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = accentColor,
+                modifier = Modifier.size(18.dp)
             )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = PureWhite
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(Slate800)
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = "$count",
+                    fontSize = 11.sp,
+                    color = Slate300,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
+        if (actionLabel != null && onActionClick != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (isActionFocused) AccentCyan else Slate850)
+                    .border(
+                        width = if (isActionFocused) 2.dp else 1.dp,
+                        color = if (isActionFocused) PureWhite else Slate700,
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                    .focusable(interactionSource = actionInteraction)
+                    .onPreviewKeyEvent { event ->
+                        if (event.type == KeyEventType.KeyUp &&
+                            (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                        ) {
+                            onActionClick()
+                            true
+                        } else false
+                    }
+                    .clickable(interactionSource = actionInteraction, indication = null, onClick = onActionClick)
+                    .padding(horizontal = 10.dp, vertical = 5.dp)
+            ) {
+                Text(
+                    text = actionLabel,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isActionFocused) Slate950 else AccentCyan
+                )
+                Icon(
+                    imageVector = if (isAr) Icons.Default.ChevronLeft else Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = if (isActionFocused) Slate950 else AccentCyan,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
         }
     }
 }
