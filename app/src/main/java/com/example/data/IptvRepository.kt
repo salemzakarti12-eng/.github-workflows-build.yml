@@ -221,6 +221,7 @@ class IptvRepository(context: Context) {
                 val obj = array.getJSONObject(i)
                 val typeStr = obj.optString("type", IptvType.LIVE_TV.name)
                 val type = try { IptvType.valueOf(typeStr) } catch (_: Exception) { IptvType.LIVE_TV }
+                if (type == IptvType.LIVE_TV) continue
                 list.add(
                     IptvItem(
                         id = obj.getString("id"),
@@ -243,6 +244,7 @@ class IptvRepository(context: Context) {
     private fun persistHistory() {
         val array = JSONArray()
         for (item in _recentlyWatched.value) {
+            if (item.type == IptvType.LIVE_TV) continue
             val obj = JSONObject().apply {
                 put("id", item.id)
                 put("name", item.name)
@@ -299,6 +301,7 @@ class IptvRepository(context: Context) {
     }
 
     fun recordRecentlyWatched(item: IptvItem) {
+        if (item.type == IptvType.LIVE_TV) return
         val current = _recentlyWatched.value.toMutableList()
         current.removeAll { it.id == item.id || it.streamUrl == item.streamUrl }
         current.add(0, item)
