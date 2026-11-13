@@ -109,7 +109,7 @@ fun ContentBrowserScreen(
     onLoadMore: () -> Unit,
     onPlayItem: (IptvItem) -> Unit,
     onOpenSeries: (IptvItem) -> Unit,
-    onToggleFavorite: (String) -> Unit,
+    onToggleFavorite: (IptvItem) -> Unit,
     onBack: () -> Unit
 ) {
     val isAr = LocalAppLanguage.current == "ar"
@@ -373,7 +373,7 @@ fun ContentBrowserScreen(
                                     onPlayItem(item)
                                 }
                             },
-                            onToggleFavorite = { onToggleFavorite(item.id) }
+                            onToggleFavorite = { onToggleFavorite(item) }
                         )
                     }
                 }
@@ -496,7 +496,7 @@ fun ContentBrowserScreen(
                                 onPlayItem(item)
                             }
                         },
-                        onToggleFavorite = { onToggleFavorite(item.id) }
+                        onToggleFavorite = { onToggleFavorite(item) }
                     )
                 }
             }
