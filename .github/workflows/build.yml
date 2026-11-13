@@ -22,6 +22,9 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
       - name: Auto-Configure Sony TV Compatibility
         run: |
           sed -i 's/minSdk = [0-9]*/minSdk = 24/g' app/build.gradle.kts
@@ -30,9 +33,7 @@ jobs:
           sed -i "s/versionName = \"[^\"]*\"/versionName = \"1.$RUN_NUM\"/g" app/build.gradle.kts
 
       - name: Build APK Using Gradle
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug
+        run: gradle assembleDebug
 
       - name: Sign APK with Permanent Keystore
         env:
