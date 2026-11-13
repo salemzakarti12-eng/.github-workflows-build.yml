@@ -95,6 +95,10 @@ import com.example.ui.theme.Slate950
 import com.example.ui.theme.TvChannelsGradient
 import java.util.Locale
 
+private val HistoryGradient = Brush.linearGradient(
+    colors = listOf(Color(0xFF059669), Color(0xFF0D9488), Color(0xFF0284C7))
+)
+
 @Composable
 fun DashboardScreen(
     activeSource: IptvSource?,
@@ -112,9 +116,18 @@ fun DashboardScreen(
     val isAr = LocalAppLanguage.current == "ar"
     val isMiniPlayerActive = LocalMiniPlayerActive.current
     val layoutDirection = if (isAr) LayoutDirection.Rtl else LayoutDirection.Ltr
-    val vodHistory = remember(recentlyWatched) {
-        recentlyWatched.filter { it.type != IptvType.LIVE_TV }
+    val historyCount = remember(recentlyWatched) {
+        recentlyWatched.count { it.type != IptvType.LIVE_TV }
     }
+
+    val historyTitle = if (isAr) "سجل المشاهدة" else "History"
+    val historySubtitle = if (isAr) "الأفلام والمسلسلات التي شاهدتها مؤخراً" else "Recently watched movies & TV series"
+    val historyCountText = if (isAr) {
+        "%,d عنصر محفوظ".format(Locale.US, historyCount)
+    } else {
+        "%,d Saved Titles".format(Locale.US, historyCount)
+    }
+    val historyBadge = if (isAr) "المشاهدات" else "WATCH LOG"
 
     CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
         BoxWithConstraints(modifier = modifier.fillMaxSize().background(Slate950)) {
@@ -155,48 +168,71 @@ fun DashboardScreen(
 
                 if (isWideScreen) {
                     item {
-                        Row(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 6.dp),
-                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
-                            HypnotixGradientCard(
-                                title = strings.liveTv,
-                                subtitle = strings.liveTvSubtitle,
-                                countText = "%,d %s".format(Locale.US, liveCount, strings.channelsAvailable),
-                                icon = Icons.Default.LiveTv,
-                                gradient = TvChannelsGradient,
-                                testTag = "card_tv_channels",
-                                badgeText = strings.liveStreamingBadge,
-                                isLandscapeCard = true,
-                                onClick = { onNavigate(Screen.LIVE_CHANNELS) },
-                                modifier = Modifier.weight(1f)
-                            )
-                            HypnotixGradientCard(
-                                title = strings.movies,
-                                subtitle = strings.moviesSubtitle,
-                                countText = "%,d %s".format(Locale.US, moviesCount, strings.vodTitles),
-                                icon = Icons.Default.Movie,
-                                gradient = MoviesGradient,
-                                testTag = "card_movies",
-                                badgeText = strings.cinemaVodBadge,
-                                isLandscapeCard = true,
-                                onClick = { onNavigate(Screen.MOVIES) },
-                                modifier = Modifier.weight(1f)
-                            )
-                            HypnotixGradientCard(
-                                title = strings.series,
-                                subtitle = strings.seriesSubtitle,
-                                countText = "%,d %s".format(Locale.US, seriesCount, strings.showsCatalog),
-                                icon = Icons.Default.VideoLibrary,
-                                gradient = SeriesGradient,
-                                testTag = "card_series",
-                                badgeText = strings.episodicTvBadge,
-                                isLandscapeCard = true,
-                                onClick = { onNavigate(Screen.SERIES) },
-                                modifier = Modifier.weight(1f)
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                HypnotixGradientCard(
+                                    title = strings.liveTv,
+                                    subtitle = strings.liveTvSubtitle,
+                                    countText = "%,d %s".format(Locale.US, liveCount, strings.channelsAvailable),
+                                    icon = Icons.Default.LiveTv,
+                                    gradient = TvChannelsGradient,
+                                    testTag = "card_tv_channels",
+                                    badgeText = strings.liveStreamingBadge,
+                                    isLandscapeCard = true,
+                                    onClick = { onNavigate(Screen.LIVE_CHANNELS) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                HypnotixGradientCard(
+                                    title = strings.movies,
+                                    subtitle = strings.moviesSubtitle,
+                                    countText = "%,d %s".format(Locale.US, moviesCount, strings.vodTitles),
+                                    icon = Icons.Default.Movie,
+                                    gradient = MoviesGradient,
+                                    testTag = "card_movies",
+                                    badgeText = strings.cinemaVodBadge,
+                                    isLandscapeCard = true,
+                                    onClick = { onNavigate(Screen.MOVIES) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                HypnotixGradientCard(
+                                    title = strings.series,
+                                    subtitle = strings.seriesSubtitle,
+                                    countText = "%,d %s".format(Locale.US, seriesCount, strings.showsCatalog),
+                                    icon = Icons.Default.VideoLibrary,
+                                    gradient = SeriesGradient,
+                                    testTag = "card_series",
+                                    badgeText = strings.episodicTvBadge,
+                                    isLandscapeCard = true,
+                                    onClick = { onNavigate(Screen.SERIES) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                HypnotixGradientCard(
+                                    title = historyTitle,
+                                    subtitle = historySubtitle,
+                                    countText = historyCountText,
+                                    icon = Icons.Default.History,
+                                    gradient = HistoryGradient,
+                                    testTag = "card_history",
+                                    badgeText = historyBadge,
+                                    isLandscapeCard = true,
+                                    onClick = { onNavigate(Screen.HISTORY) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
                         }
                     }
                 } else {
@@ -241,6 +277,20 @@ fun DashboardScreen(
                             onClick = { onNavigate(Screen.SERIES) }
                         )
                     }
+
+                    item {
+                        HypnotixGradientCard(
+                            title = historyTitle,
+                            subtitle = historySubtitle,
+                            countText = historyCountText,
+                            icon = Icons.Default.History,
+                            gradient = HistoryGradient,
+                            testTag = "card_history",
+                            badgeText = historyBadge,
+                            isLandscapeCard = false,
+                            onClick = { onNavigate(Screen.HISTORY) }
+                        )
+                    }
                 }
 
                 // Favorites Row
@@ -255,25 +305,6 @@ fun DashboardScreen(
                         )
                         HorizontalItemList(
                             items = favorites,
-                            onPlayItem = onPlayItem
-                        )
-                    }
-                }
-
-                // Recently Watched / History Row (Movies & Series only)
-                if (vodHistory.isNotEmpty()) {
-                    item {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        SectionHeader(
-                            icon = Icons.Default.History,
-                            title = strings.continueWatching,
-                            count = vodHistory.size,
-                            accentColor = AccentCyan,
-                            actionLabel = if (isAr) "عرض الكل" else "View All",
-                            onActionClick = { onNavigate(Screen.HISTORY) }
-                        )
-                        HorizontalItemList(
-                            items = vodHistory,
                             onPlayItem = onPlayItem
                         )
                     }
@@ -488,7 +519,7 @@ fun HypnotixGradientCard(
         label = "cardScale"
     )
 
-    val cardHeight = if (isLandscapeCard) 175.dp else 138.dp
+    val cardHeight = if (isLandscapeCard) 150.dp else 134.dp
     val paddingModifier = if (isLandscapeCard) modifier else modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 7.dp)
 
     Card(
