@@ -7,8 +7,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.BorderStroke
@@ -16,6 +21,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -73,22 +79,27 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -117,6 +128,15 @@ import com.example.ui.theme.Slate850
 import com.example.ui.theme.Slate900
 import com.example.ui.theme.Slate950
 import java.util.Locale
+import kotlinx.coroutines.delay
+
+private enum class PlayerGestureFeedback {
+    NONE,
+    REWIND_VOD,
+    FORWARD_VOD,
+    PREV_CHANNEL,
+    NEXT_CHANNEL
+}
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -132,8 +152,22 @@ fun VideoPlayerScreen(
 ) {
     val isAr = LocalAppLanguage.current == "ar"
     val localView = LocalView.current
+    val haptics = LocalHapticFeedback.current
     val playerRootFocus = remember { FocusRequester() }
     val playPauseFocus = remember { FocusRequester() }
+
+    // Gen Z kinetic double-tap feedback state
+    var gestureFeedback by remember { mutableStateOf(PlayerGestureFeedback.NONE) }
+    var accumulatedSkipSeconds by remember { mutableIntStateOf(10) }
+    var feedbackTriggerKey by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(feedbackTriggerKey) {
+        if (gestureFeedback != PlayerGestureFeedback.NONE) {
+            delay(650L)
+            gestureFeedback = PlayerGestureFeedback.NONE
+            accumulatedSkipSeconds = 10
+        }
+    }
 
     DisposableEffect(localView) {
         val prevKeepScreenOn = localView.keepScreenOn
@@ -177,7 +211,7 @@ fun VideoPlayerScreen(
     }
 
     val currentItem = uiState.currentItem
-    val isLive = currentItem?.type == IptvType.LIVE_TV
+    val isLive = currentItem?.type == IptvType.LIVE_TV || playerManager.isCurrentStreamLive()
     val hasDrawerItems = allChannels.isNotEmpty() && currentItem?.type != IptvType.MOVIE
 
     Box(
@@ -203,6 +237,8 @@ fun VideoPlayerScreen(
                         Key.DirectionUp -> {
                             if (!uiState.isControlsVisible && !uiState.isQuickChannelListOpen) {
                                 if (isLive) {
+                                    gestureFeedback = PlayerGestureFeedback.PREV_CHANNEL
+                                    feedbackTriggerKey++
                                     onPlayPrevious()
                                 } else {
                                     playerManager.showControlsTemporarily()
@@ -213,6 +249,8 @@ fun VideoPlayerScreen(
                         Key.DirectionDown -> {
                             if (!uiState.isControlsVisible && !uiState.isQuickChannelListOpen) {
                                 if (isLive) {
+                                    gestureFeedback = PlayerGestureFeedback.NEXT_CHANNEL
+                                    feedbackTriggerKey++
                                     onPlayNext()
                                 } else {
                                     playerManager.showControlsTemporarily()
@@ -225,7 +263,10 @@ fun VideoPlayerScreen(
                                 if (isLive && hasDrawerItems) {
                                     playerManager.toggleQuickChannelList()
                                 } else if (!isLive) {
-                                    playerManager.seekTo((uiState.currentPositionMs - 10_000L).coerceAtLeast(0L))
+                                    accumulatedSkipSeconds = if (gestureFeedback == PlayerGestureFeedback.REWIND_VOD) accumulatedSkipSeconds + 10 else 10
+                                    gestureFeedback = PlayerGestureFeedback.REWIND_VOD
+                                    feedbackTriggerKey++
+                                    playerManager.seekRelative(-10_000L)
                                     playerManager.showControlsTemporarily()
                                 }
                                 true
@@ -233,16 +274,23 @@ fun VideoPlayerScreen(
                         }
                         Key.DirectionRight -> {
                             if (!uiState.isControlsVisible && !uiState.isQuickChannelListOpen && !isLive) {
-                                playerManager.seekTo((uiState.currentPositionMs + 10_000L).coerceAtMost(uiState.durationMs))
+                                accumulatedSkipSeconds = if (gestureFeedback == PlayerGestureFeedback.FORWARD_VOD) accumulatedSkipSeconds + 10 else 10
+                                gestureFeedback = PlayerGestureFeedback.FORWARD_VOD
+                                feedbackTriggerKey++
+                                playerManager.seekRelative(10_000L)
                                 playerManager.showControlsTemporarily()
                                 true
                             } else false
                         }
                         Key.ChannelUp, Key.PageUp -> {
+                            gestureFeedback = PlayerGestureFeedback.NEXT_CHANNEL
+                            feedbackTriggerKey++
                             onPlayNext()
                             true
                         }
                         Key.ChannelDown, Key.PageDown -> {
+                            gestureFeedback = PlayerGestureFeedback.PREV_CHANNEL
+                            feedbackTriggerKey++
                             onPlayPrevious()
                             true
                         }
@@ -253,15 +301,48 @@ fun VideoPlayerScreen(
                     }
                 } else false
             }
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) {
-                playerManager.toggleControlsVisibility()
+            .pointerInput(isLive, uiState.currentItem?.id) {
+                detectTapGestures(
+                    onTap = {
+                        playerManager.toggleControlsVisibility()
+                    },
+                    onDoubleTap = { tapOffset ->
+                        val isRightSide = tapOffset.x > (size.width / 2f)
+                        try {
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        } catch (_: Exception) {}
+
+                        if (isLive) {
+                            // Live TV: instant channel zapping (no 10s skip on live broadcasts)
+                            if (isRightSide) {
+                                gestureFeedback = PlayerGestureFeedback.NEXT_CHANNEL
+                                feedbackTriggerKey++
+                                onPlayNext()
+                            } else {
+                                gestureFeedback = PlayerGestureFeedback.PREV_CHANNEL
+                                feedbackTriggerKey++
+                                onPlayPrevious()
+                            }
+                        } else {
+                            // Movies & Series: YouTube-style ±10s skip with stacking counter
+                            if (isRightSide) {
+                                accumulatedSkipSeconds = if (gestureFeedback == PlayerGestureFeedback.FORWARD_VOD) accumulatedSkipSeconds + 10 else 10
+                                gestureFeedback = PlayerGestureFeedback.FORWARD_VOD
+                                feedbackTriggerKey++
+                                playerManager.seekRelative(10_000L)
+                            } else {
+                                accumulatedSkipSeconds = if (gestureFeedback == PlayerGestureFeedback.REWIND_VOD) accumulatedSkipSeconds + 10 else 10
+                                gestureFeedback = PlayerGestureFeedback.REWIND_VOD
+                                feedbackTriggerKey++
+                                playerManager.seekRelative(-10_000L)
+                            }
+                        }
+                    }
+                )
             }
             .testTag("video_player_screen")
     ) {
-        // ExoPlayer Video Surface
+        // ExoPlayer Video Surface (keeps previous live frame during zapping for zero black flash)
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
@@ -271,6 +352,7 @@ fun VideoPlayerScreen(
                     isFocusable = false
                     isFocusableInTouchMode = false
                     keepScreenOn = true
+                    setKeepContentOnPlayerReset(true)
                     layoutParams = FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
@@ -279,6 +361,7 @@ fun VideoPlayerScreen(
             },
             update = { playerView ->
                 playerView.keepScreenOn = true
+                playerView.setKeepContentOnPlayerReset(true)
                 if (playerView.player !== playerManager.player) {
                     playerView.player = playerManager.player
                 }
@@ -291,6 +374,70 @@ fun VideoPlayerScreen(
                 }
             }
         )
+
+        // Kinetic Double-Tap Ripple Pill Overlay (VOD ±10s Skip / Live TV Channel Zap)
+        AnimatedVisibility(
+            visible = gestureFeedback != PlayerGestureFeedback.NONE,
+            enter = fadeIn(tween(140)) + scaleIn(initialScale = 0.85f, animationSpec = tween(180, easing = FastOutSlowInEasing)),
+            exit = fadeOut(tween(240)) + scaleOut(targetScale = 1.08f, animationSpec = tween(240)),
+            modifier = Modifier.align(
+                when (gestureFeedback) {
+                    PlayerGestureFeedback.REWIND_VOD, PlayerGestureFeedback.PREV_CHANNEL -> Alignment.CenterStart
+                    PlayerGestureFeedback.FORWARD_VOD, PlayerGestureFeedback.NEXT_CHANNEL -> Alignment.CenterEnd
+                    PlayerGestureFeedback.NONE -> Alignment.Center
+                }
+            )
+        ) {
+            val pulseScale by animateFloatAsState(
+                targetValue = if (gestureFeedback != PlayerGestureFeedback.NONE) 1.04f else 0.95f,
+                animationSpec = tween(160),
+                label = "gesturePulse"
+            )
+
+            Surface(
+                color = Color(0xCC040D1A),
+                shape = RoundedCornerShape(24.dp),
+                border = BorderStroke(1.5.dp, AccentCyan.copy(alpha = 0.85f)),
+                modifier = Modifier
+                    .padding(horizontal = 36.dp)
+                    .scale(pulseScale)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp)
+                ) {
+                    val icon = when (gestureFeedback) {
+                        PlayerGestureFeedback.REWIND_VOD -> Icons.Default.Replay10
+                        PlayerGestureFeedback.FORWARD_VOD -> Icons.Default.Forward10
+                        PlayerGestureFeedback.PREV_CHANNEL -> Icons.Default.SkipPrevious
+                        PlayerGestureFeedback.NEXT_CHANNEL -> Icons.Default.SkipNext
+                        PlayerGestureFeedback.NONE -> Icons.Default.PlayArrow
+                    }
+                    val label = when (gestureFeedback) {
+                        PlayerGestureFeedback.REWIND_VOD -> "-${accumulatedSkipSeconds}s"
+                        PlayerGestureFeedback.FORWARD_VOD -> "+${accumulatedSkipSeconds}s"
+                        PlayerGestureFeedback.PREV_CHANNEL -> if (isAr) "القناة السابقة" else "Prev Channel"
+                        PlayerGestureFeedback.NEXT_CHANNEL -> if (isAr) "القناة التالية" else "Next Channel"
+                        PlayerGestureFeedback.NONE -> ""
+                    }
+
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = AccentCyan,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Text(
+                        text = label,
+                        color = PureWhite,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 0.4.sp
+                    )
+                }
+            }
+        }
 
         // Buffering Spinner
         if (uiState.isBuffering) {
@@ -395,14 +542,34 @@ fun VideoPlayerScreen(
                     Spacer(modifier = Modifier.width(12.dp))
 
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = currentItem?.name ?: "",
-                            color = PureWhite,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (isLive) {
+                                Surface(
+                                    color = AccentRed,
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text(
+                                        text = if (isAr) "مباشر" else "LIVE",
+                                        color = PureWhite,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Black,
+                                        letterSpacing = 0.6.sp,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = currentItem?.name ?: "",
+                                color = PureWhite,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                         Text(
                             text = currentItem?.group ?: "",
                             color = AccentCyan,
@@ -444,7 +611,7 @@ fun VideoPlayerScreen(
                     }
                 }
 
-                // Bottom Bar Controls & D-Pad Focusable Seekbar
+                // Bottom Bar Controls & D-Pad Focusable Seekbar (VOD/Series only)
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -494,11 +661,11 @@ fun VideoPlayerScreen(
                                             playerManager.showControlsTemporarily()
                                             when (event.key) {
                                                 Key.DirectionLeft -> {
-                                                    playerManager.seekTo((uiState.currentPositionMs - 15_000L).coerceAtLeast(0L))
+                                                    playerManager.seekRelative(-15_000L)
                                                     true
                                                 }
                                                 Key.DirectionRight -> {
-                                                    playerManager.seekTo((uiState.currentPositionMs + 15_000L).coerceAtMost(uiState.durationMs))
+                                                    playerManager.seekRelative(15_000L)
                                                     true
                                                 }
                                                 else -> false
@@ -524,8 +691,16 @@ fun VideoPlayerScreen(
                             icon = if (isLive) Icons.Default.SkipPrevious else Icons.Default.Replay10,
                             contentDescription = "Previous / Rewind 10s",
                             onClick = {
-                                if (isLive) onPlayPrevious()
-                                else playerManager.seekTo((uiState.currentPositionMs - 10_000L).coerceAtLeast(0L))
+                                if (isLive) {
+                                    gestureFeedback = PlayerGestureFeedback.PREV_CHANNEL
+                                    feedbackTriggerKey++
+                                    onPlayPrevious()
+                                } else {
+                                    accumulatedSkipSeconds = if (gestureFeedback == PlayerGestureFeedback.REWIND_VOD) accumulatedSkipSeconds + 10 else 10
+                                    gestureFeedback = PlayerGestureFeedback.REWIND_VOD
+                                    feedbackTriggerKey++
+                                    playerManager.seekRelative(-10_000L)
+                                }
                             }
                         )
 
@@ -545,8 +720,16 @@ fun VideoPlayerScreen(
                             icon = if (isLive) Icons.Default.SkipNext else Icons.Default.Forward10,
                             contentDescription = "Next / Forward 10s",
                             onClick = {
-                                if (isLive) onPlayNext()
-                                else playerManager.seekTo((uiState.currentPositionMs + 10_000L).coerceAtMost(uiState.durationMs))
+                                if (isLive) {
+                                    gestureFeedback = PlayerGestureFeedback.NEXT_CHANNEL
+                                    feedbackTriggerKey++
+                                    onPlayNext()
+                                } else {
+                                    accumulatedSkipSeconds = if (gestureFeedback == PlayerGestureFeedback.FORWARD_VOD) accumulatedSkipSeconds + 10 else 10
+                                    gestureFeedback = PlayerGestureFeedback.FORWARD_VOD
+                                    feedbackTriggerKey++
+                                    playerManager.seekRelative(10_000L)
+                                }
                             }
                         )
                     }
@@ -664,7 +847,7 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Scrollable Audio Tracks Dialog (Works in Landscape & TV)
+        // Scrollable Audio Tracks Dialog
         if (showAudioDialog) {
             AlertDialog(
                 onDismissRequest = { showAudioDialog = false },
@@ -725,7 +908,7 @@ fun VideoPlayerScreen(
             )
         }
 
-        // Scrollable Subtitles & Timing Sync Dialog (Works in Landscape & TV)
+        // Scrollable Subtitles & Timing Sync Dialog
         if (showSubtitleDialog) {
             AlertDialog(
                 onDismissRequest = { showSubtitleDialog = false },
