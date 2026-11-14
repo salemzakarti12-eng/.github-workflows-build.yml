@@ -4,6 +4,14 @@
 
 ---
 
+## 📸 Screenshots
+
+| Home Dashboard | Cinema Player |
+| :---: | :---: |
+| ![Dashboard](dashboard.png) | ![Player](player.png) |
+
+---
+
 ## ✨ Key Features
 
 - **⚡ Sub-Second Cached Startup (Stale-While-Revalidate):** Compresses and caches massive playlists (45,000+ channels, movies, and series) locally via GZIP for instant `< 0.9s` launches while silently syncing server updates in the background.
