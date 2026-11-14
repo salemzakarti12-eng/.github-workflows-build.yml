@@ -51,19 +51,20 @@ class ExoPlayerManager(
     private val httpDataSourceFactory = DefaultHttpDataSource.Factory()
         .setUserAgent("IPTVSmartersPlayer")
         .setAllowCrossProtocolRedirects(true)
-        .setConnectTimeoutMs(15000)
+        .setConnectTimeoutMs(12000)
         .setReadTimeoutMs(25000)
 
     private val renderersFactory = DefaultRenderersFactory(context)
         .setEnableDecoderFallback(true)
         .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
 
+    // Gen Z fast-zap buffer tuning: 600ms instant start instead of 1500ms wait
     private val loadControl = DefaultLoadControl.Builder()
         .setBufferDurationsMs(
-            15_000,
-            30_000,
-            1_500,
-            3_000
+            12_000, // minBufferMs
+            30_000, // maxBufferMs
+            600,    // bufferForPlaybackMs (instant channel lock-in)
+            1_500   // bufferForPlaybackAfterRebufferMs
         )
         .setPrioritizeTimeOverSizeThresholds(true)
         .build()
@@ -151,7 +152,7 @@ class ExoPlayerManager(
                     )
                     reconnectJob?.cancel()
                     reconnectJob = coroutineScope.launch(Dispatchers.Main) {
-                        delay(2000L)
+                        delay(1500L)
                         val item = _uiState.value.currentItem
                         if (item != null) {
                             loadStreamInternal(item, isReconnect = true)
@@ -185,7 +186,7 @@ class ExoPlayerManager(
         })
     }
 
-    private fun isVodOrSeries(item: IptvItem): Boolean {
+    fun isVodOrSeries(item: IptvItem): Boolean {
         return item.type == IptvType.MOVIE ||
                 item.type == IptvType.SERIES ||
                 item.seasonNumber != null ||
@@ -201,6 +202,11 @@ class ExoPlayerManager(
                 item.name.contains(Regex("""S\d{1,2}E\d{1,3}""", RegexOption.IGNORE_CASE)) ||
                 item.streamUrl.contains("/movie/", ignoreCase = true) ||
                 item.streamUrl.contains("/series/", ignoreCase = true)
+    }
+
+    fun isCurrentStreamLive(): Boolean {
+        val current = _uiState.value.currentItem ?: return true
+        return !isVodOrSeries(current)
     }
 
     private fun positionKey(item: IptvItem): String {
@@ -263,7 +269,7 @@ class ExoPlayerManager(
             }
             val mediaItem = mediaItemBuilder.build()
 
-            val mediaSource = if ( activeSubtitleConfigs.isEmpty() &&
+            val mediaSource = if (activeSubtitleConfigs.isEmpty() &&
                 (format == StreamFormat.HLS || item.streamUrl.contains(".m3u8", ignoreCase = true))
             ) {
                 HlsMediaSource.Factory(httpDataSourceFactory)
@@ -322,10 +328,16 @@ class ExoPlayerManager(
     }
 
     fun seekTo(positionMs: Long) {
+        if (isCurrentStreamLive()) return
         val target = positionMs.coerceIn(0L, player.duration.coerceAtLeast(0L))
         player.seekTo(target)
         _uiState.value = _uiState.value.copy(currentPositionMs = target)
         saveCurrentPlaybackPosition()
+    }
+
+    fun seekRelative(deltaMs: Long) {
+        if (isCurrentStreamLive()) return
+        seekTo(player.currentPosition + deltaMs)
     }
 
     fun cycleAspectRatio() {
@@ -362,7 +374,7 @@ class ExoPlayerManager(
     fun scheduleControlsAutoHide() {
         controlsHideJob?.cancel()
         controlsHideJob = coroutineScope.launch {
-            delay(5000)
+            delay(4000)
             if (isActive && player.isPlaying && !_uiState.value.isQuickChannelListOpen) {
                 _uiState.value = _uiState.value.copy(isControlsVisible = false)
             }
@@ -491,10 +503,6 @@ class ExoPlayerManager(
         syncSubtitleStateToUiState()
     }
 
-    /**
-     * Dynamically updates `subtitleOffsetMs` and `externalSubtitleUri` on `PlayerUiState`
-     * if those fields exist in `PlayerModels.kt` without breaking compilation if they don't.
-     */
     private fun syncSubtitleStateToUiState() {
         try {
             val current = _uiState.value
@@ -510,7 +518,6 @@ class ExoPlayerManager(
                     it.isAccessible = true
                     it.set(current, _externalSubtitleUri.value)
                 }
-                // Trigger StateFlow emission
                 _uiState.value = current.copy(isBuffering = current.isBuffering)
             }
         } catch (_: Exception) {}
