@@ -1,5 +1,6 @@
 package com.example.ui.dashboard
 
+import android.content.Context
 import android.widget.ImageView
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -62,6 +64,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -114,8 +117,18 @@ fun DashboardScreen(
 ) {
     val strings = LocalAppStrings.current
     val isAr = LocalAppLanguage.current == "ar"
+    val context = LocalContext.current
     val isMiniPlayerActive = LocalMiniPlayerActive.current
     val layoutDirection = if (isAr) LayoutDirection.Rtl else LayoutDirection.Ltr
+
+    val positionPrefs = remember {
+        context.getSharedPreferences("hypnostream_playback_positions", Context.MODE_PRIVATE)
+    }
+
+    val continueWatchingItems = remember(recentlyWatched) {
+        recentlyWatched.filter { it.type != IptvType.LIVE_TV }.take(12)
+    }
+
     val historyCount = remember(recentlyWatched) {
         recentlyWatched.count { it.type != IptvType.LIVE_TV }
     }
@@ -289,6 +302,29 @@ fun DashboardScreen(
                             badgeText = historyBadge,
                             isLandscapeCard = false,
                             onClick = { onNavigate(Screen.HISTORY) }
+                        )
+                    }
+                }
+
+                // Continue Watching Rail with Cyan Progress Bars & Resume Timestamps
+                if (continueWatchingItems.isNotEmpty()) {
+                    item {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SectionHeader(
+                            icon = Icons.Default.History,
+                            title = if (isAr) "متابعة المشاهدة" else "Continue Watching",
+                            count = continueWatchingItems.size,
+                            accentColor = AccentCyan,
+                            actionLabel = if (isAr) "عرض الكل" else "View All",
+                            onActionClick = { onNavigate(Screen.HISTORY) }
+                        )
+                        HorizontalItemList(
+                            items = continueWatchingItems,
+                            showProgress = true,
+                            getSavedPositionMs = { item ->
+                                positionPrefs.getLong("resume_${item.id}_${item.streamUrl.hashCode()}", 0L)
+                            },
+                            onPlayItem = onPlayItem
                         )
                     }
                 }
@@ -746,6 +782,8 @@ fun SectionHeader(
 @Composable
 fun HorizontalItemList(
     items: List<IptvItem>,
+    showProgress: Boolean = false,
+    getSavedPositionMs: ((IptvItem) -> Long)? = null,
     onPlayItem: (IptvItem) -> Unit
 ) {
     LazyRow(
@@ -753,8 +791,13 @@ fun HorizontalItemList(
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         items(items, key = { it.id }) { item ->
+            val savedPosMs = remember(item.id, showProgress) {
+                if (showProgress) getSavedPositionMs?.invoke(item) ?: 0L else 0L
+            }
             ItemMiniCard(
                 item = item,
+                showProgress = showProgress,
+                savedPositionMs = savedPosMs,
                 onClick = { onPlayItem(item) }
             )
         }
@@ -764,6 +807,8 @@ fun HorizontalItemList(
 @Composable
 fun ItemMiniCard(
     item: IptvItem,
+    showProgress: Boolean = false,
+    savedPositionMs: Long = 0L,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -774,6 +819,29 @@ fun ItemMiniCard(
         animationSpec = spring(dampingRatio = 0.75f, stiffness = 400f),
         label = "itemMiniScale"
     )
+
+    val progressFraction = remember(savedPositionMs, item.type) {
+        if (savedPositionMs <= 5_000L) {
+            0.18f
+        } else {
+            val estimatedTotalMs = if (item.type == IptvType.SERIES) 45 * 60_000L else 110 * 60_000L
+            (savedPositionMs.toFloat() / estimatedTotalMs.toFloat()).coerceIn(0.08f, 0.94f)
+        }
+    }
+
+    val resumeTimeBadge = remember(savedPositionMs) {
+        if (savedPositionMs > 5_000L) {
+            val totalSeconds = savedPositionMs / 1000L
+            val minutes = totalSeconds / 60L
+            val seconds = totalSeconds % 60L
+            val hours = minutes / 60L
+            if (hours > 0) {
+                String.format(Locale.US, "%d:%02d:%02d", hours, minutes % 60L, seconds)
+            } else {
+                String.format(Locale.US, "%02d:%02d", minutes, seconds)
+            }
+        } else null
+    }
 
     Card(
         modifier = Modifier
@@ -830,6 +898,25 @@ fun ItemMiniCard(
                 )
             }
 
+            if (showProgress && resumeTimeBadge != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(7.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xCC030917))
+                        .border(1.dp, AccentCyan.copy(alpha = 0.65f), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "▶ $resumeTimeBadge",
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = AccentCyan
+                    )
+                }
+            }
+
             Box(
                 modifier = Modifier
                     .size(34.dp)
@@ -849,7 +936,8 @@ fun ItemMiniCard(
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(8.dp)
+                    .fillMaxWidth()
+                    .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = if (showProgress) 10.dp else 8.dp)
             ) {
                 Text(
                     text = item.name,
@@ -866,6 +954,24 @@ fun ItemMiniCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+            }
+
+            // Sleek Cyan Progress Bar along bottom edge for Continue Watching
+            if (showProgress) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .background(Slate800)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(progressFraction)
+                            .fillMaxHeight()
+                            .background(AccentCyan)
+                    )
+                }
             }
         }
     }
