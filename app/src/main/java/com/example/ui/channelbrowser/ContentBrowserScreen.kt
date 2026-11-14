@@ -1,5 +1,6 @@
 package com.example.ui.channelbrowser
 
+import android.content.Context
 import android.content.res.Configuration
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -33,11 +34,15 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
@@ -72,7 +77,10 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -94,6 +102,7 @@ import com.example.ui.theme.Slate900
 import com.example.ui.theme.Slate950
 import com.example.util.CategoryTranslator
 import com.example.util.LocalIsTelevision
+import org.json.JSONArray
 
 @Composable
 fun ContentBrowserScreen(
@@ -113,11 +122,37 @@ fun ContentBrowserScreen(
     onBack: () -> Unit
 ) {
     val isAr = LocalAppLanguage.current == "ar"
+    val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val isTablet = configuration.smallestScreenWidthDp >= 600
     val isTv = LocalIsTelevision.current
     val useSideCategoryPanel = isLandscape || isTablet || isTv
+
+    // Persistent per-screen recent search history (last 6 queries)
+    val searchPrefs = remember {
+        context.getSharedPreferences("hypnostream_search_history", Context.MODE_PRIVATE)
+    }
+    val historyStorageKey = "recent_searches_${screen.name}"
+    var recentSearches by remember(screen) {
+        mutableStateOf(loadRecentSearches(searchPrefs.getString(historyStorageKey, null)))
+    }
+
+    val recordSearchTerm: (String) -> Unit = { raw ->
+        val clean = raw.trim()
+        if (clean.length >= 2) {
+            val updated = (listOf(clean) + recentSearches.filterNot { it.equals(clean, ignoreCase = true) })
+                .take(6)
+            recentSearches = updated
+            searchPrefs.edit().putString(historyStorageKey, JSONArray(updated).toString()).apply()
+        }
+    }
+
+    val clearRecentSearches: () -> Unit = {
+        recentSearches = emptyList()
+        searchPrefs.edit().remove(historyStorageKey).apply()
+    }
 
     var categorySearchQuery by remember(screen) { mutableStateOf("") }
 
@@ -310,6 +345,13 @@ fun ContentBrowserScreen(
                         value = searchQuery,
                         onValueChange = onSearchChange,
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(
+                            onSearch = {
+                                recordSearchTerm(searchQuery)
+                                focusManager.clearFocus()
+                            }
+                        ),
                         placeholder = {
                             Text(
                                 text = searchPlaceholder,
@@ -354,6 +396,19 @@ fun ContentBrowserScreen(
                     )
                 }
 
+                // Recent Search History Chips (shown when search box is empty)
+                if (searchQuery.isEmpty() && recentSearches.isNotEmpty()) {
+                    RecentSearchesRow(
+                        recentSearches = recentSearches,
+                        isAr = isAr,
+                        onSelectSearch = { term ->
+                            onSearchChange(term)
+                            recordSearchTerm(term)
+                        },
+                        onClearAll = clearRecentSearches
+                    )
+                }
+
                 LazyVerticalGrid(
                     state = gridState,
                     columns = GridCells.Adaptive(minSize = if (isVodPoster) 135.dp else 175.dp),
@@ -367,6 +422,9 @@ fun ContentBrowserScreen(
                             item = item,
                             isVodPoster = isVodPoster,
                             onClick = {
+                                if (searchQuery.isNotBlank()) {
+                                    recordSearchTerm(searchQuery)
+                                }
                                 if (item.type == IptvType.SERIES) {
                                     onOpenSeries(item)
                                 } else {
@@ -418,6 +476,13 @@ fun ContentBrowserScreen(
                     value = searchQuery,
                     onValueChange = onSearchChange,
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(
+                        onSearch = {
+                            recordSearchTerm(searchQuery)
+                            focusManager.clearFocus()
+                        }
+                    ),
                     placeholder = {
                         Text(
                             text = searchPlaceholder,
@@ -434,6 +499,21 @@ fun ContentBrowserScreen(
                             modifier = Modifier.size(18.dp)
                         )
                     },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(
+                                onClick = { onSearchChange("") },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Clear,
+                                    contentDescription = "Clear",
+                                    tint = Slate400,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    },
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = AccentCyan,
@@ -444,6 +524,19 @@ fun ContentBrowserScreen(
                         unfocusedTextColor = PureWhite
                     ),
                     modifier = Modifier.weight(1f)
+                )
+            }
+
+            // Recent Search History Chips (Mobile / Portrait)
+            if (searchQuery.isEmpty() && recentSearches.isNotEmpty()) {
+                RecentSearchesRow(
+                    recentSearches = recentSearches,
+                    isAr = isAr,
+                    onSelectSearch = { term ->
+                        onSearchChange(term)
+                        recordSearchTerm(term)
+                    },
+                    onClearAll = clearRecentSearches
                 )
             }
 
@@ -490,6 +583,9 @@ fun ContentBrowserScreen(
                         item = item,
                         isVodPoster = isVodPoster,
                         onClick = {
+                            if (searchQuery.isNotBlank()) {
+                                recordSearchTerm(searchQuery)
+                            }
                             if (item.type == IptvType.SERIES) {
                                 onOpenSeries(item)
                             } else {
@@ -501,6 +597,119 @@ fun ContentBrowserScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun RecentSearchesRow(
+    recentSearches: List<String>,
+    isAr: Boolean,
+    onSelectSearch: (String) -> Unit,
+    onClearAll: () -> Unit
+) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        items(recentSearches, key = { "recent_$it" }) { term ->
+            val interaction = remember { MutableInteractionSource() }
+            val isFocused by interaction.collectIsFocusedAsState()
+
+            Surface(
+                color = if (isFocused) AccentCyan.copy(alpha = 0.25f) else Slate900,
+                shape = CircleShape,
+                border = BorderStroke(
+                    width = if (isFocused) 1.5.dp else 1.dp,
+                    color = if (isFocused) PureWhite else AccentCyan.copy(alpha = 0.45f)
+                ),
+                modifier = Modifier
+                    .focusable(interactionSource = interaction)
+                    .onPreviewKeyEvent { event ->
+                        if (event.type == KeyEventType.KeyUp &&
+                            (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                        ) {
+                            onSelectSearch(term)
+                            true
+                        } else false
+                    }
+                    .clickable(interactionSource = interaction, indication = null) {
+                        onSelectSearch(term)
+                    }
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.History,
+                        contentDescription = null,
+                        tint = AccentCyan,
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Text(
+                        text = term,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = PureWhite,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+
+        item(key = "clear_recent_searches") {
+            val clearInteraction = remember { MutableInteractionSource() }
+            val isClearFocused by clearInteraction.collectIsFocusedAsState()
+
+            Surface(
+                color = if (isClearFocused) AccentRed else Slate850,
+                shape = CircleShape,
+                border = BorderStroke(1.dp, if (isClearFocused) PureWhite else Slate700),
+                modifier = Modifier
+                    .focusable(interactionSource = clearInteraction)
+                    .onPreviewKeyEvent { event ->
+                        if (event.type == KeyEventType.KeyUp &&
+                            (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                        ) {
+                            onClearAll()
+                            true
+                        } else false
+                    }
+                    .clickable(interactionSource = clearInteraction, indication = null, onClick = onClearAll)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = null,
+                        tint = if (isClearFocused) PureWhite else Slate400,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Text(
+                        text = if (isAr) "مسح" else "Clear",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isClearFocused) PureWhite else Slate400
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun loadRecentSearches(rawJson: String?): List<String> {
+    if (rawJson.isNullOrBlank()) return emptyList()
+    return try {
+        val arr = JSONArray(rawJson)
+        List(arr.length()) { idx -> arr.getString(idx) }.filter { it.isNotBlank() }
+    } catch (_: Exception) {
+        emptyList()
     }
 }
 
