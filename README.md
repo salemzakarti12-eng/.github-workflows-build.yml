@@ -8,7 +8,7 @@
 
 | Home Dashboard | Cinema Player |
 | :---: | :---: |
-| ![Dashboard](dashboard.png) | ![Player](player.png) |
+| ![Dashboard](YOUR_DASHBOARD_IMAGE.jpg) | ![Player](YOUR_PLAYER_IMAGE.jpg) |
 
 ---
 
