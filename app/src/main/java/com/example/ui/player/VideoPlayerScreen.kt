@@ -1,5 +1,8 @@
 package com.example.ui.player
 
+import android.app.Activity
+import android.content.Context
+import android.media.AudioManager
 import android.net.Uri
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -22,6 +25,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -47,8 +51,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material.icons.filled.BrightnessHigh
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Forward10
@@ -66,6 +72,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -79,6 +86,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -99,6 +107,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
@@ -127,6 +136,7 @@ import com.example.ui.theme.Slate800
 import com.example.ui.theme.Slate850
 import com.example.ui.theme.Slate900
 import com.example.ui.theme.Slate950
+import com.example.util.LocalIsTelevision
 import java.util.Locale
 import kotlinx.coroutines.delay
 
@@ -136,6 +146,12 @@ private enum class PlayerGestureFeedback {
     FORWARD_VOD,
     PREV_CHANNEL,
     NEXT_CHANNEL
+}
+
+private enum class VerticalSwipeHUD {
+    NONE,
+    BRIGHTNESS,
+    VOLUME
 }
 
 @OptIn(UnstableApi::class)
@@ -151,12 +167,71 @@ fun VideoPlayerScreen(
     modifier: Modifier = Modifier
 ) {
     val isAr = LocalAppLanguage.current == "ar"
+    val context = LocalContext.current
     val localView = LocalView.current
     val haptics = LocalHapticFeedback.current
+    val isTv = LocalIsTelevision.current
     val playerRootFocus = remember { FocusRequester() }
     val playPauseFocus = remember { FocusRequester() }
 
-    // Gen Z kinetic double-tap feedback state
+    val currentItem = uiState.currentItem
+    val isLive = currentItem?.type == IptvType.LIVE_TV || playerManager.isCurrentStreamLive()
+    val hasDrawerItems = allChannels.isNotEmpty() && currentItem?.type != IptvType.MOVIE
+
+    // --- Option 1: Binge-Mode Auto-Play Next Episode Countdown ---
+    val nextEpisodeItem = remember(currentItem?.id, allChannels) {
+        if (currentItem?.type == IptvType.SERIES && allChannels.size > 1) {
+            val idx = allChannels.indexOfFirst { it.id == currentItem.id || it.streamUrl == currentItem.streamUrl }
+            if (idx in 0 until allChannels.lastIndex) allChannels[idx + 1] else null
+        } else null
+    }
+
+    var nextEpDismissedForId by remember(currentItem?.id) { mutableStateOf(false) }
+    var nextEpCountdownSec by remember(currentItem?.id) { mutableIntStateOf(5) }
+
+    val isNearEpisodeEnd = !isLive &&
+        currentItem?.type == IptvType.SERIES &&
+        nextEpisodeItem != null &&
+        !nextEpDismissedForId &&
+        uiState.durationMs > 60_000L &&
+        (uiState.durationMs - uiState.currentPositionMs) in 1L..15_000L
+
+    LaunchedEffect(isNearEpisodeEnd, currentItem?.id) {
+        if (isNearEpisodeEnd) {
+            nextEpCountdownSec = 5
+            while (nextEpCountdownSec > 0) {
+                delay(1000L)
+                nextEpCountdownSec--
+            }
+            if (!nextEpDismissedForId) {
+                onPlayNext()
+            }
+        }
+    }
+
+    // --- Option 3: Vertical Brightness & Volume Swipe Gestures (Mobile/Tablet) ---
+    val audioManager = remember {
+        context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    }
+    val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
+
+    var activeSwipeHud by remember { mutableStateOf(VerticalSwipeHUD.NONE) }
+    var swipeHudLevel by remember { mutableFloatStateOf(0.5f) }
+    var swipeHudTriggerKey by remember { mutableIntStateOf(0) }
+
+    var brightnessLevel by remember {
+        val windowAttr = (context as? Activity)?.window?.attributes?.screenBrightness ?: -1f
+        mutableFloatStateOf(if (windowAttr in 0f..1f) windowAttr else 0.55f)
+    }
+
+    LaunchedEffect(swipeHudTriggerKey) {
+        if (activeSwipeHud != VerticalSwipeHUD.NONE) {
+            delay(850L)
+            activeSwipeHud = VerticalSwipeHUD.NONE
+        }
+    }
+
+    // --- Double-Tap Kinetic Ripple State ---
     var gestureFeedback by remember { mutableStateOf(PlayerGestureFeedback.NONE) }
     var accumulatedSkipSeconds by remember { mutableIntStateOf(10) }
     var feedbackTriggerKey by remember { mutableIntStateOf(0) }
@@ -209,10 +284,6 @@ fun VideoPlayerScreen(
             playerManager.loadExternalSubtitle(uri, if (isAr) "ملف ترجمة خارجي" else "External Subtitle")
         }
     }
-
-    val currentItem = uiState.currentItem
-    val isLive = currentItem?.type == IptvType.LIVE_TV || playerManager.isCurrentStreamLive()
-    val hasDrawerItems = allChannels.isNotEmpty() && currentItem?.type != IptvType.MOVIE
 
     Box(
         modifier = modifier
@@ -313,7 +384,6 @@ fun VideoPlayerScreen(
                         } catch (_: Exception) {}
 
                         if (isLive) {
-                            // Live TV: instant channel zapping (no 10s skip on live broadcasts)
                             if (isRightSide) {
                                 gestureFeedback = PlayerGestureFeedback.NEXT_CHANNEL
                                 feedbackTriggerKey++
@@ -324,7 +394,6 @@ fun VideoPlayerScreen(
                                 onPlayPrevious()
                             }
                         } else {
-                            // Movies & Series: YouTube-style ±10s skip with stacking counter
                             if (isRightSide) {
                                 accumulatedSkipSeconds = if (gestureFeedback == PlayerGestureFeedback.FORWARD_VOD) accumulatedSkipSeconds + 10 else 10
                                 gestureFeedback = PlayerGestureFeedback.FORWARD_VOD
@@ -340,9 +409,54 @@ fun VideoPlayerScreen(
                     }
                 )
             }
+            .pointerInput(isTv) {
+                if (!isTv) {
+                    var dragStartIsRight = false
+                    var dragAccRatio = 0f
+                    detectVerticalDragGestures(
+                        onDragStart = { startOffset ->
+                            dragStartIsRight = startOffset.x > (size.width / 2f)
+                            dragAccRatio = if (dragStartIsRight) {
+                                audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume.toFloat()
+                            } else {
+                                brightnessLevel
+                            }
+                        },
+                        onVerticalDrag = { change, dragAmount ->
+                            change.consume()
+                            val screenHeight = size.height.toFloat().coerceAtLeast(1f)
+                            val deltaRatio = (-dragAmount / (screenHeight * 0.65f))
+                            dragAccRatio = (dragAccRatio + deltaRatio).coerceIn(0f, 1f)
+
+                            if (dragStartIsRight) {
+                                val targetVol = (dragAccRatio * maxVolume).toInt().coerceIn(0, maxVolume)
+                                try {
+                                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
+                                } catch (_: Exception) {}
+                                activeSwipeHud = VerticalSwipeHUD.VOLUME
+                                swipeHudLevel = dragAccRatio
+                                swipeHudTriggerKey++
+                            } else {
+                                brightnessLevel = dragAccRatio.coerceIn(0.02f, 1f)
+                                try {
+                                    val activity = context as? Activity
+                                    activity?.window?.let { win ->
+                                        val lp = win.attributes
+                                        lp.screenBrightness = brightnessLevel
+                                        win.attributes = lp
+                                    }
+                                } catch (_: Exception) {}
+                                activeSwipeHud = VerticalSwipeHUD.BRIGHTNESS
+                                swipeHudLevel = brightnessLevel
+                                swipeHudTriggerKey++
+                            }
+                        }
+                    )
+                }
+            }
             .testTag("video_player_screen")
     ) {
-        // ExoPlayer Video Surface (keeps previous live frame during zapping for zero black flash)
+        // ExoPlayer Video Surface
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
@@ -375,7 +489,65 @@ fun VideoPlayerScreen(
             }
         )
 
-        // Kinetic Double-Tap Ripple Pill Overlay (VOD ±10s Skip / Live TV Channel Zap)
+        // Vertical Brightness / Volume Swipe HUD Pill
+        AnimatedVisibility(
+            visible = activeSwipeHud != VerticalSwipeHUD.NONE,
+            enter = fadeIn(tween(120)),
+            exit = fadeOut(tween(220)),
+            modifier = Modifier.align(
+                if (activeSwipeHud == VerticalSwipeHUD.BRIGHTNESS) Alignment.CenterStart else Alignment.CenterEnd
+            )
+        ) {
+            Surface(
+                color = Color(0xCC040D1A),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.5.dp, AccentCyan.copy(alpha = 0.8f)),
+                modifier = Modifier.padding(horizontal = 24.dp)
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 16.dp)
+                ) {
+                    Icon(
+                        imageVector = if (activeSwipeHud == VerticalSwipeHUD.BRIGHTNESS) {
+                            Icons.Default.BrightnessHigh
+                        } else {
+                            Icons.AutoMirrored.Filled.VolumeUp
+                        },
+                        contentDescription = null,
+                        tint = AccentCyan,
+                        modifier = Modifier.size(22.dp)
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .width(6.dp)
+                            .height(110.dp)
+                            .clip(CircleShape)
+                            .background(Slate800)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .fillMaxHeight(swipeHudLevel.coerceIn(0f, 1f))
+                                .clip(CircleShape)
+                                .background(AccentCyan)
+                        )
+                    }
+
+                    Text(
+                        text = "${(swipeHudLevel * 100).toInt()}%",
+                        color = PureWhite,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        // Kinetic Double-Tap Ripple Pill Overlay
         AnimatedVisibility(
             visible = gestureFeedback != PlayerGestureFeedback.NONE,
             enter = fadeIn(tween(140)) + scaleIn(initialScale = 0.85f, animationSpec = tween(180, easing = FastOutSlowInEasing)),
@@ -435,6 +607,101 @@ fun VideoPlayerScreen(
                         fontWeight = FontWeight.ExtraBold,
                         letterSpacing = 0.4.sp
                     )
+                }
+            }
+        }
+
+        // Binge-Mode Auto-Play Next Episode Card (Last 15s of Series Episode)
+        AnimatedVisibility(
+            visible = isNearEpisodeEnd && nextEpisodeItem != null,
+            enter = fadeIn(tween(220)) + slideInHorizontally(initialOffsetX = { it }),
+            exit = fadeOut(tween(180)) + slideOutHorizontally(targetOffsetX = { it }),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 20.dp, bottom = if (uiState.isControlsVisible) 96.dp else 24.dp)
+        ) {
+            val nextEp = nextEpisodeItem ?: return@AnimatedVisibility
+            Surface(
+                color = Color(0xE6071120),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.5.dp, AccentCyan),
+                modifier = Modifier.width(290.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = if (isAr) "الحلقة التالية خلال ${nextEpCountdownSec}ث" else "Next episode in ${nextEpCountdownSec}s",
+                            color = AccentCyan,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                        IconButton(
+                            onClick = { nextEpDismissedForId = true },
+                            modifier = Modifier.size(22.dp)
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Cancel", tint = Slate400, modifier = Modifier.size(16.dp))
+                        }
+                    }
+
+                    Text(
+                        text = nextEp.name,
+                        color = PureWhite,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    LinearProgressIndicator(
+                        progress = { (5 - nextEpCountdownSec).coerceIn(0, 5) / 5f },
+                        color = AccentCyan,
+                        trackColor = Slate800,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .clip(CircleShape)
+                    )
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Button(
+                            onClick = { onPlayNext() },
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentCyan, contentColor = Slate950),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (isAr) "تشغيل الآن" else "Play Now",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        OutlinedButton(
+                            onClick = { nextEpDismissedForId = true },
+                            border = BorderStroke(1.dp, Slate700),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = if (isAr) "إلغاء" else "Cancel",
+                                color = Slate300,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -520,7 +787,6 @@ fun VideoPlayerScreen(
             exit = fadeOut()
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                // Top Bar
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -611,7 +877,6 @@ fun VideoPlayerScreen(
                     }
                 }
 
-                // Bottom Bar Controls & D-Pad Focusable Seekbar (VOD/Series only)
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -737,7 +1002,7 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Quick Side Drawer for Live TV Channels or Series Episodes
+        // Quick Side Drawer
         AnimatedVisibility(
             visible = uiState.isQuickChannelListOpen && hasDrawerItems,
             enter = slideInHorizontally(initialOffsetX = { it }),
