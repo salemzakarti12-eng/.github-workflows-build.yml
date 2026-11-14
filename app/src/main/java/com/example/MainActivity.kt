@@ -16,6 +16,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -27,6 +28,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -435,8 +437,9 @@ fun HypnoStreamApp(
     var minSplashTimePassed by remember { mutableStateOf(false) }
     var initialLoadCompleted by remember { mutableStateOf(false) }
 
+    // Gen Z instant gratification: 900ms snappy entry when data is already cached
     LaunchedEffect(Unit) {
-        delay(2000L)
+        delay(900L)
         minSplashTimePassed = true
         delay(10000L)
         initialLoadCompleted = true
@@ -444,7 +447,7 @@ fun HypnoStreamApp(
 
     LaunchedEffect(minSplashTimePassed, isLoading, totalLoadedItems) {
         if (minSplashTimePassed && (!isLoading && (totalLoadedItems > 0 || activeSource == null))) {
-            delay(250L)
+            delay(150L)
             initialLoadCompleted = true
         }
     }
@@ -1037,10 +1040,14 @@ fun HypnoStreamApp(
             )
         }
 
+        // Spatial Gen Z zoom-out dissolve into the dashboard
         AnimatedVisibility(
             visible = showSplash,
-            enter = fadeIn(tween(300)),
-            exit = fadeOut(tween(650))
+            enter = fadeIn(tween(220)),
+            exit = fadeOut(tween(420)) + scaleOut(
+                targetScale = 1.08f,
+                animationSpec = tween(420, easing = FastOutSlowInEasing)
+            )
         ) {
             HypnoOrbitalSplashOverlay(
                 isAr = isAr,
@@ -1383,11 +1390,15 @@ fun HypnoOrbitalSplashOverlay(
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "hypnoSplash")
 
+    // Snappy whip-momentum orbital easing so the comet accelerates across the front glass
     val orbitAngle by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2200, easing = LinearEasing),
+            animation = tween(
+                durationMillis = 1850,
+                easing = CubicBezierEasing(0.35f, 0.0f, 0.25f, 1.0f)
+            ),
             repeatMode = RepeatMode.Restart
         ),
         label = "orbitRotation"
@@ -1499,7 +1510,6 @@ fun HypnoOrbitalSplashOverlay(
                             style = Stroke(width = 7.dp.toPx(), cap = StrokeCap.Round)
                         )
 
-                        // White comet trail while behind the TV (180°..360°)
                         for (i in 0..14) {
                             val trailDeg = ((normalizedDeg - i * 3.5f) + 360f) % 360f
                             if (trailDeg > 180f && trailDeg < 360f) {
@@ -1639,7 +1649,6 @@ fun HypnoOrbitalSplashOverlay(
                             style = Stroke(width = 8.5.dp.toPx(), cap = StrokeCap.Round)
                         )
 
-                        // Bright white comet sweeping OVER the front of the TV (0°..180°)
                         for (i in 0..16) {
                             val trailDeg = ((normalizedDeg - i * 3.5f) + 360f) % 360f
                             if (trailDeg in 0f..180f) {
