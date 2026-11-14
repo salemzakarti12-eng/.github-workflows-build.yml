@@ -6,9 +6,10 @@
 
 ## 📸 Screenshots
 
-| Home Dashboard | Cinema Player |
-| :---: | :---: |
-| ![Dashboard](YOUR_DASHBOARD_IMAGE.jpg) | ![Player](YOUR_PLAYER_IMAGE.jpg) |
+| | | |
+| :---: | :---: | :---: |
+| ![Screen 1](Screenshot_20261114_114307_HypnoStream.jpg) | ![Screen 2](Screenshot_20261114_114313_HypnoStream.jpg) | ![Screen 3](Screenshot_20261114_114321_HypnoStream.jpg) |
+| ![Screen 4](Screenshot_20261114_114326_HypnoStream.jpg) | ![Screen 5](Screenshot_20261114_114332_HypnoStream.jpg) | ![Screen 6](Screenshot_20261114_114339_HypnoStream.jpg) |
 
 ---
 
