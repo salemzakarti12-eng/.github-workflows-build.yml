@@ -51,6 +51,11 @@ jobs:
           sed -i "s/versionCode = [0-9]*/versionCode = $RUN_NUM/g" app/build.gradle.kts
           sed -i "s/versionName = \"[^\"]*\"/versionName = \"1.$RUN_NUM\"/g" app/build.gradle.kts
 
+      - name: Generate 4K Anti-Aliased TV Banner PNG
+        run: |
+          pip install pillow
+          python3 scripts/generate_tv_banner.py
+
       - name: Build Release APK Using Gradle
         run: gradle assembleRelease
 
