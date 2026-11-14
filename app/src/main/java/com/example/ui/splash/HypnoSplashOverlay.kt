@@ -56,8 +56,9 @@ private val IndicatorCyan = Color(0xFF00E5FF)
 
 /**
  * Fullscreen animated Splash and Connection Screen for HypnoStream.
- * Displays during cold startup while the active IPTV source connects,
- * hiding playlist delays behind a sleek cinematic emblem animation.
+ * Renders a 3D depth-layered orbital ring where the glowing white comet
+ * travels behind the TV monitor on the top arc and sweeps over the front
+ * of the TV screen on the bottom arc.
  */
 @Composable
 fun HypnoSplashOverlay(
@@ -79,12 +80,12 @@ fun HypnoSplashOverlay(
         label = "PlayScale"
     )
 
-    // Continuous 360 rotation for the glowing orbital ring highlight
+    // Continuous 360 rotation for the glowing orbital comet (0f -> 360f)
     val orbitAngle by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2600, easing = LinearEasing),
+            animation = tween(2200, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "OrbitAngle"
@@ -161,73 +162,73 @@ fun HypnoSplashOverlay(
                 val tvTop = centerY - tvHeight / 2f - 6f
                 val cornerRadius = 14f
 
-                // 1. Tilted 3D Cyan Orbital Swoosh Ring (rotated at -18 degrees)
-                rotate(degrees = -18f, pivot = Offset(centerX, centerY)) {
-                    val ovalWidth = tvWidth * 1.55f
-                    val ovalHeight = tvHeight * 0.72f
-                    val ovalLeft = centerX - ovalWidth / 2f
-                    val ovalTop = centerY - ovalHeight / 2f
+                // 3D Orbital Ring dimensions
+                val ovalWidth = tvWidth * 1.58f
+                val ovalHeight = tvHeight * 0.68f
+                val ovalLeft = centerX - ovalWidth / 2f
+                val ovalTop = centerY - ovalHeight / 2f
+                val rx = ovalWidth / 2f
+                val ry = ovalHeight / 2f
 
-                    // Base faint track
-                    drawOval(
-                        brush = Brush.linearGradient(
-                            colors = listOf(
-                                NeonCyan.copy(alpha = 0.15f),
-                                ElectricBlue.copy(alpha = 0.40f),
-                                NeonCyan.copy(alpha = 0.20f)
-                            ),
-                            start = Offset(ovalLeft, ovalTop),
-                            end = Offset(ovalLeft + ovalWidth, ovalTop + ovalHeight)
-                        ),
+                // Normalize angle to [0, 360)
+                val normalizedDeg = ((orbitAngle % 360f) + 360f) % 360f
+
+                // =========================================================
+                // LAYER 1 (BACK): Top half of orbital ring (180° -> 360°)
+                // Passes BEHIND the TV monitor
+                // =========================================================
+                rotate(degrees = -18f, pivot = Offset(centerX, centerY)) {
+                    // Back cyan track
+                    drawArc(
+                        color = NeonCyan.copy(alpha = 0.30f),
+                        startAngle = 180f,
+                        sweepAngle = 180f,
+                        useCenter = false,
                         topLeft = Offset(ovalLeft, ovalTop),
                         size = Size(ovalWidth, ovalHeight),
                         style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
                     )
 
-                    // Sweeping glowing arc highlight
-                    drawArc(
-                        brush = Brush.sweepGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                NeonCyan.copy(alpha = 0.3f),
-                                PureWhite,
-                                NeonCyan,
-                                Color.Transparent
-                            ),
-                            center = Offset(centerX, centerY)
-                        ),
-                        startAngle = orbitAngle,
-                        sweepAngle = 100f,
-                        useCenter = false,
-                        topLeft = Offset(ovalLeft, ovalTop),
-                        size = Size(ovalWidth, ovalHeight),
-                        style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
-                    )
-
-                    // Particle dot traveling along the orbit
-                    val rad = Math.toRadians(orbitAngle.toDouble() + 90.0)
-                    val dotX = centerX + (ovalWidth / 2f) * cos(rad).toFloat()
-                    val dotY = centerY + (ovalHeight / 2f) * sin(rad).toFloat()
-                    drawCircle(
-                        color = PureWhite,
-                        radius = 3.5.dp.toPx(),
-                        center = Offset(dotX, dotY)
-                    )
-                    drawCircle(
-                        color = NeonCyan.copy(alpha = 0.6f),
-                        radius = 7.dp.toPx(),
-                        center = Offset(dotX, dotY)
-                    )
+                    // White comet trail while traveling BEHIND the TV (180°..360°)
+                    for (i in 0..14) {
+                        val trailDeg = ((normalizedDeg - i * 3.5f) + 360f) % 360f
+                        if (trailDeg > 180f && trailDeg < 360f) {
+                            val rad = Math.toRadians(trailDeg.toDouble())
+                            val dotX = centerX + rx * cos(rad).toFloat()
+                            val dotY = centerY + ry * sin(rad).toFloat()
+                            val fraction = 1f - (i / 15f)
+                            drawCircle(
+                                color = PureWhite.copy(alpha = 0.65f * fraction),
+                                radius = (3.0.dp.toPx() * fraction),
+                                center = Offset(dotX, dotY)
+                            )
+                        }
+                    }
                 }
 
-                // 2. TV Monitor Outer Shell / Frame with Neon Cyan to Electric Blue Gradient
+                // =========================================================
+                // LAYER 2 (MIDDLE): TV Monitor, Stand, Pills & Play Button
+                // =========================================================
                 val frameGradient = Brush.linearGradient(
                     colors = listOf(NeonCyan, ElectricBlue),
                     start = Offset(tvLeft, tvTop),
                     end = Offset(tvLeft + tvWidth, tvTop + tvHeight)
                 )
 
-                // Outer bezel glow
+                // Monitor screen interior (solid opaque dark fill so back arc hides behind it)
+                val screenPadding = 5f
+                val screenWidth = tvWidth - screenPadding * 2f
+                val screenHeight = tvHeight - screenPadding * 2f
+                val screenLeft = tvLeft + screenPadding
+                val screenTop = tvTop + screenPadding
+                drawRoundRect(
+                    color = Color(0xFF030814),
+                    topLeft = Offset(screenLeft, screenTop),
+                    size = Size(screenWidth, screenHeight),
+                    cornerRadius = CornerRadius(cornerRadius - 3f, cornerRadius - 3f)
+                )
+
+                // Outer bezel frame
                 drawRoundRect(
                     brush = frameGradient,
                     topLeft = Offset(tvLeft, tvTop),
@@ -236,20 +237,7 @@ fun HypnoSplashOverlay(
                     style = Stroke(width = 3.5.dp.toPx(), cap = StrokeCap.Round)
                 )
 
-                // Monitor screen interior (very deep midnight dark)
-                val screenPadding = 7f
-                val screenWidth = tvWidth - screenPadding * 2f
-                val screenHeight = tvHeight - screenPadding * 2f
-                val screenLeft = tvLeft + screenPadding
-                val screenTop = tvTop + screenPadding
-                drawRoundRect(
-                    color = Color(0xFF030712),
-                    topLeft = Offset(screenLeft, screenTop),
-                    size = Size(screenWidth, screenHeight),
-                    cornerRadius = CornerRadius(cornerRadius - 4f, cornerRadius - 4f)
-                )
-
-                // 3. Monitor Stand
+                // Monitor Stand Neck & Base
                 val neckWidth = 14f
                 val neckHeight = 16f
                 val neckLeft = centerX - neckWidth / 2f
@@ -272,8 +260,7 @@ fun HypnoSplashOverlay(
                     cornerRadius = CornerRadius(3f, 3f)
                 )
 
-                // 4. Three Glowing Indicator Pills at Top of Screen (Red, Purple, Cyan)
-                // Calculated sequential pulse alpha
+                // Three Glowing Indicator Pills at Top of Screen (Red, Purple, Cyan)
                 val alphaRed = ((sin(pulsePhase.toDouble()) + 1.0) / 2.0).toFloat().coerceIn(0.35f, 1f)
                 val alphaPurple = ((sin(pulsePhase.toDouble() - 2.0 * PI / 3.0) + 1.0) / 2.0).toFloat().coerceIn(0.35f, 1f)
                 val alphaCyan = ((sin(pulsePhase.toDouble() - 4.0 * PI / 3.0) + 1.0) / 2.0).toFloat().coerceIn(0.35f, 1f)
@@ -283,7 +270,7 @@ fun HypnoSplashOverlay(
                 val pillSpacing = 6f
                 val totalPillsWidth = (pillWidth * 3f) + (pillSpacing * 2f)
                 val pillsStart = centerX - totalPillsWidth / 2f
-                val pillsTop = screenTop + 7f
+                val pillsTop = screenTop + 8f
 
                 // Red Pill (Live TV)
                 drawRoundRect(
@@ -307,7 +294,7 @@ fun HypnoSplashOverlay(
                     cornerRadius = CornerRadius(2.5f, 2.5f)
                 )
 
-                // 5. Center White-to-Cyan Breathing Play Triangle
+                // Center White-to-Cyan Breathing Play Triangle
                 val playCenterX = centerX + 2f
                 val playCenterY = screenTop + (screenHeight / 2f) + 5f
                 val baseTriangleSize = 16f * playScale
@@ -319,7 +306,6 @@ fun HypnoSplashOverlay(
                     close()
                 }
 
-                // Triangle glow
                 drawPath(
                     path = playPath,
                     brush = Brush.linearGradient(
@@ -328,6 +314,47 @@ fun HypnoSplashOverlay(
                         end = Offset(playCenterX + baseTriangleSize, playCenterY + baseTriangleSize)
                     )
                 )
+
+                // =========================================================
+                // LAYER 3 (FRONT): Bottom half of orbital ring (0° -> 180°)
+                // Sweeps OVER / IN FRONT of the TV screen with white comet
+                // =========================================================
+                rotate(degrees = -18f, pivot = Offset(centerX, centerY)) {
+                    // Solid bright cyan front ring sweeping across TV
+                    drawArc(
+                        color = NeonCyan,
+                        startAngle = 0f,
+                        sweepAngle = 180f,
+                        useCenter = false,
+                        topLeft = Offset(ovalLeft, ovalTop),
+                        size = Size(ovalWidth, ovalHeight),
+                        style = Stroke(width = 3.5.dp.toPx(), cap = StrokeCap.Round)
+                    )
+
+                    // Bright white comet & cyan aura sweeping IN FRONT of the TV (0°..180°)
+                    for (i in 0..16) {
+                        val trailDeg = ((normalizedDeg - i * 3.5f) + 360f) % 360f
+                        if (trailDeg in 0f..180f) {
+                            val rad = Math.toRadians(trailDeg.toDouble())
+                            val dotX = centerX + rx * cos(rad).toFloat()
+                            val dotY = centerY + ry * sin(rad).toFloat()
+                            val fraction = 1f - (i / 17f)
+
+                            // Outer cyan glow halo
+                            drawCircle(
+                                color = NeonCyan.copy(alpha = 0.45f * fraction),
+                                radius = (6.5.dp.toPx() * fraction),
+                                center = Offset(dotX, dotY)
+                            )
+                            // Crisp white core streak
+                            drawCircle(
+                                color = PureWhite.copy(alpha = fraction),
+                                radius = (3.4.dp.toPx() * fraction),
+                                center = Offset(dotX, dotY)
+                            )
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
