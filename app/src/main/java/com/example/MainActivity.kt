@@ -170,6 +170,8 @@ import com.example.ui.theme.Slate950
 import com.example.util.DeviceUtils
 import com.example.util.LocalIsTelevision
 import java.util.Locale
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
@@ -1385,7 +1387,7 @@ fun HypnoOrbitalSplashOverlay(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2600, easing = LinearEasing),
+            animation = tween(durationMillis = 2200, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "orbitRotation"
@@ -1462,6 +1464,7 @@ fun HypnoOrbitalSplashOverlay(
                     val h = size.height
                     val cx = w / 2f
                     val cy = h / 2f
+                    val normalizedDeg = ((orbitAngle % 360f) + 360f) % 360f
 
                     drawCircle(
                         brush = Brush.radialGradient(
@@ -1476,12 +1479,18 @@ fun HypnoOrbitalSplashOverlay(
                         center = Offset(cx, cy)
                     )
 
+                    // =========================================================
+                    // LAYER 1 (BACK): Top orbital arc (180° -> 360°)
+                    // White comet passes BEHIND the TV monitor on the back arc
+                    // =========================================================
                     rotate(degrees = -18f, pivot = Offset(cx, cy)) {
                         val ovalTopLeft = Offset(w * 0.04f, h * 0.30f)
                         val ovalSize = Size(w * 0.92f, h * 0.40f)
+                        val rx = ovalSize.width / 2f
+                        val ry = ovalSize.height / 2f
 
                         drawArc(
-                            color = Color(0xFF0284C7).copy(alpha = 0.65f),
+                            color = Color(0xFF0284C7).copy(alpha = 0.55f),
                             startAngle = 180f,
                             sweepAngle = 180f,
                             useCenter = false,
@@ -1489,8 +1498,27 @@ fun HypnoOrbitalSplashOverlay(
                             size = ovalSize,
                             style = Stroke(width = 7.dp.toPx(), cap = StrokeCap.Round)
                         )
+
+                        // White comet trail while behind the TV (180°..360°)
+                        for (i in 0..14) {
+                            val trailDeg = ((normalizedDeg - i * 3.5f) + 360f) % 360f
+                            if (trailDeg > 180f && trailDeg < 360f) {
+                                val rad = Math.toRadians(trailDeg.toDouble())
+                                val dotX = cx + rx * cos(rad).toFloat()
+                                val dotY = cy + ry * sin(rad).toFloat()
+                                val fraction = 1f - (i / 15f)
+                                drawCircle(
+                                    color = Color.White.copy(alpha = 0.70f * fraction),
+                                    radius = 3.2.dp.toPx() * fraction,
+                                    center = Offset(dotX, dotY)
+                                )
+                            }
+                        }
                     }
 
+                    // =========================================================
+                    // LAYER 2 (MIDDLE): Opaque TV Monitor, Pills, Play & Stand
+                    // =========================================================
                     val tvWidth = w * 0.62f
                     val tvHeight = h * 0.48f
                     val tvLeft = cx - (tvWidth / 2f)
@@ -1585,9 +1613,15 @@ fun HypnoOrbitalSplashOverlay(
                         cap = StrokeCap.Round
                     )
 
+                    // =========================================================
+                    // LAYER 3 (FRONT): Bottom orbital arc (0° -> 180°)
+                    // White comet & glow sweep OVER the front of the TV monitor
+                    // =========================================================
                     rotate(degrees = -18f, pivot = Offset(cx, cy)) {
                         val ovalTopLeft = Offset(w * 0.04f, h * 0.30f)
                         val ovalSize = Size(w * 0.92f, h * 0.40f)
+                        val rx = ovalSize.width / 2f
+                        val ry = ovalSize.height / 2f
 
                         drawArc(
                             brush = Brush.horizontalGradient(
@@ -1605,15 +1639,27 @@ fun HypnoOrbitalSplashOverlay(
                             style = Stroke(width = 8.5.dp.toPx(), cap = StrokeCap.Round)
                         )
 
-                        drawArc(
-                            color = Color.White,
-                            startAngle = orbitAngle,
-                            sweepAngle = 55f,
-                            useCenter = false,
-                            topLeft = ovalTopLeft,
-                            size = ovalSize,
-                            style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
-                        )
+                        // Bright white comet sweeping OVER the front of the TV (0°..180°)
+                        for (i in 0..16) {
+                            val trailDeg = ((normalizedDeg - i * 3.5f) + 360f) % 360f
+                            if (trailDeg in 0f..180f) {
+                                val rad = Math.toRadians(trailDeg.toDouble())
+                                val dotX = cx + rx * cos(rad).toFloat()
+                                val dotY = cy + ry * sin(rad).toFloat()
+                                val fraction = 1f - (i / 17f)
+
+                                drawCircle(
+                                    color = Color(0xFF00E5FF).copy(alpha = 0.45f * fraction),
+                                    radius = 6.5.dp.toPx() * fraction,
+                                    center = Offset(dotX, dotY)
+                                )
+                                drawCircle(
+                                    color = Color.White.copy(alpha = fraction),
+                                    radius = 3.8.dp.toPx() * fraction,
+                                    center = Offset(dotX, dotY)
+                                )
+                            }
+                        }
                     }
                 }
             }
