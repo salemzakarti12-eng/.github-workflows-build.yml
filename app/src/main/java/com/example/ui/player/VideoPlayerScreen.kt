@@ -116,6 +116,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -178,7 +181,25 @@ fun VideoPlayerScreen(
     val isLive = currentItem?.type == IptvType.LIVE_TV || playerManager.isCurrentStreamLive()
     val hasDrawerItems = allChannels.isNotEmpty() && currentItem?.type != IptvType.MOVIE
 
-    // --- Option 1: Binge-Mode Auto-Play Next Episode Countdown ---
+    // --- True Fullscreen Immersive Mode (Hides Time, Signal, Battery & Nav Bar) ---
+    DisposableEffect(localView) {
+        val prevKeepScreenOn = localView.keepScreenOn
+        localView.keepScreenOn = true
+
+        val window = (context as? Activity)?.window
+        val insetsController = window?.let { WindowCompat.getInsetsController(it, localView) }
+        insetsController?.apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.systemBars())
+        }
+
+        onDispose {
+            localView.keepScreenOn = prevKeepScreenOn
+            insetsController?.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
+    // --- Binge-Mode Auto-Play Next Episode Countdown (10 seconds) ---
     val nextEpisodeItem = remember(currentItem?.id, allChannels) {
         if (currentItem?.type == IptvType.SERIES && allChannels.size > 1) {
             val idx = allChannels.indexOfFirst { it.id == currentItem.id || it.streamUrl == currentItem.streamUrl }
@@ -187,18 +208,18 @@ fun VideoPlayerScreen(
     }
 
     var nextEpDismissedForId by remember(currentItem?.id) { mutableStateOf(false) }
-    var nextEpCountdownSec by remember(currentItem?.id) { mutableIntStateOf(5) }
+    var nextEpCountdownSec by remember(currentItem?.id) { mutableIntStateOf(10) }
 
     val isNearEpisodeEnd = !isLive &&
         currentItem?.type == IptvType.SERIES &&
         nextEpisodeItem != null &&
         !nextEpDismissedForId &&
         uiState.durationMs > 60_000L &&
-        (uiState.durationMs - uiState.currentPositionMs) in 1L..15_000L
+        (uiState.durationMs - uiState.currentPositionMs) in 1L..18_000L
 
     LaunchedEffect(isNearEpisodeEnd, currentItem?.id) {
         if (isNearEpisodeEnd) {
-            nextEpCountdownSec = 5
+            nextEpCountdownSec = 10
             while (nextEpCountdownSec > 0) {
                 delay(1000L)
                 nextEpCountdownSec--
@@ -209,7 +230,7 @@ fun VideoPlayerScreen(
         }
     }
 
-    // --- Option 3: Vertical Brightness & Volume Swipe Gestures (Mobile/Tablet) ---
+    // --- Vertical Brightness & Volume Swipe Gestures (Mobile/Tablet) ---
     val audioManager = remember {
         context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
@@ -241,14 +262,6 @@ fun VideoPlayerScreen(
             delay(650L)
             gestureFeedback = PlayerGestureFeedback.NONE
             accumulatedSkipSeconds = 10
-        }
-    }
-
-    DisposableEffect(localView) {
-        val prevKeepScreenOn = localView.keepScreenOn
-        localView.keepScreenOn = true
-        onDispose {
-            localView.keepScreenOn = prevKeepScreenOn
         }
     }
 
@@ -611,7 +624,7 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Binge-Mode Auto-Play Next Episode Card (Last 15s of Series Episode)
+        // Binge-Mode Auto-Play Next Episode Card (10-second countdown)
         AnimatedVisibility(
             visible = isNearEpisodeEnd && nextEpisodeItem != null,
             enter = fadeIn(tween(220)) + slideInHorizontally(initialOffsetX = { it }),
@@ -660,7 +673,7 @@ fun VideoPlayerScreen(
                     )
 
                     LinearProgressIndicator(
-                        progress = { (5 - nextEpCountdownSec).coerceIn(0, 5) / 5f },
+                        progress = { (10 - nextEpCountdownSec).coerceIn(0, 10) / 10f },
                         color = AccentCyan,
                         trackColor = Slate800,
                         modifier = Modifier
