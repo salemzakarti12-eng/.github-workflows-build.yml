@@ -103,7 +103,7 @@ class IptvRepository(context: Context) {
         get() = _appLanguage.value == "ar"
 
     fun setAppLanguage(lang: String) {
-        val supportedCodes = setOf("en", "ar", "zh", "ja", "fr", "es", "tr", "ur", "ru", "pt")
+        val supportedCodes = setOf("en", "ar", "zh", "ja", "fr", "es", "tr", "ur", "ru", "pt", "pl")
         val normalized = lang.lowercase().takeIf { it in supportedCodes } ?: "en"
         _appLanguage.value = normalized
         prefs.edit().putString("app_language", normalized).apply()
