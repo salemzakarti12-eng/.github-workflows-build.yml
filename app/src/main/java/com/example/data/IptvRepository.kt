@@ -288,7 +288,6 @@ class IptvRepository(context: Context) {
                         } else {
                             "Ready! Loaded %,d channels, movies & series...".format(lives.size + movs.size + sers.size)
                         }
-                        // Silent background revalidation (Stale-While-Revalidate)
                         addOrUpdateXtreamSource(
                             name = active.name,
                             serverUrl = active.serverUrl,
@@ -769,10 +768,8 @@ class IptvRepository(context: Context) {
                 }
             )
 
-            // Persist compressed GZIP catalog for <0.9s instant startup next launch
             saveCatalogCache(sourceId, live, movs, sers)
 
-            // Only hot-swap if user hasn't switched to a different source mid-sync
             if (!isBackgroundRefresh || _activeSource.value?.id == sourceId) {
                 indexStreams(live, movs, sers)
                 updateActiveSource(source)
@@ -987,7 +984,12 @@ class IptvRepository(context: Context) {
     }
 
     suspend fun switchSource(source: IptvSource, forceRefresh: Boolean = false) {
-        if (!forceRefresh) {
+        if (forceRefresh) {
+            try {
+                val cacheFile = getCacheFile(source.id)
+                if (cacheFile.exists()) cacheFile.delete()
+            } catch (_: Exception) {}
+        } else {
             val cached = loadCatalogCache(source.id)
             if (cached != null) {
                 val (lives, movs, sers) = cached
