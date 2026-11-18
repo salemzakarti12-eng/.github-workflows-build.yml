@@ -123,7 +123,8 @@ fun ContentBrowserScreen(
     onBack: () -> Unit
 ) {
     val strings = LocalAppStrings.current
-    val isAr = LocalAppLanguage.current == "ar"
+    val currentLanguage = LocalAppLanguage.current
+    val isAr = currentLanguage == "ar"
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val configuration = LocalConfiguration.current
@@ -132,7 +133,6 @@ fun ContentBrowserScreen(
     val isTv = LocalIsTelevision.current
     val useSideCategoryPanel = isLandscape || isTablet || isTv
 
-    // Persistent per-screen recent search history (last 6 queries)
     val searchPrefs = remember {
         context.getSharedPreferences("hypnostream_search_history", Context.MODE_PRIVATE)
     }
@@ -158,13 +158,14 @@ fun ContentBrowserScreen(
 
     var categorySearchQuery by remember(screen) { mutableStateOf("") }
 
-    val filteredCategories = remember(categories, categorySearchQuery, isAr) {
+    val filteredCategories = remember(categories, categorySearchQuery, currentLanguage) {
         if (categorySearchQuery.isBlank()) {
             categories
         } else {
             categories.filter { cat ->
                 cat.name.contains(categorySearchQuery, ignoreCase = true) ||
-                CategoryTranslator.translate(cat.name, isAr).contains(categorySearchQuery, ignoreCase = true)
+                CategoryTranslator.translateForLanguage(cat.name, currentLanguage)
+                    .contains(categorySearchQuery, ignoreCase = true)
             }
         }
     }
@@ -280,8 +281,8 @@ fun ContentBrowserScreen(
                     }
 
                     items(filteredCategories, key = { it.id }) { category ->
-                        val translatedTitle = remember(category.name, isAr) {
-                            CategoryTranslator.translate(category.name, isAr)
+                        val translatedTitle = remember(category.name, currentLanguage) {
+                            CategoryTranslator.translateForLanguage(category.name, currentLanguage)
                         }
                         CategoryRowItem(
                             displayName = translatedTitle,
@@ -393,7 +394,6 @@ fun ContentBrowserScreen(
                     )
                 }
 
-                // Recent Search History Chips (shown when search box is empty)
                 if (searchQuery.isEmpty() && recentSearches.isNotEmpty()) {
                     RecentSearchesRow(
                         recentSearches = recentSearches,
@@ -524,7 +524,6 @@ fun ContentBrowserScreen(
                 )
             }
 
-            // Recent Search History Chips (Mobile / Portrait)
             if (searchQuery.isEmpty() && recentSearches.isNotEmpty()) {
                 RecentSearchesRow(
                     recentSearches = recentSearches,
@@ -556,8 +555,8 @@ fun ContentBrowserScreen(
                     )
                 }
                 items(filteredCategories, key = { it.id }) { category ->
-                    val translatedTitle = remember(category.name, isAr) {
-                        CategoryTranslator.translate(category.name, isAr)
+                    val translatedTitle = remember(category.name, currentLanguage) {
+                        CategoryTranslator.translateForLanguage(category.name, currentLanguage)
                     }
                     CategoryChipItem(
                         displayName = "$translatedTitle (${category.itemCount})",
