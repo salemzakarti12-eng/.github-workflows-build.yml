@@ -373,6 +373,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun refreshActiveSource() {
+        val current = activeSource.value ?: return
+        viewModelScope.launch {
+            repository.switchSource(current)
+        }
+    }
+
     fun deleteSource(sourceId: String) {
         repository.deleteSource(sourceId)
     }
