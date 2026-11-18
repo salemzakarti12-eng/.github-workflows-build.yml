@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import android.content.res.Configuration
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -13,11 +14,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -42,6 +46,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -71,6 +76,8 @@ fun LanguageToggleButton(
 ) {
     val currentLanguage = LocalAppLanguage.current
     val strings = LocalAppStrings.current
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
@@ -125,17 +132,22 @@ fun LanguageToggleButton(
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
-                text = "🌐 $activeNativeName",
+                text = activeNativeName,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (isFocused) Slate900 else PureWhite
+                color = if (isFocused) Slate900 else PureWhite,
+                maxLines = 1,
+                softWrap = false
             )
         }
     }
 
     if (showLanguageDialog && onSelectLanguage != null) {
         val selectedFocusRequester = remember { FocusRequester() }
-        val languageRows = remember { AppLanguageManager.supportedLanguages.chunked(2) }
+        val columnsCount = if (isLandscape) 3 else 2
+        val languageRows = remember(columnsCount) {
+            AppLanguageManager.supportedLanguages.chunked(columnsCount)
+        }
 
         LaunchedEffect(Unit) {
             try {
@@ -150,22 +162,25 @@ fun LanguageToggleButton(
         ) {
             Surface(
                 color = Slate900,
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(18.dp),
                 border = BorderStroke(1.dp, Slate700),
                 modifier = Modifier
                     .fillMaxWidth(0.92f)
-                    .widthIn(max = 460.dp)
+                    .widthIn(max = if (isLandscape) 640.dp else 440.dp)
+                    .heightIn(max = (configuration.screenHeightDp * 0.90f).dp)
             ) {
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = 4.dp)
+                            .padding(bottom = 2.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -175,11 +190,11 @@ fun LanguageToggleButton(
                                 imageVector = Icons.Default.Language,
                                 contentDescription = null,
                                 tint = AccentCyan,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                             Text(
                                 text = strings.switchLanguage,
-                                fontSize = 16.sp,
+                                fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = PureWhite
                             )
@@ -187,13 +202,13 @@ fun LanguageToggleButton(
 
                         IconButton(
                             onClick = { showLanguageDialog = false },
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(26.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = strings.close,
                                 tint = Slate400,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(17.dp)
                             )
                         }
                     }
@@ -216,7 +231,7 @@ fun LanguageToggleButton(
                                     modifier = Modifier.weight(1f)
                                 )
                             }
-                            if (rowItems.size == 1) {
+                            repeat(columnsCount - rowItems.size) {
                                 Spacer(modifier = Modifier.weight(1f))
                             }
                         }
@@ -282,12 +297,12 @@ private fun CompactLanguageGridItem(
                 indication = null,
                 onClick = onSelect
             )
-            .padding(horizontal = 10.dp, vertical = 8.dp)
+            .padding(horizontal = 10.dp, vertical = 6.dp)
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = lang.nativeName,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (isItemFocused) Slate950 else PureWhite,
                 maxLines = 1,
@@ -295,7 +310,7 @@ private fun CompactLanguageGridItem(
             )
             Text(
                 text = lang.englishName,
-                fontSize = 10.sp,
+                fontSize = 9.5.sp,
                 color = if (isItemFocused) Slate900 else Slate400,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -308,7 +323,7 @@ private fun CompactLanguageGridItem(
                 imageVector = Icons.Default.Check,
                 contentDescription = null,
                 tint = if (isItemFocused) Slate950 else AccentCyan,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(15.dp)
             )
         }
     }
