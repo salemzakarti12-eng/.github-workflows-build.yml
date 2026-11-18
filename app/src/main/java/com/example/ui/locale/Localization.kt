@@ -1166,6 +1166,111 @@ val PortugueseStrings = AppStrings(
     updatePlaylist = "Atualizar"
 )
 
+val PolishStrings = AppStrings(
+    home = "Strona główna",
+    liveTv = "Telewizja na żywo",
+    liveChannelsTitle = "Kanały TV na żywo",
+    movies = "Filmy",
+    moviesTitle = "Filmy i Kino",
+    series = "Seriale",
+    seriesTitle = "Seriale i Programy",
+    sources = "Źródła",
+    settings = "Ustawienia",
+    exploreEntertainment = "ODKRYWAJ ROZRYWKĘ",
+    modernIptvPlayer = "Nowoczesny odtwarzacz IPTV i VOD",
+    liveTvSubtitle = "Telewizja na żywo, sport i wiadomości ze świata",
+    moviesSubtitle = "Kino na żądanie, hity kinowe i filmy fabularne",
+    seriesSubtitle = "Seriale, pełne sezony i odcinki",
+    liveStreamingBadge = "NA ŻYWO",
+    cinemaVodBadge = "KINO I VOD",
+    episodicTvBadge = "SERIALE TV",
+    channelsAvailable = "Dostępnych kanałów",
+    vodTitles = "Filmów VOD",
+    showsCatalog = "Seriali w katalogu",
+    connected = "POŁĄCZONO",
+    disconnected = "ROZŁĄCZONO",
+    noActiveSourceHint = "Brak aktywnego źródła. Dotknij, aby dodać listę Xtream lub M3U.",
+    switchSource = "Zmień",
+    configure = "Konfiguruj",
+    all = "Wszystkie",
+    favorites = "Ulubione",
+    favoriteChannelsAndShows = "Ulubione kanały i programy",
+    continueWatching = "Kontynuuj oglądanie",
+    searchInCategories = "Szukaj w kategoriach...",
+    searchPlaceholder = "Szukaj po nazwie lub kategorii...",
+    searchCategoriesPlaceholder = "Filtruj kategorie...",
+    searchByStreamName = "Szukaj kanałów, filmów lub seriali...",
+    nowPlaying = "Teraz odtwarzane",
+    noStreamsInCategory = "Brak transmisji w tej kategorii",
+    noStreamsHint = "Spróbuj zmienić kategorię lub wyczyścić wyszukiwanie.",
+    noCategoriesFound = "Nie znaleziono kategorii",
+    loadMore = "Załaduj więcej",
+    play = "Odtwórz",
+    viewSeries = "Zobacz serial",
+    back = "Wstecz",
+    close = "Zamknij",
+    audio = "Dźwięk",
+    subtitles = "Napisy",
+    selectAudioTrack = "Wybierz ścieżkę dźwiękową",
+    selectSubtitleTrack = "Wybierz napisy / CC",
+    off = "Wyłączone",
+    defaultTrack = "Ścieżka domyślna",
+    trackNumber = "Ścieżka",
+    season = "Sezon",
+    episode = "Odcinek",
+    episodes = "Odcinki",
+    episodesCount = "Odcinków",
+    playEpisode = "Odtwórz odcinek",
+    plotOverview = "Opis fabuły",
+    noEpisodesFound = "Nie znaleziono odcinków dla tego sezonu",
+    loadingSeriesDetails = "Ładowanie sezonów i odcinków...",
+    sourcesAndProviders = "Źródła i Listy",
+    managePlaylists = "Konfiguruj dane IPTV i listy odtwarzania",
+    m3uTab = "Lista M3U",
+    xtreamTab = "Xtream Codes API",
+    savedTab = "Zapisani dostawcy",
+    serverUrl = "Adres serwera (http://...)",
+    username = "Nazwa użytkownika",
+    password = "Hasło",
+    playlistName = "Nazwa listy (opcjonalnie)",
+    connectAndLoad = "Połącz / Załaduj",
+    connectXtreamButton = "Połącz i załaduj kanały",
+    active = "Aktywne",
+    activate = "Aktywuj",
+    delete = "Usuń",
+    language = "Język",
+    languageToggleLabel = "Polski",
+    switchLanguage = "Wybierz język",
+    english = "English",
+    arabic = "العربية",
+    noSavedSources = "Brak zapisanych list",
+    noSavedSourcesDesc = "Dodaj swoje pierwsze źródło Xtream lub M3U powyżej.",
+    quickChannels = "Kanały",
+    fitScreen = "Dopasuj",
+    volumeLabel = "Głośność",
+    brightnessLabel = "Jasność",
+    addM3uTitle = "Dodaj link do listy M3U",
+    addM3uSubtitle = "Szybkie ładowanie list zawierających ponad 50 000 kanałów.",
+    xtreamLoginTitle = "Logowanie Xtream Codes API",
+    xtreamLoginSubtitle = "Natychmiastowe połączenie z kategoriami TV, filmów i seriali.",
+    m3uUrlLabel = "Adres URL listy M3U / M3U8",
+    m3uUrlPlaceholder = "http://provider.tv:8080/get.php?username=...&password=...",
+    autoDetectTitle = "Inteligentne wykrywanie aktywne",
+    autoDetectDesc = "Wykryto dane Xtream Codes API. Natychmiastowe ładowanie przez API!",
+    parsingStreams = "Łączenie i analizowanie kanałów...",
+    viewModeList = "Widok listy",
+    viewModeGrid = "Widok siatki",
+    exploreDemoTitle = "Wypróbuj kanały demo",
+    exploreDemoDesc = "Przetestuj zweryfikowane, publiczne strumienie IPTV bez konfiguracji.",
+    testDriveButton = "Załaduj publiczne kanały demo",
+    history = "Historia",
+    historyTitle = "Historia oglądania",
+    historySubtitle = "Ostatnio oglądane filmy i seriale",
+    historyBadge = "HISTORIA",
+    savedTitles = "Zapisanych tytułów",
+    updatePlaylist = "Aktualizuj"
+)
+
 fun getAppStrings(language: String): AppStrings {
     return when (language.lowercase()) {
         "ar" -> ArabicStrings
@@ -1177,6 +1282,7 @@ fun getAppStrings(language: String): AppStrings {
         "ur" -> UrduStrings
         "ru" -> RussianStrings
         "pt" -> PortugueseStrings
+        "pl" -> PolishStrings
         else -> EnglishStrings
     }
 }
@@ -1203,6 +1309,7 @@ object AppLanguageManager {
     const val LANG_UR = "ur"
     const val LANG_RU = "ru"
     const val LANG_PT = "pt"
+    const val LANG_PL = "pl"
 
     val supportedLanguages = listOf(
         SupportedLanguage(LANG_EN, "English", "English", isRtl = false),
@@ -1214,7 +1321,8 @@ object AppLanguageManager {
         SupportedLanguage(LANG_TR, "Türkçe", "Turkish", isRtl = false),
         SupportedLanguage(LANG_UR, "اردو", "Urdu", isRtl = true),
         SupportedLanguage(LANG_RU, "Русский", "Russian", isRtl = false),
-        SupportedLanguage(LANG_PT, "Português", "Portuguese", isRtl = false)
+        SupportedLanguage(LANG_PT, "Português", "Portuguese", isRtl = false),
+        SupportedLanguage(LANG_PL, "Polski", "Polish", isRtl = false)
     )
 }
 
