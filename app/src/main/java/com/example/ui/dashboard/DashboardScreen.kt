@@ -86,6 +86,7 @@ import com.example.ui.components.LanguageToggleButton
 import com.example.ui.locale.LocalAppLanguage
 import com.example.ui.locale.LocalAppStrings
 import com.example.ui.locale.LocalMiniPlayerActive
+import com.example.ui.locale.isRtlLanguage
 import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.AccentEmerald
 import com.example.ui.theme.MoviesGradient
@@ -117,15 +118,18 @@ fun DashboardScreen(
     onNavigate: (Screen) -> Unit,
     onPlayItem: (IptvItem) -> Unit,
     onToggleLanguage: () -> Unit = {},
+    onSelectLanguage: ((String) -> Unit)? = null,
     isRefreshing: Boolean = false,
     onRefreshSource: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val strings = LocalAppStrings.current
-    val isAr = LocalAppLanguage.current == "ar"
+    val currentLanguage = LocalAppLanguage.current
+    val isAr = currentLanguage == "ar"
+    val isRtl = isRtlLanguage(currentLanguage)
     val context = LocalContext.current
     val isMiniPlayerActive = LocalMiniPlayerActive.current
-    val layoutDirection = if (isAr) LayoutDirection.Rtl else LayoutDirection.Ltr
+    val layoutDirection = if (isRtl) LayoutDirection.Rtl else LayoutDirection.Ltr
 
     val positionPrefs = remember {
         context.getSharedPreferences("hypnostream_playback_positions", Context.MODE_PRIVATE)
@@ -163,7 +167,8 @@ fun DashboardScreen(
                     DashboardHeader(
                         activeSource = activeSource,
                         onOpenSources = { onNavigate(Screen.SOURCES) },
-                        onToggleLanguage = onToggleLanguage
+                        onToggleLanguage = onToggleLanguage,
+                        onSelectLanguage = onSelectLanguage
                     )
                 }
 
@@ -320,7 +325,7 @@ fun DashboardScreen(
                         Spacer(modifier = Modifier.height(16.dp))
                         SectionHeader(
                             icon = Icons.Default.History,
-                            title = if (isAr) "متابعة المشاهدة" else "Continue Watching",
+                            title = strings.continueWatching,
                             count = continueWatchingItems.size,
                             accentColor = AccentCyan,
                             actionLabel = if (isAr) "عرض الكل" else "View All",
@@ -366,7 +371,8 @@ fun DashboardScreen(
 fun DashboardHeader(
     activeSource: IptvSource?,
     onOpenSources: () -> Unit,
-    onToggleLanguage: () -> Unit = {}
+    onToggleLanguage: () -> Unit = {},
+    onSelectLanguage: ((String) -> Unit)? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
@@ -414,7 +420,10 @@ fun DashboardHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            LanguageToggleButton(onToggleLanguage = onToggleLanguage)
+            LanguageToggleButton(
+                onToggleLanguage = onToggleLanguage,
+                onSelectLanguage = onSelectLanguage
+            )
 
             IconButton(
                 onClick = onOpenSources,
@@ -464,7 +473,9 @@ fun SourceInfoBanner(
     val isRefreshFocused by refreshInteraction.collectIsFocusedAsState()
 
     val strings = LocalAppStrings.current
-    val isAr = LocalAppLanguage.current == "ar"
+    val currentLanguage = LocalAppLanguage.current
+    val isAr = currentLanguage == "ar"
+    val isRtl = isRtlLanguage(currentLanguage)
 
     Surface(
         modifier = Modifier
@@ -617,7 +628,7 @@ fun SourceInfoBanner(
                             color = if (isSwitchFocused) Slate950 else AccentCyan
                         )
                         Icon(
-                            imageVector = if (isAr) Icons.Default.ChevronLeft else Icons.Default.ChevronRight,
+                            imageVector = if (isRtl) Icons.Default.ChevronLeft else Icons.Default.ChevronRight,
                             contentDescription = null,
                             tint = if (isSwitchFocused) Slate950 else AccentCyan,
                             modifier = Modifier.size(16.dp)
@@ -644,7 +655,7 @@ fun HypnotixGradientCard(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
-    val isAr = LocalAppLanguage.current == "ar"
+    val isRtl = isRtlLanguage(LocalAppLanguage.current)
 
     val scale by animateFloatAsState(
         targetValue = if (isFocused) 1.05f else 1f,
@@ -775,7 +786,7 @@ fun HypnotixGradientCard(
                         modifier = Modifier.weight(1f)
                     )
                     Icon(
-                        imageVector = if (isAr) Icons.Default.ChevronLeft else Icons.Default.ChevronRight,
+                        imageVector = if (isRtl) Icons.Default.ChevronLeft else Icons.Default.ChevronRight,
                         contentDescription = "Open",
                         tint = PureWhite,
                         modifier = Modifier.size(18.dp)
@@ -797,7 +808,7 @@ fun SectionHeader(
 ) {
     val actionInteraction = remember { MutableInteractionSource() }
     val isActionFocused by actionInteraction.collectIsFocusedAsState()
-    val isAr = LocalAppLanguage.current == "ar"
+    val isRtl = isRtlLanguage(LocalAppLanguage.current)
 
     Row(
         modifier = Modifier
@@ -866,7 +877,7 @@ fun SectionHeader(
                     color = if (isActionFocused) Slate950 else AccentCyan
                 )
                 Icon(
-                    imageVector = if (isAr) Icons.Default.ChevronLeft else Icons.Default.ChevronRight,
+                    imageVector = if (isRtl) Icons.Default.ChevronLeft else Icons.Default.ChevronRight,
                     contentDescription = null,
                     tint = if (isActionFocused) Slate950 else AccentCyan,
                     modifier = Modifier.size(16.dp)
