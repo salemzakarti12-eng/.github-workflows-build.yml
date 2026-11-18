@@ -103,7 +103,8 @@ class IptvRepository(context: Context) {
         get() = _appLanguage.value == "ar"
 
     fun setAppLanguage(lang: String) {
-        val normalized = if (lang.equals("ar", ignoreCase = true)) "ar" else "en"
+        val supportedCodes = setOf("en", "ar", "zh", "ja", "fr", "es", "tr", "ur", "ru", "pt")
+        val normalized = lang.lowercase().takeIf { it in supportedCodes } ?: "en"
         _appLanguage.value = normalized
         prefs.edit().putString("app_language", normalized).apply()
     }
@@ -985,28 +986,30 @@ class IptvRepository(context: Context) {
         )
     }
 
-    suspend fun switchSource(source: IptvSource) {
-        val cached = loadCatalogCache(source.id)
-        if (cached != null) {
-            val (lives, movs, sers) = cached
-            indexStreams(lives, movs, sers)
-            updateActiveSource(source)
-            when (source.type) {
-                SourceType.XTREAM_CODES -> addOrUpdateXtreamSource(
-                    name = source.name,
-                    serverUrl = source.serverUrl,
-                    username = source.username,
-                    password = source.password,
-                    isBackgroundRefresh = true
-                )
-                SourceType.M3U_URL -> addOrUpdateM3uSource(
-                    name = source.name,
-                    m3uUrl = source.m3uUrl,
-                    isBackgroundRefresh = true
-                )
-                else -> {}
+    suspend fun switchSource(source: IptvSource, forceRefresh: Boolean = false) {
+        if (!forceRefresh) {
+            val cached = loadCatalogCache(source.id)
+            if (cached != null) {
+                val (lives, movs, sers) = cached
+                indexStreams(lives, movs, sers)
+                updateActiveSource(source)
+                when (source.type) {
+                    SourceType.XTREAM_CODES -> addOrUpdateXtreamSource(
+                        name = source.name,
+                        serverUrl = source.serverUrl,
+                        username = source.username,
+                        password = source.password,
+                        isBackgroundRefresh = true
+                    )
+                    SourceType.M3U_URL -> addOrUpdateM3uSource(
+                        name = source.name,
+                        m3uUrl = source.m3uUrl,
+                        isBackgroundRefresh = true
+                    )
+                    else -> {}
+                }
+                return
             }
-            return
         }
 
         when (source.type) {
@@ -1018,20 +1021,23 @@ class IptvRepository(context: Context) {
                     name = source.name,
                     serverUrl = source.serverUrl,
                     username = source.username,
-                    password = source.password
+                    password = source.password,
+                    isBackgroundRefresh = false
                 )
             }
             SourceType.M3U_URL -> {
                 addOrUpdateM3uSource(
                     name = source.name,
-                    m3uUrl = source.m3uUrl
+                    m3uUrl = source.m3uUrl,
+                    isBackgroundRefresh = false
                 )
             }
             SourceType.M3U_TEXT -> {
                 addOrUpdateM3uSource(
                     name = source.name,
                     m3uUrl = "",
-                    rawContent = source.m3uContent
+                    rawContent = source.m3uContent,
+                    isBackgroundRefresh = false
                 )
             }
         }
