@@ -494,12 +494,12 @@ fun HypnoStreamApp(
             .background(Slate950)
     ) {
         val navItems = listOf(
-            Triple(Screen.DASHBOARD, Icons.Default.Home, if (isAr) "الرئيسية" else strings.home),
-            Triple(Screen.LIVE_CHANNELS, Icons.Default.LiveTv, if (isAr) "البث المباشر" else strings.liveTv),
-            Triple(Screen.MOVIES, Icons.Default.Movie, if (isAr) "الأفلام" else strings.movies),
-            Triple(Screen.SERIES, Icons.Default.VideoLibrary, if (isAr) "المسلسلات" else strings.series),
-            Triple(Screen.HISTORY, Icons.Default.History, if (isAr) "السجل" else "History"),
-            Triple(Screen.SOURCES, Icons.Default.Settings, if (isAr) "المصادر" else strings.sources)
+            Triple(Screen.DASHBOARD, Icons.Default.Home, strings.home),
+            Triple(Screen.LIVE_CHANNELS, Icons.Default.LiveTv, strings.liveTv),
+            Triple(Screen.MOVIES, Icons.Default.Movie, strings.movies),
+            Triple(Screen.SERIES, Icons.Default.VideoLibrary, strings.series),
+            Triple(Screen.HISTORY, Icons.Default.History, strings.history),
+            Triple(Screen.SOURCES, Icons.Default.Settings, strings.sources)
         )
 
         val screenContent: @Composable () -> Unit = {
@@ -517,6 +517,7 @@ fun HypnoStreamApp(
                         onToggleLanguage = { viewModel.toggleLanguage() },
                         onSelectLanguage = { viewModel.setLanguage(it) },
                         isRefreshing = isLoading,
+                        statusMessage = statusMessage,
                         onRefreshSource = { viewModel.refreshActiveSource() }
                     )
                 }
@@ -1101,6 +1102,7 @@ fun WatchHistoryScreen(
     onClearAll: () -> Unit,
     onBack: () -> Unit
 ) {
+    val strings = LocalAppStrings.current
     val isAr = LocalAppLanguage.current == "ar"
     var selectedFilter by remember { mutableStateOf("ALL") }
 
@@ -1117,9 +1119,9 @@ fun WatchHistoryScreen(
     }
 
     val filterTabs = listOf(
-        "ALL" to (if (isAr) "الكل (${vodItems.size})" else "All (${vodItems.size})"),
-        "SERIES" to (if (isAr) "مسلسلات" else "Series"),
-        "MOVIES" to (if (isAr) "أفلام" else "Movies")
+        "ALL" to "${strings.all} (${vodItems.size})",
+        "SERIES" to strings.series,
+        "MOVIES" to strings.movies
     )
 
     Column(
@@ -1145,7 +1147,7 @@ fun WatchHistoryScreen(
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
+                        contentDescription = strings.back,
                         tint = PureWhite
                     )
                 }
@@ -1158,7 +1160,7 @@ fun WatchHistoryScreen(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = if (isAr) "سجل المشاهدة" else "Watch History",
+                    text = strings.historyTitle,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Black,
                     color = PureWhite
@@ -1425,7 +1427,6 @@ fun HypnoOrbitalSplashOverlay(
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "hypnoSplash")
 
-    // Snappy whip-momentum orbital easing so the comet accelerates across the front glass
     val orbitAngle by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
@@ -1525,10 +1526,6 @@ fun HypnoOrbitalSplashOverlay(
                         center = Offset(cx, cy)
                     )
 
-                    // =========================================================
-                    // LAYER 1 (BACK): Top orbital arc (180° -> 360°)
-                    // White comet passes BEHIND the TV monitor on the back arc
-                    // =========================================================
                     rotate(degrees = -18f, pivot = Offset(cx, cy)) {
                         val ovalTopLeft = Offset(w * 0.04f, h * 0.30f)
                         val ovalSize = Size(w * 0.92f, h * 0.40f)
@@ -1561,9 +1558,6 @@ fun HypnoOrbitalSplashOverlay(
                         }
                     }
 
-                    // =========================================================
-                    // LAYER 2 (MIDDLE): Opaque TV Monitor, Pills, Play & Stand
-                    // =========================================================
                     val tvWidth = w * 0.62f
                     val tvHeight = h * 0.48f
                     val tvLeft = cx - (tvWidth / 2f)
@@ -1658,10 +1652,6 @@ fun HypnoOrbitalSplashOverlay(
                         cap = StrokeCap.Round
                     )
 
-                    // =========================================================
-                    // LAYER 3 (FRONT): Bottom orbital arc (0° -> 180°)
-                    // White comet & glow sweep OVER the front of the TV monitor
-                    // =========================================================
                     rotate(degrees = -18f, pivot = Offset(cx, cy)) {
                         val ovalTopLeft = Offset(w * 0.04f, h * 0.30f)
                         val ovalSize = Size(w * 0.92f, h * 0.40f)
@@ -1780,9 +1770,8 @@ fun MiniPlayerBar(
     val closeBtnInteraction = remember { MutableInteractionSource() }
     val isCloseBtnFocused by closeBtnInteraction.collectIsFocusedAsState()
 
-    val currentLanguage = LocalAppLanguage.current
-    val isAr = currentLanguage == "ar"
-    val nowPlayingText = if (isAr) "يعرض الآن" else "Now Playing"
+    val strings = LocalAppStrings.current
+    val isAr = LocalAppLanguage.current == "ar"
 
     val previewWidth = if (isCompact) 112.dp else 124.dp
     val previewHeight = if (isCompact) 62.dp else 70.dp
@@ -1892,7 +1881,7 @@ fun MiniPlayerBar(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "$nowPlayingText • ${item.group}",
+                        text = "${strings.nowPlaying} • ${item.group}",
                         fontSize = 11.sp,
                         color = AccentCyan,
                         maxLines = 1,
