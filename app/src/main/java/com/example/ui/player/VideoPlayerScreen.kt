@@ -129,6 +129,7 @@ import com.example.model.IptvType
 import com.example.model.PlayerUiState
 import com.example.player.ExoPlayerManager
 import com.example.ui.locale.LocalAppLanguage
+import com.example.ui.locale.LocalAppStrings
 import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.AccentRed
 import com.example.ui.theme.PureWhite
@@ -169,6 +170,7 @@ fun VideoPlayerScreen(
     onSelectChannel: (IptvItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalAppStrings.current
     val isAr = LocalAppLanguage.current == "ar"
     val context = LocalContext.current
     val localView = LocalView.current
@@ -528,7 +530,11 @@ fun VideoPlayerScreen(
                         } else {
                             Icons.AutoMirrored.Filled.VolumeUp
                         },
-                        contentDescription = null,
+                        contentDescription = if (activeSwipeHud == VerticalSwipeHUD.BRIGHTNESS) {
+                            strings.brightnessLabel
+                        } else {
+                            strings.volumeLabel
+                        },
                         tint = AccentCyan,
                         modifier = Modifier.size(22.dp)
                     )
@@ -659,7 +665,7 @@ fun VideoPlayerScreen(
                             onClick = { nextEpDismissedForId = true },
                             modifier = Modifier.size(22.dp)
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Cancel", tint = Slate400, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Close, contentDescription = strings.close, tint = Slate400, modifier = Modifier.size(16.dp))
                         }
                     }
 
@@ -696,7 +702,7 @@ fun VideoPlayerScreen(
                             Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = if (isAr) "تشغيل الآن" else "Play Now",
+                                text = strings.play,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -709,7 +715,7 @@ fun VideoPlayerScreen(
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
                         ) {
                             Text(
-                                text = if (isAr) "إلغاء" else "Cancel",
+                                text = strings.close,
                                 color = Slate300,
                                 fontSize = 12.sp
                             )
@@ -733,7 +739,7 @@ fun VideoPlayerScreen(
                     )
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        text = if (isAr) "جاري التحميل..." else "Loading stream...",
+                        text = strings.parsingStreams,
                         color = PureWhite,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
@@ -786,7 +792,7 @@ fun VideoPlayerScreen(
                             onClick = onBack,
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = PureWhite)
                         ) {
-                            Text(if (isAr) "رجوع" else "Back")
+                            Text(strings.back)
                         }
                     }
                 }
@@ -814,7 +820,7 @@ fun VideoPlayerScreen(
                 ) {
                     PlayerCircleButton(
                         icon = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
+                        contentDescription = strings.back,
                         onClick = onBack
                     )
 
@@ -860,7 +866,7 @@ fun VideoPlayerScreen(
 
                     PlayerCircleButton(
                         icon = Icons.Default.Audiotrack,
-                        contentDescription = "Audio Tracks",
+                        contentDescription = strings.audio,
                         onClick = { showAudioDialog = true }
                     )
 
@@ -868,7 +874,7 @@ fun VideoPlayerScreen(
 
                     PlayerCircleButton(
                         icon = Icons.Default.Subtitles,
-                        contentDescription = "Subtitles",
+                        contentDescription = strings.subtitles,
                         onClick = { showSubtitleDialog = true }
                     )
 
@@ -876,7 +882,7 @@ fun VideoPlayerScreen(
 
                     PlayerCircleButton(
                         icon = Icons.Default.AspectRatio,
-                        contentDescription = "Aspect Ratio",
+                        contentDescription = strings.fitScreen,
                         onClick = { playerManager.cycleAspectRatio() }
                     )
 
@@ -884,7 +890,7 @@ fun VideoPlayerScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         PlayerCircleButton(
                             icon = Icons.AutoMirrored.Filled.FormatListBulleted,
-                            contentDescription = "Channel List",
+                            contentDescription = strings.quickChannels,
                             onClick = { playerManager.toggleQuickChannelList() }
                         )
                     }
@@ -986,7 +992,7 @@ fun VideoPlayerScreen(
 
                         PlayerCircleButton(
                             icon = if (uiState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = "Play/Pause",
+                            contentDescription = strings.play,
                             isPrimary = true,
                             focusRequester = playPauseFocus,
                             onClick = { playerManager.togglePlayPause() }
@@ -1039,16 +1045,16 @@ fun VideoPlayerScreen(
                     ) {
                         Text(
                             text = if (currentItem?.type == IptvType.SERIES) {
-                                if (isAr) "حلقات المسلسل" else "Series Episodes"
+                                strings.episodes
                             } else {
-                                if (isAr) "قائمة القنوات" else "Channels"
+                                strings.quickChannels
                             },
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = PureWhite
                         )
                         IconButton(onClick = { playerManager.closeQuickChannelList() }) {
-                            Icon(Icons.Default.Close, contentDescription = "Close", tint = Slate400)
+                            Icon(Icons.Default.Close, contentDescription = strings.close, tint = Slate400)
                         }
                     }
 
@@ -1132,7 +1138,7 @@ fun VideoPlayerScreen(
                 containerColor = Slate900,
                 title = {
                     Text(
-                        text = if (isAr) "المسارات الصوتية" else "Audio Tracks",
+                        text = strings.selectAudioTrack,
                         color = PureWhite,
                         fontWeight = FontWeight.Bold
                     )
@@ -1180,7 +1186,7 @@ fun VideoPlayerScreen(
                 },
                 confirmButton = {
                     TextButton(onClick = { showAudioDialog = false }) {
-                        Text(if (isAr) "إغلاق" else "Close", color = AccentCyan)
+                        Text(strings.close, color = AccentCyan)
                     }
                 }
             )
@@ -1193,7 +1199,7 @@ fun VideoPlayerScreen(
                 containerColor = Slate900,
                 title = {
                     Text(
-                        text = if (isAr) "الترجمة ومزامنة التوقيت" else "Subtitles & Timing Sync",
+                        text = strings.selectSubtitleTrack,
                         color = PureWhite,
                         fontWeight = FontWeight.Bold
                     )
@@ -1307,7 +1313,7 @@ fun VideoPlayerScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(if (isAr) "إيقاف الترجمة" else "Off", color = PureWhite, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                Text(strings.off, color = PureWhite, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                                 if (uiState.isSubtitleOff) {
                                     Icon(Icons.Default.Check, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(18.dp))
                                 }
@@ -1342,7 +1348,7 @@ fun VideoPlayerScreen(
                 },
                 confirmButton = {
                     TextButton(onClick = { showSubtitleDialog = false }) {
-                        Text(if (isAr) "إغلاق" else "Close", color = AccentCyan)
+                        Text(strings.close, color = AccentCyan)
                     }
                 }
             )
