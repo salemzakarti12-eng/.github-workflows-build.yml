@@ -527,10 +527,10 @@ fun SourceInfoBanner(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = if (isRefreshing) {
-                            statusMessage ?: if (isAr) "جاري تحديث القائمة..." else "Updating playlist..."
-                        } else {
-                            activeSource?.statusText ?: strings.noActiveSourceHint
+                        text = when {
+                            isRefreshing -> statusMessage ?: if (isAr) "جاري تحديث القائمة..." else "Updating playlist..."
+                            !statusMessage.isNullOrBlank() -> statusMessage
+                            else -> activeSource?.statusText ?: strings.noActiveSourceHint
                         },
                         fontSize = 11.sp,
                         color = if (isRefreshing) AccentCyan else Slate400,
@@ -546,6 +546,9 @@ fun SourceInfoBanner(
             ) {
                 if (activeSource != null) {
                     Surface(
+                        onClick = { if (!isRefreshing) onRefreshSource() },
+                        enabled = !isRefreshing,
+                        interactionSource = refreshInteraction,
                         color = if (isRefreshFocused) AccentCyan else AccentCyan.copy(alpha = 0.14f),
                         shape = RoundedCornerShape(10.dp),
                         border = BorderStroke(
@@ -553,8 +556,6 @@ fun SourceInfoBanner(
                             color = if (isRefreshFocused) PureWhite else AccentCyan.copy(alpha = 0.45f)
                         ),
                         modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .focusable(interactionSource = refreshInteraction)
                             .onPreviewKeyEvent { event ->
                                 if (event.type == KeyEventType.KeyUp &&
                                     (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
@@ -563,11 +564,6 @@ fun SourceInfoBanner(
                                     true
                                 } else false
                             }
-                            .clickable(
-                                interactionSource = refreshInteraction,
-                                indication = null,
-                                enabled = !isRefreshing
-                            ) { onRefreshSource() }
                             .testTag("btn_refresh_active_source")
                     ) {
                         Row(
@@ -600,6 +596,8 @@ fun SourceInfoBanner(
                 }
 
                 Surface(
+                    onClick = onSwitchSource,
+                    interactionSource = switchInteraction,
                     color = if (isSwitchFocused) AccentCyan else Slate850,
                     shape = RoundedCornerShape(10.dp),
                     border = BorderStroke(
@@ -607,8 +605,6 @@ fun SourceInfoBanner(
                         color = if (isSwitchFocused) PureWhite else Slate700
                     ),
                     modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .focusable(interactionSource = switchInteraction)
                         .onPreviewKeyEvent { event ->
                             if (event.type == KeyEventType.KeyUp &&
                                 (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
@@ -617,10 +613,6 @@ fun SourceInfoBanner(
                                 true
                             } else false
                         }
-                        .clickable(
-                            interactionSource = switchInteraction,
-                            indication = null
-                        ) { onSwitchSource() }
                         .testTag("btn_switch_active_source")
                 ) {
                     Row(
@@ -1070,7 +1062,6 @@ fun ItemMiniCard(
                 )
             }
 
-            // Sleek Cyan Progress Bar along bottom edge for Continue Watching
             if (showProgress) {
                 Box(
                     modifier = Modifier
