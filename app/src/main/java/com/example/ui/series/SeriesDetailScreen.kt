@@ -68,6 +68,7 @@ import coil.compose.AsyncImage
 import com.example.model.SeriesDetails
 import com.example.model.SeriesEpisode
 import com.example.ui.locale.LocalAppLanguage
+import com.example.ui.locale.LocalAppStrings
 import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.AccentEmerald
 import com.example.ui.theme.PureWhite
@@ -87,6 +88,7 @@ fun SeriesDetailScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val strings = LocalAppStrings.current
     val isAr = LocalAppLanguage.current == "ar"
     val prefs = remember { context.getSharedPreferences("hypnostream_prefs", Context.MODE_PRIVATE) }
 
@@ -122,7 +124,7 @@ fun SeriesDetailScreen(
                 CircularProgressIndicator(color = AccentCyan)
                 Spacer(modifier = Modifier.height(14.dp))
                 Text(
-                    text = if (isAr) "جاري تحميل المواسم والحلقات..." else "Loading season & episode data...",
+                    text = strings.loadingSeriesDetails,
                     color = Slate300,
                     fontSize = 14.sp
                 )
@@ -187,7 +189,7 @@ fun SeriesDetailScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
+                                contentDescription = strings.back,
                                 tint = PureWhite
                             )
                         }
@@ -281,7 +283,7 @@ fun SeriesDetailScreen(
                 item {
                     Column(modifier = Modifier.padding(top = 8.dp)) {
                         Text(
-                            text = if (isAr) "المواسم (${details.seasons.size})" else "Seasons (${details.seasons.size})",
+                            text = if (isAr) "المواسم (${details.seasons.size})" else "${strings.season} (${details.seasons.size})",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = PureWhite,
@@ -293,6 +295,11 @@ fun SeriesDetailScreen(
                         ) {
                             items(details.seasons, key = { it.seasonNumber }) { season ->
                                 val isSelected = season.seasonNumber == selectedSeasonNum
+                                val seasonLabel = if (strings.season.contains("%s")) {
+                                    strings.season.format(season.seasonNumber.toString())
+                                } else {
+                                    "${strings.season} ${season.seasonNumber}"
+                                }
                                 Surface(
                                     onClick = { selectedSeasonNum = season.seasonNumber },
                                     color = if (isSelected) AccentCyan else Slate850,
@@ -304,7 +311,7 @@ fun SeriesDetailScreen(
                                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                                     ) {
                                         Text(
-                                            text = if (isAr) "الموسم ${season.seasonNumber}" else "Season ${season.seasonNumber}",
+                                            text = seasonLabel,
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = if (isSelected) Slate950 else PureWhite
@@ -347,7 +354,7 @@ fun SeriesDetailScreen(
                             text = if (isAr) {
                                 "حلقات الموسم $selectedSeasonNum (${episodes.size})"
                             } else {
-                                "Season $selectedSeasonNum Episodes (${episodes.size})"
+                                "${strings.episodes} (${episodes.size})"
                             },
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
@@ -375,7 +382,7 @@ fun SeriesDetailScreen(
                                         text = if (isAr) {
                                             "تمت مشاهدة $watchedInSeason/${episodes.size}"
                                         } else {
-                                            "$watchedInSeason/${episodes.size} Watched"
+                                            "$watchedInSeason/${episodes.size}"
                                         },
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
@@ -397,6 +404,7 @@ fun SeriesDetailScreen(
                         fallbackCover = details.coverUrl,
                         isWatched = isWatched,
                         isAr = isAr,
+                        playDescription = strings.playEpisode,
                         onPlay = {
                             markEpisodeWatched(episodeKey)
                             onPlayEpisode(episode)
@@ -417,6 +425,7 @@ private fun EpisodeRowCard(
     fallbackCover: String?,
     isWatched: Boolean,
     isAr: Boolean,
+    playDescription: String,
     onPlay: () -> Unit,
     onToggleWatched: () -> Unit
 ) {
@@ -583,7 +592,7 @@ private fun EpisodeRowCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.PlayArrow,
-                    contentDescription = "Play Episode",
+                    contentDescription = playDescription,
                     tint = Slate950,
                     modifier = Modifier.size(22.dp)
                 )
