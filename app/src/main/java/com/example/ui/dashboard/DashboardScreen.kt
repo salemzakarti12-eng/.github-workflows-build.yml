@@ -4,6 +4,7 @@ import android.content.Context
 import android.widget.ImageView
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,10 +39,12 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -113,6 +117,8 @@ fun DashboardScreen(
     onNavigate: (Screen) -> Unit,
     onPlayItem: (IptvItem) -> Unit,
     onToggleLanguage: () -> Unit = {},
+    isRefreshing: Boolean = false,
+    onRefreshSource: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val strings = LocalAppStrings.current
@@ -164,6 +170,8 @@ fun DashboardScreen(
                 item {
                     SourceInfoBanner(
                         activeSource = activeSource,
+                        isRefreshing = isRefreshing,
+                        onRefreshSource = onRefreshSource,
                         onSwitchSource = { onNavigate(Screen.SOURCES) }
                     )
                 }
@@ -367,7 +375,8 @@ fun DashboardHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 16.dp),
+            .displayCutoutPadding()
+            .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -444,10 +453,16 @@ fun DashboardHeader(
 @Composable
 fun SourceInfoBanner(
     activeSource: IptvSource?,
+    isRefreshing: Boolean = false,
+    onRefreshSource: () -> Unit = {},
     onSwitchSource: () -> Unit
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isFocused by interactionSource.collectIsFocusedAsState()
+    val switchInteraction = remember { MutableInteractionSource() }
+    val isSwitchFocused by switchInteraction.collectIsFocusedAsState()
+
+    val refreshInteraction = remember { MutableInteractionSource() }
+    val isRefreshFocused by refreshInteraction.collectIsFocusedAsState()
+
     val strings = LocalAppStrings.current
     val isAr = LocalAppLanguage.current == "ar"
 
@@ -457,22 +472,12 @@ fun SourceInfoBanner(
             .padding(horizontal = 20.dp, vertical = 6.dp)
             .clip(RoundedCornerShape(14.dp))
             .border(
-                width = if (isFocused) 3.dp else 1.dp,
-                color = if (isFocused) AccentCyan else Slate800,
+                width = 1.dp,
+                color = Slate800,
                 shape = RoundedCornerShape(14.dp)
             )
-            .focusable(interactionSource = interactionSource)
-            .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyUp &&
-                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                ) {
-                    onSwitchSource()
-                    true
-                } else false
-            }
-            .clickable(interactionSource = interactionSource, indication = null) { onSwitchSource() }
             .testTag("source_info_banner"),
-        color = if (isFocused) Slate850 else Slate900,
+        color = Slate900,
         shape = RoundedCornerShape(14.dp)
     ) {
         Row(
@@ -484,7 +489,9 @@ fun SourceInfoBanner(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { onSwitchSource() }
             ) {
                 Box(
                     modifier = Modifier
@@ -503,9 +510,13 @@ fun SourceInfoBanner(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = activeSource?.statusText ?: strings.noActiveSourceHint,
+                        text = if (isRefreshing) {
+                            if (isAr) "جاري تحديث القائمة..." else "Updating playlist..."
+                        } else {
+                            activeSource?.statusText ?: strings.noActiveSourceHint
+                        },
                         fontSize = 11.sp,
-                        color = Slate400,
+                        color = if (isRefreshing) AccentCyan else Slate400,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -513,20 +524,106 @@ fun SourceInfoBanner(
             }
 
             Row(
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = if (activeSource != null) strings.switchSource else strings.configure,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = AccentCyan
-                )
-                Icon(
-                    imageVector = if (isAr) Icons.Default.ChevronLeft else Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    tint = AccentCyan,
-                    modifier = Modifier.size(16.dp)
-                )
+                if (activeSource != null) {
+                    Surface(
+                        color = if (isRefreshFocused) AccentCyan else AccentCyan.copy(alpha = 0.14f),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(
+                            width = if (isRefreshFocused) 2.dp else 1.dp,
+                            color = if (isRefreshFocused) PureWhite else AccentCyan.copy(alpha = 0.45f)
+                        ),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .focusable(interactionSource = refreshInteraction)
+                            .onPreviewKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyUp &&
+                                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                ) {
+                                    if (!isRefreshing) onRefreshSource()
+                                    true
+                                } else false
+                            }
+                            .clickable(
+                                interactionSource = refreshInteraction,
+                                indication = null,
+                                enabled = !isRefreshing
+                            ) { onRefreshSource() }
+                            .testTag("btn_refresh_active_source")
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            if (isRefreshing) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(13.dp),
+                                    strokeWidth = 2.dp,
+                                    color = if (isRefreshFocused) Slate950 else AccentCyan
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = if (isAr) "تحديث القائمة" else "Update Playlist",
+                                    tint = if (isRefreshFocused) Slate950 else AccentCyan,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+                            Text(
+                                text = if (isAr) "تحديث" else "Update",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isRefreshFocused) Slate950 else AccentCyan
+                            )
+                        }
+                    }
+                }
+
+                Surface(
+                    color = if (isSwitchFocused) AccentCyan else Slate850,
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(
+                        width = if (isSwitchFocused) 2.dp else 1.dp,
+                        color = if (isSwitchFocused) PureWhite else Slate700
+                    ),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .focusable(interactionSource = switchInteraction)
+                        .onPreviewKeyEvent { event ->
+                            if (event.type == KeyEventType.KeyUp &&
+                                (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                            ) {
+                                onSwitchSource()
+                                true
+                            } else false
+                        }
+                        .clickable(
+                            interactionSource = switchInteraction,
+                            indication = null
+                        ) { onSwitchSource() }
+                        .testTag("btn_switch_active_source")
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = if (activeSource != null) strings.switchSource else strings.configure,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSwitchFocused) Slate950 else AccentCyan
+                        )
+                        Icon(
+                            imageVector = if (isAr) Icons.Default.ChevronLeft else Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = if (isSwitchFocused) Slate950 else AccentCyan,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
             }
         }
     }
