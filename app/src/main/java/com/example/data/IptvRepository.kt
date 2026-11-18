@@ -13,6 +13,7 @@ import com.example.model.SourceType
 import com.example.parser.M3uParser
 import com.example.parser.XtreamCodesClient
 import com.example.parser.XtreamUrlDetector
+import com.example.ui.locale.AppLanguageManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -103,7 +104,7 @@ class IptvRepository(context: Context) {
         get() = _appLanguage.value == "ar"
 
     fun setAppLanguage(lang: String) {
-        val supportedCodes = setOf("en", "ar", "zh", "ja", "fr", "es", "tr", "ur", "ru", "pt", "pl")
+        val supportedCodes = AppLanguageManager.supportedLanguages.map { it.code }.toSet()
         val normalized = lang.lowercase().takeIf { it in supportedCodes } ?: "en"
         _appLanguage.value = normalized
         prefs.edit().putString("app_language", normalized).apply()
