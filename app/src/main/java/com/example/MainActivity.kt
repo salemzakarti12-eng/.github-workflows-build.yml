@@ -158,6 +158,7 @@ import com.example.ui.dashboard.DashboardScreen
 import com.example.ui.locale.LocalAppLanguage
 import com.example.ui.locale.LocalAppStrings
 import com.example.ui.locale.getAppStrings
+import com.example.ui.locale.isRtlLanguage
 import com.example.ui.player.VideoPlayerScreen
 import com.example.ui.series.SeriesDetailScreen
 import com.example.ui.sources.SourcesScreen
@@ -226,7 +227,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val isTelevision = remember { isTvDevice }
             val currentLanguage by mainViewModel.currentLanguage.collectAsState()
-            val layoutDirection = if (currentLanguage == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr
+            val layoutDirection = if (isRtlLanguage(currentLanguage)) LayoutDirection.Rtl else LayoutDirection.Ltr
             val strings = remember(currentLanguage) { getAppStrings(currentLanguage) }
 
             CompositionLocalProvider(
@@ -513,7 +514,10 @@ fun HypnoStreamApp(
                         recentlyWatched = recentlyWatched,
                         onNavigate = { viewModel.navigateTo(it) },
                         onPlayItem = handleOpenHistoryOrDashboardItem,
-                        onToggleLanguage = { viewModel.toggleLanguage() }
+                        onToggleLanguage = { viewModel.toggleLanguage() },
+                        onSelectLanguage = { viewModel.setLanguage(it) },
+                        isRefreshing = isLoading,
+                        onRefreshSource = { viewModel.refreshActiveSource() }
                     )
                 }
 
