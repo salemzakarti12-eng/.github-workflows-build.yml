@@ -469,7 +469,6 @@ fun HypnoStreamApp(
     var minSplashTimePassed by remember { mutableStateOf(false) }
     var initialLoadCompleted by remember { mutableStateOf(false) }
 
-    // Gen Z instant gratification: 900ms snappy entry when data is already cached
     LaunchedEffect(Unit) {
         delay(900L)
         minSplashTimePassed = true
@@ -594,7 +593,8 @@ fun HypnoStreamApp(
                         onSwitchSource = { viewModel.switchActiveSource(it) },
                         onDeleteSource = { viewModel.deleteSource(it) },
                         onBack = { performBack() },
-                        onToggleLanguage = { viewModel.toggleLanguage() }
+                        onToggleLanguage = { viewModel.toggleLanguage() },
+                        onSelectLanguage = { viewModel.setLanguage(it) }
                     )
                 }
 
@@ -1076,7 +1076,6 @@ fun HypnoStreamApp(
             )
         }
 
-        // Spatial Gen Z zoom-out dissolve into the dashboard
         AnimatedVisibility(
             visible = showSplash,
             enter = fadeIn(tween(220)),
