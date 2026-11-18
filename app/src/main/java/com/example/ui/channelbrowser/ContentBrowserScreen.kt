@@ -90,6 +90,7 @@ import com.example.model.IptvItem
 import com.example.model.IptvType
 import com.example.ui.Screen
 import com.example.ui.locale.LocalAppLanguage
+import com.example.ui.locale.LocalAppStrings
 import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.AccentRed
 import com.example.ui.theme.PureWhite
@@ -121,6 +122,7 @@ fun ContentBrowserScreen(
     onToggleFavorite: (IptvItem) -> Unit,
     onBack: () -> Unit
 ) {
+    val strings = LocalAppStrings.current
     val isAr = LocalAppLanguage.current == "ar"
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
@@ -168,18 +170,13 @@ fun ContentBrowserScreen(
     }
 
     val screenTitle = when (screen) {
-        Screen.LIVE_CHANNELS -> if (isAr) "البث المباشر" else "Live TV"
-        Screen.MOVIES -> if (isAr) "الأفلام" else "Movies"
-        Screen.SERIES -> if (isAr) "المسلسلات" else "Series"
+        Screen.LIVE_CHANNELS -> strings.liveTv
+        Screen.MOVIES -> strings.movies
+        Screen.SERIES -> strings.series
         else -> ""
     }
 
-    val searchPlaceholder = when (screen) {
-        Screen.LIVE_CHANNELS -> if (isAr) "ابحث في القنوات..." else "Search channels..."
-        Screen.MOVIES -> if (isAr) "ابحث في الأفلام..." else "Search movies..."
-        Screen.SERIES -> if (isAr) "ابحث في المسلسلات..." else "Search series..."
-        else -> if (isAr) "بحث..." else "Search..."
-    }
+    val searchPlaceholder = strings.searchByStreamName
 
     val isVodPoster = screen == Screen.MOVIES || screen == Screen.SERIES
     val gridState = rememberLazyGridState()
@@ -217,7 +214,7 @@ fun ContentBrowserScreen(
                     singleLine = true,
                     placeholder = {
                         Text(
-                            text = if (isAr) "البحث في الأقسام..." else "Search categories...",
+                            text = strings.searchInCategories,
                             fontSize = 12.sp,
                             color = Slate400,
                             maxLines = 1
@@ -266,7 +263,7 @@ fun ContentBrowserScreen(
                 ) {
                     item(key = "cat_all") {
                         CategoryRowItem(
-                            displayName = if (isAr) "الكل" else "All",
+                            displayName = strings.all,
                             count = totalCount,
                             isSelected = selectedCategory.equals("All", true) || selectedCategory == "الكل",
                             onClick = { onCategoryChange("All") }
@@ -275,7 +272,7 @@ fun ContentBrowserScreen(
 
                     item(key = "cat_fav") {
                         CategoryRowItem(
-                            displayName = if (isAr) "المفضلة" else "Favorites",
+                            displayName = strings.favorites,
                             count = favoriteCount,
                             isSelected = selectedCategory.equals("Favorites", true) || selectedCategory == "المفضلة",
                             onClick = { onCategoryChange("Favorites") }
@@ -318,7 +315,7 @@ fun ContentBrowserScreen(
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = strings.back,
                             tint = PureWhite
                         )
                     }
@@ -460,7 +457,7 @@ fun ContentBrowserScreen(
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
+                        contentDescription = strings.back,
                         tint = PureWhite
                     )
                 }
@@ -546,14 +543,14 @@ fun ContentBrowserScreen(
             ) {
                 item(key = "chip_all") {
                     CategoryChipItem(
-                        displayName = if (isAr) "الكل ($totalCount)" else "All ($totalCount)",
+                        displayName = "${strings.all} ($totalCount)",
                         isSelected = selectedCategory.equals("All", true) || selectedCategory == "الكل",
                         onClick = { onCategoryChange("All") }
                     )
                 }
                 item(key = "chip_fav") {
                     CategoryChipItem(
-                        displayName = if (isAr) "المفضلة ($favoriteCount)" else "Favorites ($favoriteCount)",
+                        displayName = "${strings.favorites} ($favoriteCount)",
                         isSelected = selectedCategory.equals("Favorites", true) || selectedCategory == "المفضلة",
                         onClick = { onCategoryChange("Favorites") }
                     )
