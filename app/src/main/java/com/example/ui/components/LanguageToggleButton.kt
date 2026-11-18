@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -12,20 +13,19 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Language
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,11 +44,15 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.ui.locale.AppLanguageManager
 import com.example.ui.locale.LocalAppLanguage
 import com.example.ui.locale.LocalAppStrings
+import com.example.ui.locale.SupportedLanguage
 import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.Slate400
@@ -131,6 +135,7 @@ fun LanguageToggleButton(
 
     if (showLanguageDialog && onSelectLanguage != null) {
         val selectedFocusRequester = remember { FocusRequester() }
+        val languageRows = remember { AppLanguageManager.supportedLanguages.chunked(2) }
 
         LaunchedEffect(Unit) {
             try {
@@ -139,128 +144,172 @@ fun LanguageToggleButton(
             } catch (_: Exception) {}
         }
 
-        AlertDialog(
+        Dialog(
             onDismissRequest = { showLanguageDialog = false },
-            containerColor = Slate900,
-            shape = RoundedCornerShape(20.dp),
-            title = {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Language,
-                        contentDescription = null,
-                        tint = AccentCyan,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Text(
-                        text = strings.switchLanguage,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = PureWhite
-                    )
-                }
-            },
-            text = {
-                LazyColumn(
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                color = Slate900,
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, Slate700),
+                modifier = Modifier
+                    .fillMaxWidth(0.92f)
+                    .widthIn(max = 460.dp)
+            ) {
+                Column(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 360.dp)
+                    modifier = Modifier.padding(16.dp)
                 ) {
-                    items(AppLanguageManager.supportedLanguages, key = { it.code }) { lang ->
-                        val isSelected = lang.code.equals(currentLanguage, ignoreCase = true)
-                        val itemInteraction = remember { MutableInteractionSource() }
-                        val isItemFocused by itemInteraction.collectIsFocusedAsState()
-
-                        val focusModifier = if (isSelected) {
-                            Modifier.focusRequester(selectedFocusRequester)
-                        } else {
-                            Modifier
-                        }
-
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 4.dp)
+                    ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .then(focusModifier)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(
-                                    when {
-                                        isItemFocused -> AccentCyan
-                                        isSelected -> AccentCyan.copy(alpha = 0.16f)
-                                        else -> Slate850
-                                    }
-                                )
-                                .border(
-                                    width = if (isItemFocused) 2.5.dp else if (isSelected) 1.5.dp else 1.dp,
-                                    color = when {
-                                        isItemFocused -> PureWhite
-                                        isSelected -> AccentCyan
-                                        else -> Slate800
-                                    },
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                                .focusable(interactionSource = itemInteraction)
-                                .onPreviewKeyEvent { event ->
-                                    if (event.type == KeyEventType.KeyUp &&
-                                        (event.key == Key.DirectionCenter ||
-                                         event.key == Key.Enter ||
-                                         event.key == Key.NumPadEnter)
-                                    ) {
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Language,
+                                contentDescription = null,
+                                tint = AccentCyan,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = strings.switchLanguage,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = PureWhite
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { showLanguageDialog = false },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = strings.close,
+                                tint = Slate400,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    languageRows.forEach { rowItems ->
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            rowItems.forEach { lang ->
+                                val isSelected = lang.code.equals(currentLanguage, ignoreCase = true)
+                                CompactLanguageGridItem(
+                                    lang = lang,
+                                    isSelected = isSelected,
+                                    focusRequester = if (isSelected) selectedFocusRequester else null,
+                                    onSelect = {
                                         onSelectLanguage(lang.code)
                                         showLanguageDialog = false
-                                        true
-                                    } else false
-                                }
-                                .clickable(
-                                    interactionSource = itemInteraction,
-                                    indication = null
-                                ) {
-                                    onSelectLanguage(lang.code)
-                                    showLanguageDialog = false
-                                }
-                                .padding(horizontal = 14.dp, vertical = 11.dp)
-                        ) {
-                            Column {
-                                Text(
-                                    text = lang.nativeName,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isItemFocused) Slate950 else PureWhite
+                                    },
+                                    modifier = Modifier.weight(1f)
                                 )
-                                if (lang.englishName != lang.nativeName) {
-                                    Text(
-                                        text = lang.englishName,
-                                        fontSize = 11.sp,
-                                        color = if (isItemFocused) Slate900 else Slate400
-                                    )
-                                }
                             }
-
-                            if (isSelected) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = null,
-                                    tint = if (isItemFocused) Slate950 else AccentCyan,
-                                    modifier = Modifier.size(20.dp)
-                                )
+                            if (rowItems.size == 1) {
+                                Spacer(modifier = Modifier.weight(1f))
                             }
                         }
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { showLanguageDialog = false }) {
-                    Text(
-                        text = strings.close,
-                        color = Slate400,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
             }
-        )
+        }
+    }
+}
+
+@Composable
+private fun CompactLanguageGridItem(
+    lang: SupportedLanguage,
+    isSelected: Boolean,
+    focusRequester: FocusRequester?,
+    onSelect: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val itemInteraction = remember { MutableInteractionSource() }
+    val isItemFocused by itemInteraction.collectIsFocusedAsState()
+
+    val focusModifier = if (focusRequester != null) {
+        Modifier.focusRequester(focusRequester)
+    } else {
+        Modifier
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = modifier
+            .then(focusModifier)
+            .clip(RoundedCornerShape(10.dp))
+            .background(
+                when {
+                    isItemFocused -> AccentCyan
+                    isSelected -> AccentCyan.copy(alpha = 0.16f)
+                    else -> Slate850
+                }
+            )
+            .border(
+                width = if (isItemFocused) 2.dp else if (isSelected) 1.5.dp else 1.dp,
+                color = when {
+                    isItemFocused -> PureWhite
+                    isSelected -> AccentCyan
+                    else -> Slate800
+                },
+                shape = RoundedCornerShape(10.dp)
+            )
+            .focusable(interactionSource = itemInteraction)
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyUp &&
+                    (event.key == Key.DirectionCenter ||
+                     event.key == Key.Enter ||
+                     event.key == Key.NumPadEnter)
+                ) {
+                    onSelect()
+                    true
+                } else false
+            }
+            .clickable(
+                interactionSource = itemInteraction,
+                indication = null,
+                onClick = onSelect
+            )
+            .padding(horizontal = 10.dp, vertical = 8.dp)
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = lang.nativeName,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isItemFocused) Slate950 else PureWhite,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = lang.englishName,
+                fontSize = 10.sp,
+                color = if (isItemFocused) Slate900 else Slate400,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        if (isSelected) {
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = null,
+                tint = if (isItemFocused) Slate950 else AccentCyan,
+                modifier = Modifier.size(16.dp)
+            )
+        }
     }
 }
