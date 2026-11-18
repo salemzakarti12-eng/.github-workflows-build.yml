@@ -120,6 +120,7 @@ fun DashboardScreen(
     onToggleLanguage: () -> Unit = {},
     onSelectLanguage: ((String) -> Unit)? = null,
     isRefreshing: Boolean = false,
+    statusMessage: String? = null,
     onRefreshSource: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -143,14 +144,10 @@ fun DashboardScreen(
         recentlyWatched.count { it.type != IptvType.LIVE_TV }
     }
 
-    val historyTitle = if (isAr) "سجل المشاهدة" else "History"
-    val historySubtitle = if (isAr) "الأفلام والمسلسلات التي شاهدتها مؤخراً" else "Recently watched movies & TV series"
-    val historyCountText = if (isAr) {
-        "%,d عنصر محفوظ".format(Locale.US, historyCount)
-    } else {
-        "%,d Saved Titles".format(Locale.US, historyCount)
-    }
-    val historyBadge = if (isAr) "المشاهدات" else "WATCH LOG"
+    val historyTitle = strings.historyTitle
+    val historySubtitle = strings.historySubtitle
+    val historyCountText = "%,d %s".format(Locale.US, historyCount, strings.savedTitles)
+    val historyBadge = strings.historyBadge
 
     CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
         BoxWithConstraints(modifier = modifier.fillMaxSize().background(Slate950)) {
@@ -176,6 +173,7 @@ fun DashboardScreen(
                     SourceInfoBanner(
                         activeSource = activeSource,
                         isRefreshing = isRefreshing,
+                        statusMessage = statusMessage,
                         onRefreshSource = onRefreshSource,
                         onSwitchSource = { onNavigate(Screen.SOURCES) }
                     )
@@ -387,7 +385,8 @@ fun DashboardHeader(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f, fill = false)
         ) {
             AndroidView(
                 factory = { ctx ->
@@ -406,15 +405,21 @@ fun DashboardHeader(
                     text = "HypnoStream",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Black,
-                    color = PureWhite
+                    color = PureWhite,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = strings.modernIptvPlayer,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Slate400
+                    color = Slate400,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
+
+        Spacer(modifier = Modifier.width(8.dp))
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -463,6 +468,7 @@ fun DashboardHeader(
 fun SourceInfoBanner(
     activeSource: IptvSource?,
     isRefreshing: Boolean = false,
+    statusMessage: String? = null,
     onRefreshSource: () -> Unit = {},
     onSwitchSource: () -> Unit
 ) {
@@ -522,7 +528,7 @@ fun SourceInfoBanner(
                     )
                     Text(
                         text = if (isRefreshing) {
-                            if (isAr) "جاري تحديث القائمة..." else "Updating playlist..."
+                            statusMessage ?: if (isAr) "جاري تحديث القائمة..." else "Updating playlist..."
                         } else {
                             activeSource?.statusText ?: strings.noActiveSourceHint
                         },
@@ -578,13 +584,13 @@ fun SourceInfoBanner(
                             } else {
                                 Icon(
                                     imageVector = Icons.Default.Refresh,
-                                    contentDescription = if (isAr) "تحديث القائمة" else "Update Playlist",
+                                    contentDescription = strings.updatePlaylist,
                                     tint = if (isRefreshFocused) Slate950 else AccentCyan,
                                     modifier = Modifier.size(15.dp)
                                 )
                             }
                             Text(
-                                text = if (isAr) "تحديث" else "Update",
+                                text = strings.updatePlaylist,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isRefreshFocused) Slate950 else AccentCyan
