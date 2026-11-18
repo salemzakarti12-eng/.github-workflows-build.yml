@@ -100,7 +100,13 @@ data class AppStrings(
     val viewModeGrid: String,
     val exploreDemoTitle: String,
     val exploreDemoDesc: String,
-    val testDriveButton: String
+    val testDriveButton: String,
+    val history: String,
+    val historyTitle: String,
+    val historySubtitle: String,
+    val historyBadge: String,
+    val savedTitles: String,
+    val updatePlaylist: String
 )
 
 data class SupportedLanguage(
@@ -206,7 +212,13 @@ val EnglishStrings = AppStrings(
     viewModeGrid = "Logo Grid View",
     exploreDemoTitle = "Explore Demo Channels",
     exploreDemoDesc = "Test drive verified, legal public IPTV streams with 0 setup required.",
-    testDriveButton = "Load Verified Public Streams"
+    testDriveButton = "Load Verified Public Streams",
+    history = "History",
+    historyTitle = "Watch History",
+    historySubtitle = "Recently watched movies & TV series",
+    historyBadge = "WATCH LOG",
+    savedTitles = "Saved Titles",
+    updatePlaylist = "Update"
 )
 
 val ArabicStrings = AppStrings(
@@ -305,7 +317,13 @@ val ArabicStrings = AppStrings(
     viewModeGrid = "عرض شبكة الشعارات",
     exploreDemoTitle = "استكشاف القنوات التجريبية",
     exploreDemoDesc = "تجربة بث مباشر عام وموثوق ومجاني دون الحاجة لأي اشتراك.",
-    testDriveButton = "تحميل القنوات التجريبية العامة"
+    testDriveButton = "تحميل القنوات التجريبية العامة",
+    history = "السجل",
+    historyTitle = "سجل المشاهدة",
+    historySubtitle = "الأفلام والمسلسلات التي شاهدتها مؤخراً",
+    historyBadge = "المشاهدات",
+    savedTitles = "عنصر محفوظ",
+    updatePlaylist = "تحديث"
 )
 
 val ChineseStrings = AppStrings(
@@ -404,7 +422,13 @@ val ChineseStrings = AppStrings(
     viewModeGrid = "图标网格视图",
     exploreDemoTitle = "体验演示频道",
     exploreDemoDesc = "无需任何配置，立即测试公开合法的 IPTV 直播流。",
-    testDriveButton = "加载公开演示频道"
+    testDriveButton = "加载公开演示频道",
+    history = "历史记录",
+    historyTitle = "观看历史",
+    historySubtitle = "最近观看的电影和剧集",
+    historyBadge = "观看记录",
+    savedTitles = "个已保存项目",
+    updatePlaylist = "更新"
 )
 
 val JapaneseStrings = AppStrings(
@@ -503,7 +527,13 @@ val JapaneseStrings = AppStrings(
     viewModeGrid = "ロゴグリッド表示",
     exploreDemoTitle = "デモチャンネルを試す",
     exploreDemoDesc = "設定不要で公式の公開 IPTV ストリームをすぐにテスト再生できます。",
-    testDriveButton = "公開デモストリームを読み込む"
+    testDriveButton = "公開デモストリームを読み込む",
+    history = "履歴",
+    historyTitle = "視聴履歴",
+    historySubtitle = "最近視聴した映画やシリーズ",
+    historyBadge = "視聴ログ",
+    savedTitles = "件の保存済み作品",
+    updatePlaylist = "更新"
 )
 
 val FrenchStrings = AppStrings(
@@ -602,7 +632,13 @@ val FrenchStrings = AppStrings(
     viewModeGrid = "Vue Grille Logos",
     exploreDemoTitle = "Explorer les chaînes démo",
     exploreDemoDesc = "Testez des flux IPTV publics vérifiés sans aucune configuration.",
-    testDriveButton = "Charger les flux publics vérifiés"
+    testDriveButton = "Charger les flux publics vérifiés",
+    history = "Historique",
+    historyTitle = "Historique",
+    historySubtitle = "Films et séries regardés récemment",
+    historyBadge = "JOURNAL",
+    savedTitles = "Titres enregistrés",
+    updatePlaylist = "Actualiser"
 )
 
 val SpanishStrings = AppStrings(
@@ -701,7 +737,13 @@ val SpanishStrings = AppStrings(
     viewModeGrid = "Vista de cuadrícula",
     exploreDemoTitle = "Explorar canales demo",
     exploreDemoDesc = "Prueba transmisiones IPTV públicas verificadas sin configuración.",
-    testDriveButton = "Cargar transmisiones públicas"
+    testDriveButton = "Cargar transmisiones públicas",
+    history = "Historial",
+    historyTitle = "Historial",
+    historySubtitle = "Películas y series vistas recientemente",
+    historyBadge = "REGISTRO",
+    savedTitles = "Títulos guardados",
+    updatePlaylist = "Actualizar"
 )
 
 val TurkishStrings = AppStrings(
@@ -800,7 +842,13 @@ val TurkishStrings = AppStrings(
     viewModeGrid = "Logo Izgara Görünümü",
     exploreDemoTitle = "Demo Kanalları Keşfet",
     exploreDemoDesc = "Kurulum gerektirmeden doğrulanmış halka açık IPTV yayınlarını test edin.",
-    testDriveButton = "Doğrulanmış Açık Yayınları Yükle"
+    testDriveButton = "Doğrulanmış Açık Yayınları Yükle",
+    history = "Geçmiş",
+    historyTitle = "İzleme Geçmişi",
+    historySubtitle = "Son izlenen filmler ve diziler",
+    historyBadge = "İZLEME KAYDI",
+    savedTitles = "Kayıtlı İçerik",
+    updatePlaylist = "Güncelle"
 )
 
 val UrduStrings = AppStrings(
@@ -899,7 +947,13 @@ val UrduStrings = AppStrings(
     viewModeGrid = "لوگو گرڈ منظر",
     exploreDemoTitle = "ڈیمو چینلز دریافت کریں",
     exploreDemoDesc = "بغیر کسی سیٹ اپ کے تصدیق شدہ عوامی IPTV چینلز آزمائیں۔",
-    testDriveButton = "عوامی ڈیمو چینلز لوڈ کریں"
+    testDriveButton = "عوامی ڈیمو چینلز لوڈ کریں",
+    history = "ہسٹری",
+    historyTitle = "دیکھنے کی ہسٹری",
+    historySubtitle = "حال ہی میں دیکھی گئی فلمیں اور سیریز",
+    historyBadge = "واچ لاگ",
+    savedTitles = "محفوظ کردہ عنوانات",
+    updatePlaylist = "اپ ڈیٹ"
 )
 
 val RussianStrings = AppStrings(
@@ -998,7 +1052,13 @@ val RussianStrings = AppStrings(
     viewModeGrid = "Сетка логотипов",
     exploreDemoTitle = "Демо-каналы",
     exploreDemoDesc = "Протестируйте проверенные публичные IPTV-потоки без настройки.",
-    testDriveButton = "Загрузить демо-потоки"
+    testDriveButton = "Загрузить демо-потоки",
+    history = "История",
+    historyTitle = "История просмотра",
+    historySubtitle = "Недавно просмотренные фильмы и сериалы",
+    historyBadge = "ЖУРНАЛ",
+    savedTitles = "Сохранённых",
+    updatePlaylist = "Обновить"
 )
 
 val PortugueseStrings = AppStrings(
@@ -1097,7 +1157,13 @@ val PortugueseStrings = AppStrings(
     viewModeGrid = "Grade de logotipos",
     exploreDemoTitle = "Explorar canais demo",
     exploreDemoDesc = "Teste transmissões IPTV públicas verificadas sem precisar configurar.",
-    testDriveButton = "Carregar transmissões públicas"
+    testDriveButton = "Carregar transmissões públicas",
+    history = "Histórico",
+    historyTitle = "Histórico",
+    historySubtitle = "Filmes e séries assistidos recentemente",
+    historyBadge = "REGISTRO",
+    savedTitles = "Títulos salvos",
+    updatePlaylist = "Atualizar"
 )
 
 fun getAppStrings(language: String): AppStrings {
