@@ -3,6 +3,7 @@ package com.example.ui.player
 import android.app.Activity
 import android.content.Context
 import android.graphics.Color as AndroidColor
+import android.graphics.Typeface
 import android.media.AudioManager
 import android.net.Uri
 import android.view.View
@@ -22,6 +23,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,6 +35,8 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -59,7 +63,11 @@ import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.BrightnessHigh
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FontDownload
+import androidx.compose.material.icons.filled.FormatColorFill
+import androidx.compose.material.icons.filled.FormatColorText
 import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Height
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -72,6 +80,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -99,8 +108,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.key.Key
@@ -109,13 +124,14 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -146,6 +162,8 @@ import com.example.ui.theme.Slate850
 import com.example.ui.theme.Slate900
 import com.example.ui.theme.Slate950
 import com.example.util.LocalIsTelevision
+import java.io.File
+import java.io.FileOutputStream
 import java.util.Locale
 import kotlinx.coroutines.delay
 
@@ -163,66 +181,150 @@ private enum class VerticalSwipeHUD {
     VOLUME
 }
 
-private enum class SubtitleBgMode(val labelEn: String, val labelAr: String, val colorInt: Int) {
-    NONE("None", "شفاف", AndroidColor.TRANSPARENT),
-    SEMI("Soft", "ظل خفيف", AndroidColor.argb(115, 0, 0, 0)),
-    BOX("Box", "صندوق", AndroidColor.argb(215, 0, 0, 0))
-}
+private val SubtitleColorPalette = listOf(
+    Color(0xFFFFFFFF), // White
+    Color(0xFFF44336), // Red
+    Color(0xFFE91E63), // Pink
+    Color(0xFF9C27B0), // Purple
+    Color(0xFF673AB7), // Deep Purple
+    Color(0xFF3F51B5), // Indigo
+    Color(0xFF2196F3), // Blue
+    Color(0xFF00BCD4), // Cyan
+    Color(0xFF009688), // Teal
+    Color(0xFF4CAF50), // Green
+    Color(0xFF8BC34A), // Light Green
+    Color(0xFFCDDC39), // Lime
+    Color(0xFFFFEB3B), // Yellow
+    Color(0xFFFFC107), // Amber
+    Color(0xFFFF9800), // Orange
+    Color(0xFF795548), // Brown
+    Color(0xFF607D8B), // Blue Grey
+    Color(0xFF9E9E9E), // Grey
+    Color(0xFF000000)  // Black
+)
 
-private enum class SubtitleTextSize(val labelEn: String, val labelAr: String, val scale: Float) {
-    SMALL("S", "صغير", 0.85f),
-    MEDIUM("M", "متوسط", 1.05f),
-    LARGE("L", "كبير", 1.25f),
-    XLARGE("XL", "ضخم", 1.48f)
-}
+private val TransparencySteps = listOf(0.0f, 0.15f, 0.30f, 0.50f, 0.70f, 0.85f, 1.0f)
 
-private enum class SubtitleTextColor(val labelEn: String, val labelAr: String, val colorInt: Int) {
-    WHITE("White", "أبيض", AndroidColor.WHITE),
-    YELLOW("Yellow", "أصفر", AndroidColor.YELLOW),
-    CYAN("Cyan", "سماوي", AndroidColor.CYAN)
-}
+private data class FontChoice(
+    val id: String,
+    val displayName: String,
+    val filePath: String? = null
+)
 
 private data class SubtitleAppearanceConfig(
-    val bgMode: SubtitleBgMode = SubtitleBgMode.NONE,
-    val textSize: SubtitleTextSize = SubtitleTextSize.MEDIUM,
-    val textColor: SubtitleTextColor = SubtitleTextColor.WHITE
+    val textColorRgb: Int = 0xFFFFFF,
+    val textAlpha: Float = 1.0f,
+    val bgColorRgb: Int = 0x000000,
+    val bgAlpha: Float = 0.0f, // 0f = Transparent by default
+    val textSizeScale: Float = 1.05f,
+    val bottomPaddingFraction: Float = 0.08f, // Vertical position (0.02f bottom -> 0.85f top)
+    val fontId: String = "DEFAULT",
+    val customFontPath: String? = null
 )
 
 private object SubtitleAppearancePrefs {
-    private const val PREFS_NAME = "hypnostream_subtitle_style_prefs"
+    private const val PREFS_NAME = "hypnostream_advanced_subtitle_prefs"
 
     fun load(context: Context): SubtitleAppearanceConfig {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val bg = SubtitleBgMode.entries.getOrElse(prefs.getInt("bg_mode", 0)) { SubtitleBgMode.NONE }
-        val size = SubtitleTextSize.entries.getOrElse(prefs.getInt("text_size", 1)) { SubtitleTextSize.MEDIUM }
-        val color = SubtitleTextColor.entries.getOrElse(prefs.getInt("text_color", 0)) { SubtitleTextColor.WHITE }
-        return SubtitleAppearanceConfig(bg, size, color)
+        return SubtitleAppearanceConfig(
+            textColorRgb = prefs.getInt("text_rgb", 0xFFFFFF),
+            textAlpha = prefs.getFloat("text_alpha", 1.0f).coerceIn(0.15f, 1.0f),
+            bgColorRgb = prefs.getInt("bg_rgb", 0x000000),
+            bgAlpha = prefs.getFloat("bg_alpha", 0.0f).coerceIn(0f, 1.0f),
+            textSizeScale = prefs.getFloat("size_scale", 1.05f).coerceIn(0.6f, 2.0f),
+            bottomPaddingFraction = prefs.getFloat("bottom_pad", 0.08f).coerceIn(0.02f, 0.85f),
+            fontId = prefs.getString("font_id", "DEFAULT") ?: "DEFAULT",
+            customFontPath = prefs.getString("custom_font_path", null)
+        )
     }
 
     fun save(context: Context, config: SubtitleAppearanceConfig) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
-            .putInt("bg_mode", config.bgMode.ordinal)
-            .putInt("text_size", config.textSize.ordinal)
-            .putInt("text_color", config.textColor.ordinal)
+            .putInt("text_rgb", config.textColorRgb)
+            .putFloat("text_alpha", config.textAlpha)
+            .putInt("bg_rgb", config.bgColorRgb)
+            .putFloat("bg_alpha", config.bgAlpha)
+            .putFloat("size_scale", config.textSizeScale)
+            .putFloat("bottom_pad", config.bottomPaddingFraction)
+            .putString("font_id", config.fontId)
+            .putString("custom_font_path", config.customFontPath)
             .apply()
     }
+
+    fun getAvailableFonts(context: Context, currentCustomPath: String?): List<FontChoice> {
+        val list = mutableListOf(
+            FontChoice("DEFAULT", "Default"),
+            FontChoice("SANS_BOLD", "Sans-Serif Bold"),
+            FontChoice("SERIF", "Serif"),
+            FontChoice("MONOSPACE", "Monospace")
+        )
+        if (!currentCustomPath.isNullOrBlank() && File(currentCustomPath).exists()) {
+            list.add(FontChoice("CUSTOM_LOCAL", "Custom: ${File(currentCustomPath).name}", currentCustomPath))
+        }
+        try {
+            val sysFontsDir = File("/system/fonts")
+            if (sysFontsDir.exists() && sysFontsDir.isDirectory) {
+                sysFontsDir.listFiles()
+                    ?.filter { it.isFile && (it.name.endsWith(".ttf", true) || it.name.endsWith(".otf", true)) }
+                    ?.sortedBy { it.name.lowercase(Locale.US) }
+                    ?.take(25)
+                    ?.forEach { file ->
+                        val cleanName = file.nameWithoutExtension
+                        list.add(FontChoice("SYS_${file.name}", cleanName, file.absolutePath))
+                    }
+            }
+        } catch (_: Exception) {}
+        return list
+    }
+
+    fun resolveTypeface(config: SubtitleAppearanceConfig): Typeface? {
+        return try {
+            when {
+                !config.customFontPath.isNullOrBlank() && File(config.customFontPath).exists() ->
+                    Typeface.createFromFile(config.customFontPath)
+                config.fontId == "SANS_BOLD" -> Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                config.fontId == "SERIF" -> Typeface.SERIF
+                config.fontId == "MONOSPACE" -> Typeface.MONOSPACE
+                config.fontId.startsWith("SYS_") -> {
+                    val fileName = config.fontId.removePrefix("SYS_")
+                    val file = File("/system/fonts/$fileName")
+                    if (file.exists()) Typeface.createFromFile(file) else null
+                }
+                else -> null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+}
+
+private fun combineRgbWithAlpha(rgb: Int, alpha: Float): Int {
+    val a = (alpha.coerceIn(0f, 1f) * 255).toInt()
+    val r = (rgb shr 16) and 0xFF
+    val g = (rgb shr 8) and 0xFF
+    val b = rgb and 0xFF
+    return AndroidColor.argb(a, r, g, b)
 }
 
 @OptIn(UnstableApi::class)
 private fun PlayerView.applySubtitleAppearance(config: SubtitleAppearanceConfig) {
-    val edgeType = if (config.bgMode == SubtitleBgMode.NONE) {
+    val fgColor = combineRgbWithAlpha(config.textColorRgb, config.textAlpha)
+    val bgColor = combineRgbWithAlpha(config.bgColorRgb, config.bgAlpha)
+    val edgeType = if (config.bgAlpha < 0.25f) {
         CaptionStyleCompat.EDGE_TYPE_OUTLINE
     } else {
         CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW
     }
+    val typeface = SubtitleAppearancePrefs.resolveTypeface(config)
 
     val captionStyle = CaptionStyleCompat(
-        config.textColor.colorInt,
-        config.bgMode.colorInt,
+        fgColor,
+        bgColor,
         AndroidColor.TRANSPARENT,
         edgeType,
         AndroidColor.BLACK,
-        null
+        typeface
     )
 
     subtitleView?.apply {
@@ -230,7 +332,8 @@ private fun PlayerView.applySubtitleAppearance(config: SubtitleAppearanceConfig)
         setApplyEmbeddedStyles(false)
         setApplyEmbeddedFontSizes(false)
         setStyle(captionStyle)
-        setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * config.textSize.scale)
+        setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * config.textSizeScale)
+        setBottomPaddingFraction(config.bottomPaddingFraction)
     }
 }
 
@@ -259,7 +362,7 @@ fun VideoPlayerScreen(
     val isLive = currentItem?.type == IptvType.LIVE_TV || playerManager.isCurrentStreamLive()
     val hasDrawerItems = allChannels.isNotEmpty() && currentItem?.type != IptvType.MOVIE
 
-    // --- True Fullscreen Immersive Mode (Hides Time, Signal, Battery & Nav Bar) ---
+    // --- True Fullscreen Immersive Mode ---
     DisposableEffect(localView) {
         val prevKeepScreenOn = localView.keepScreenOn
         localView.keepScreenOn = true
@@ -277,7 +380,7 @@ fun VideoPlayerScreen(
         }
     }
 
-    // --- Binge-Mode Auto-Play Next Episode Countdown (10 seconds) ---
+    // --- Binge-Mode Auto-Play Next Episode Countdown ---
     val nextEpisodeItem = remember(currentItem?.id, allChannels) {
         if (currentItem?.type == IptvType.SERIES && allChannels.size > 1) {
             val idx = allChannels.indexOfFirst { it.id == currentItem.id || it.streamUrl == currentItem.streamUrl }
@@ -308,7 +411,7 @@ fun VideoPlayerScreen(
         }
     }
 
-    // --- Vertical Brightness & Volume Swipe Gestures (Mobile/Tablet) ---
+    // --- Vertical Brightness & Volume Swipe Gestures ---
     val audioManager = remember {
         context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
@@ -365,7 +468,13 @@ fun VideoPlayerScreen(
     var showSubtitleDialog by remember { mutableStateOf(false) }
     var showSubtitleUrlInput by remember { mutableStateOf(false) }
     var subtitleUrlText by remember { mutableStateOf("") }
+
+    // Advanced Subtitle Customization Dialogs & Overlay States
     var subtitleStyleConfig by remember { mutableStateOf(SubtitleAppearancePrefs.load(context)) }
+    var showTextColorPicker by remember { mutableStateOf(false) }
+    var showBgColorPicker by remember { mutableStateOf(false) }
+    var showFontPickerDialog by remember { mutableStateOf(false) }
+    var isAdjustingSubtitlePosition by remember { mutableStateOf(false) }
 
     val subtitleOffsetMs by playerManager.subtitleOffsetMs.collectAsState()
 
@@ -377,6 +486,27 @@ fun VideoPlayerScreen(
         }
     }
 
+    val fontPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                val destFile = File(context.filesDir, "custom_sub_font.ttf")
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(destFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                val updated = subtitleStyleConfig.copy(
+                    fontId = "CUSTOM_LOCAL",
+                    customFontPath = destFile.absolutePath
+                )
+                subtitleStyleConfig = updated
+                SubtitleAppearancePrefs.save(context, updated)
+            } catch (_: Exception) {}
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -384,6 +514,32 @@ fun VideoPlayerScreen(
             .focusRequester(playerRootFocus)
             .focusable()
             .onPreviewKeyEvent { event ->
+                if (isAdjustingSubtitlePosition && event.type == KeyEventType.KeyDown) {
+                    when (event.key) {
+                        Key.DirectionUp -> {
+                            val updated = subtitleStyleConfig.copy(
+                                bottomPaddingFraction = (subtitleStyleConfig.bottomPaddingFraction + 0.03f).coerceIn(0.02f, 0.85f)
+                            )
+                            subtitleStyleConfig = updated
+                            SubtitleAppearancePrefs.save(context, updated)
+                            return@onPreviewKeyEvent true
+                        }
+                        Key.DirectionDown -> {
+                            val updated = subtitleStyleConfig.copy(
+                                bottomPaddingFraction = (subtitleStyleConfig.bottomPaddingFraction - 0.03f).coerceIn(0.02f, 0.85f)
+                            )
+                            subtitleStyleConfig = updated
+                            SubtitleAppearancePrefs.save(context, updated)
+                            return@onPreviewKeyEvent true
+                        }
+                        Key.Back, Key.Escape, Key.DirectionCenter, Key.Enter -> {
+                            isAdjustingSubtitlePosition = false
+                            return@onPreviewKeyEvent true
+                        }
+                        else -> return@onPreviewKeyEvent true
+                    }
+                }
+
                 if (event.type == KeyEventType.KeyDown) {
                     when (event.key) {
                         Key.MediaPlayPause -> {
@@ -464,45 +620,47 @@ fun VideoPlayerScreen(
                     }
                 } else false
             }
-            .pointerInput(isLive, uiState.currentItem?.id) {
-                detectTapGestures(
-                    onTap = {
-                        playerManager.toggleControlsVisibility()
-                    },
-                    onDoubleTap = { tapOffset ->
-                        val isRightSide = tapOffset.x > (size.width / 2f)
-                        try {
-                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        } catch (_: Exception) {}
+            .pointerInput(isLive, uiState.currentItem?.id, isAdjustingSubtitlePosition) {
+                if (!isAdjustingSubtitlePosition) {
+                    detectTapGestures(
+                        onTap = {
+                            playerManager.toggleControlsVisibility()
+                        },
+                        onDoubleTap = { tapOffset ->
+                            val isRightSide = tapOffset.x > (size.width / 2f)
+                            try {
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            } catch (_: Exception) {}
 
-                        if (isLive) {
-                            if (isRightSide) {
-                                gestureFeedback = PlayerGestureFeedback.NEXT_CHANNEL
-                                feedbackTriggerKey++
-                                onPlayNext()
+                            if (isLive) {
+                                if (isRightSide) {
+                                    gestureFeedback = PlayerGestureFeedback.NEXT_CHANNEL
+                                    feedbackTriggerKey++
+                                    onPlayNext()
+                                } else {
+                                    gestureFeedback = PlayerGestureFeedback.PREV_CHANNEL
+                                    feedbackTriggerKey++
+                                    onPlayPrevious()
+                                }
                             } else {
-                                gestureFeedback = PlayerGestureFeedback.PREV_CHANNEL
-                                feedbackTriggerKey++
-                                onPlayPrevious()
-                            }
-                        } else {
-                            if (isRightSide) {
-                                accumulatedSkipSeconds = if (gestureFeedback == PlayerGestureFeedback.FORWARD_VOD) accumulatedSkipSeconds + 10 else 10
-                                gestureFeedback = PlayerGestureFeedback.FORWARD_VOD
-                                feedbackTriggerKey++
-                                playerManager.seekRelative(10_000L)
-                            } else {
-                                accumulatedSkipSeconds = if (gestureFeedback == PlayerGestureFeedback.REWIND_VOD) accumulatedSkipSeconds + 10 else 10
-                                gestureFeedback = PlayerGestureFeedback.REWIND_VOD
-                                feedbackTriggerKey++
-                                playerManager.seekRelative(-10_000L)
+                                if (isRightSide) {
+                                    accumulatedSkipSeconds = if (gestureFeedback == PlayerGestureFeedback.FORWARD_VOD) accumulatedSkipSeconds + 10 else 10
+                                    gestureFeedback = PlayerGestureFeedback.FORWARD_VOD
+                                    feedbackTriggerKey++
+                                    playerManager.seekRelative(10_000L)
+                                } else {
+                                    accumulatedSkipSeconds = if (gestureFeedback == PlayerGestureFeedback.REWIND_VOD) accumulatedSkipSeconds + 10 else 10
+                                    gestureFeedback = PlayerGestureFeedback.REWIND_VOD
+                                    feedbackTriggerKey++
+                                    playerManager.seekRelative(-10_000L)
+                                }
                             }
                         }
-                    }
-                )
+                    )
+                }
             }
-            .pointerInput(isTv) {
-                if (!isTv) {
+            .pointerInput(isTv, isAdjustingSubtitlePosition) {
+                if (!isTv && !isAdjustingSubtitlePosition) {
                     var dragStartIsRight = false
                     var dragAccRatio = 0f
                     detectVerticalDragGestures(
@@ -583,9 +741,96 @@ fun VideoPlayerScreen(
             }
         )
 
+        // Interactive Vertical Subtitle Position Overlay (Matches Reference Player)
+        if (isAdjustingSubtitlePosition) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0x33000000))
+            ) {
+                // Horizontal Guide Line matching current subtitle height
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                        .fillMaxHeight(subtitleStyleConfig.bottomPaddingFraction.coerceIn(0.02f, 0.85f))
+                ) {
+                    HorizontalDivider(
+                        thickness = 1.5.dp,
+                        color = PureWhite.copy(alpha = 0.75f),
+                        modifier = Modifier.align(Alignment.TopCenter)
+                    )
+                }
+
+                // Right-Side Vertical Position Slider Card
+                Surface(
+                    color = Color(0xE61A1D24),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, Slate700),
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 20.dp)
+                        .width(56.dp)
+                        .height(270.dp)
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(vertical = 10.dp)
+                    ) {
+                        IconButton(
+                            onClick = { isAdjustingSubtitlePosition = false },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = strings.close,
+                                tint = PureWhite,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                        ) {
+                            Slider(
+                                value = subtitleStyleConfig.bottomPaddingFraction,
+                                onValueChange = { newVal ->
+                                    val updated = subtitleStyleConfig.copy(bottomPaddingFraction = newVal)
+                                    subtitleStyleConfig = updated
+                                    SubtitleAppearancePrefs.save(context, updated)
+                                },
+                                valueRange = 0.02f..0.85f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = PureWhite,
+                                    activeTrackColor = AccentCyan,
+                                    inactiveTrackColor = Slate700
+                                ),
+                                modifier = Modifier
+                                    .verticalSlider()
+                                    .width(190.dp)
+                            )
+                        }
+
+                        Text(
+                            text = "${(subtitleStyleConfig.bottomPaddingFraction * 100).toInt()}%",
+                            color = AccentCyan,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+
         // Vertical Brightness / Volume Swipe HUD Pill
         AnimatedVisibility(
-            visible = activeSwipeHud != VerticalSwipeHUD.NONE,
+            visible = activeSwipeHud != VerticalSwipeHUD.NONE && !isAdjustingSubtitlePosition,
             enter = fadeIn(tween(120)),
             exit = fadeOut(tween(220)),
             modifier = Modifier.align(
@@ -647,7 +892,7 @@ fun VideoPlayerScreen(
 
         // Kinetic Double-Tap Ripple Pill Overlay
         AnimatedVisibility(
-            visible = gestureFeedback != PlayerGestureFeedback.NONE,
+            visible = gestureFeedback != PlayerGestureFeedback.NONE && !isAdjustingSubtitlePosition,
             enter = fadeIn(tween(140)) + scaleIn(initialScale = 0.85f, animationSpec = tween(180, easing = FastOutSlowInEasing)),
             exit = fadeOut(tween(240)) + scaleOut(targetScale = 1.08f, animationSpec = tween(240)),
             modifier = Modifier.align(
@@ -709,9 +954,9 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Binge-Mode Auto-Play Next Episode Card (10-second countdown)
+        // Binge-Mode Auto-Play Next Episode Card
         AnimatedVisibility(
-            visible = isNearEpisodeEnd && nextEpisodeItem != null,
+            visible = isNearEpisodeEnd && nextEpisodeItem != null && !isAdjustingSubtitlePosition,
             enter = fadeIn(tween(220)) + slideInHorizontally(initialOffsetX = { it }),
             exit = fadeOut(tween(180)) + slideOutHorizontally(targetOffsetX = { it }),
             modifier = Modifier
@@ -880,7 +1125,7 @@ fun VideoPlayerScreen(
 
         // Top & Bottom Player Controls Overlay
         AnimatedVisibility(
-            visible = uiState.isControlsVisible,
+            visible = uiState.isControlsVisible && !isAdjustingSubtitlePosition,
             enter = fadeIn(),
             exit = fadeOut()
         ) {
@@ -1102,7 +1347,7 @@ fun VideoPlayerScreen(
 
         // Quick Side Drawer
         AnimatedVisibility(
-            visible = uiState.isQuickChannelListOpen && hasDrawerItems,
+            visible = uiState.isQuickChannelListOpen && hasDrawerItems && !isAdjustingSubtitlePosition,
             enter = slideInHorizontally(initialOffsetX = { it }),
             exit = slideOutHorizontally(targetOffsetX = { it }),
             modifier = Modifier.align(Alignment.CenterEnd)
@@ -1210,7 +1455,7 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Scrollable Audio Tracks Dialog
+        // Audio Tracks Dialog
         if (showAudioDialog) {
             AlertDialog(
                 onDismissRequest = { showAudioDialog = false },
@@ -1271,7 +1516,7 @@ fun VideoPlayerScreen(
             )
         }
 
-        // Scrollable Subtitles, Appearance & Timing Sync Dialog
+        // Main Subtitles, Appearance, Font, Position & Sync Dialog
         if (showSubtitleDialog) {
             AlertDialog(
                 onDismissRequest = { showSubtitleDialog = false },
@@ -1288,83 +1533,136 @@ fun VideoPlayerScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 360.dp)
+                            .heightIn(max = 390.dp)
                             .verticalScroll(rememberScrollState())
                     ) {
-                        // --- Subtitle Appearance Controls (Background, Size, Color) ---
-                        Text(
-                            text = if (isAr) "خلفية الترجمة:" else "Subtitle Background:",
-                            color = AccentCyan,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        // 1. Color & Background Pickers Row
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            SubtitleBgMode.entries.forEach { mode ->
-                                SubtitleOptionPill(
-                                    label = if (isAr) mode.labelAr else mode.labelEn,
-                                    selected = subtitleStyleConfig.bgMode == mode,
-                                    modifier = Modifier.weight(1f),
-                                    onClick = {
-                                        val updated = subtitleStyleConfig.copy(bgMode = mode)
-                                        subtitleStyleConfig = updated
-                                        SubtitleAppearancePrefs.save(context, updated)
-                                    }
+                            OutlinedButton(
+                                onClick = { showTextColorPicker = true },
+                                border = BorderStroke(1.dp, Slate700),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(subtitleStyleConfig.textColorRgb or 0xFF000000.toInt()))
+                                        .border(1.dp, PureWhite, CircleShape)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (isAr) "لون النص" else "Text Color",
+                                    color = PureWhite,
+                                    fontSize = 12.sp,
+                                    maxLines = 1
+                                )
+                            }
+
+                            OutlinedButton(
+                                onClick = { showBgColorPicker = true },
+                                border = BorderStroke(1.dp, Slate700),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.FormatColorFill, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (isAr) "لون الخلفية" else "Background",
+                                    color = PureWhite,
+                                    fontSize = 12.sp,
+                                    maxLines = 1
                                 )
                             }
                         }
 
-                        Text(
-                            text = if (isAr) "حجم الخط:" else "Font Size:",
-                            color = AccentCyan,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        // 2. Font Picker & Vertical Position Buttons Row
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            SubtitleTextSize.entries.forEach { size ->
-                                SubtitleOptionPill(
-                                    label = if (isAr) size.labelAr else size.labelEn,
-                                    selected = subtitleStyleConfig.textSize == size,
-                                    modifier = Modifier.weight(1f),
-                                    onClick = {
-                                        val updated = subtitleStyleConfig.copy(textSize = size)
-                                        subtitleStyleConfig = updated
-                                        SubtitleAppearancePrefs.save(context, updated)
-                                    }
+                            OutlinedButton(
+                                onClick = { showFontPickerDialog = true },
+                                border = BorderStroke(1.dp, Slate700),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.FontDownload, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (isAr) "نوع الخط" else "Font",
+                                    color = PureWhite,
+                                    fontSize = 12.sp,
+                                    maxLines = 1
+                                )
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    showSubtitleDialog = false
+                                    playerManager.hideControls()
+                                    isAdjustingSubtitlePosition = true
+                                },
+                                border = BorderStroke(1.dp, AccentCyan.copy(alpha = 0.7f)),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.Height, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (isAr) "مكان الترجمة" else "Position",
+                                    color = AccentCyan,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1
                                 )
                             }
                         }
 
-                        Text(
-                            text = if (isAr) "لون النص:" else "Text Color:",
-                            color = AccentCyan,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            SubtitleTextColor.entries.forEach { colorOption ->
-                                SubtitleOptionPill(
-                                    label = if (isAr) colorOption.labelAr else colorOption.labelEn,
-                                    selected = subtitleStyleConfig.textColor == colorOption,
-                                    modifier = Modifier.weight(1f),
-                                    onClick = {
-                                        val updated = subtitleStyleConfig.copy(textColor = colorOption)
-                                        subtitleStyleConfig = updated
-                                        SubtitleAppearancePrefs.save(context, updated)
-                                    }
+                        // 3. Smooth Font Size Slider
+                        Column {
+                            Row(
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = if (isAr) "حجم الخط:" else "Font Size:",
+                                    color = Slate300,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "${(subtitleStyleConfig.textSizeScale * 100).toInt()}%",
+                                    color = AccentCyan,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
+                            Slider(
+                                value = subtitleStyleConfig.textSizeScale,
+                                onValueChange = { scale ->
+                                    val updated = subtitleStyleConfig.copy(textSizeScale = scale)
+                                    subtitleStyleConfig = updated
+                                    SubtitleAppearancePrefs.save(context, updated)
+                                },
+                                valueRange = 0.6f..2.0f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = AccentCyan,
+                                    activeTrackColor = AccentCyan,
+                                    inactiveTrackColor = Slate700
+                                )
+                            )
                         }
 
-                        // --- Subtitle Delay Sync ---
+                        // 4. Subtitle Delay Sync
                         Text(
                             text = if (isAr) {
                                 "مزامنة الترجمة: ${String.format(Locale.US, "%+.1f", subtitleOffsetMs / 1000f)} ثانية"
@@ -1372,7 +1670,7 @@ fun VideoPlayerScreen(
                                 "Subtitle Delay: ${String.format(Locale.US, "%+.1f", subtitleOffsetMs / 1000f)}s"
                             },
                             color = AccentCyan,
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Row(
@@ -1399,6 +1697,7 @@ fun VideoPlayerScreen(
                             }
                         }
 
+                        // 5. External File / URL Loaders
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxWidth()
@@ -1450,6 +1749,7 @@ fun VideoPlayerScreen(
                             }
                         }
 
+                        // 6. Subtitle Track Selection
                         Surface(
                             color = if (uiState.isSubtitleOff) AccentCyan.copy(alpha = 0.2f) else Slate850,
                             shape = RoundedCornerShape(10.dp),
@@ -1506,58 +1806,267 @@ fun VideoPlayerScreen(
                 }
             )
         }
+
+        // Circular Grid Color & Transparency Picker Dialog (Text Color)
+        if (showTextColorPicker) {
+            SubtitleColorGridDialog(
+                title = if (isAr) "اختر لون الترجمة" else "Select subtitle color",
+                selectedRgb = subtitleStyleConfig.textColorRgb,
+                selectedAlpha = subtitleStyleConfig.textAlpha,
+                isAr = isAr,
+                onSelect = { rgb, alpha ->
+                    val safeAlpha = alpha.coerceAtLeast(0.15f)
+                    val updated = subtitleStyleConfig.copy(textColorRgb = rgb, textAlpha = safeAlpha)
+                    subtitleStyleConfig = updated
+                    SubtitleAppearancePrefs.save(context, updated)
+                },
+                onDismiss = { showTextColorPicker = false }
+            )
+        }
+
+        // Circular Grid Color & Transparency Picker Dialog (Background Color)
+        if (showBgColorPicker) {
+            SubtitleColorGridDialog(
+                title = if (isAr) "اختر لون خلفية الترجمة" else "Select subtitle background color",
+                selectedRgb = subtitleStyleConfig.bgColorRgb,
+                selectedAlpha = subtitleStyleConfig.bgAlpha,
+                isAr = isAr,
+                onSelect = { rgb, alpha ->
+                    val updated = subtitleStyleConfig.copy(bgColorRgb = rgb, bgAlpha = alpha)
+                    subtitleStyleConfig = updated
+                    SubtitleAppearancePrefs.save(context, updated)
+                },
+                onDismiss = { showBgColorPicker = false }
+            )
+        }
+
+        // System & Local Font Picker Dialog (Matches Reference Player)
+        if (showFontPickerDialog) {
+            val fonts = remember(subtitleStyleConfig.customFontPath) {
+                SubtitleAppearancePrefs.getAvailableFonts(context, subtitleStyleConfig.customFontPath)
+            }
+            AlertDialog(
+                onDismissRequest = { showFontPickerDialog = false },
+                containerColor = Slate900,
+                title = {
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = if (isAr) "خطوط النظام والمحلية" else "SYSTEM & LOCAL FONTS",
+                            color = AccentCyan,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        TextButton(onClick = { fontPickerLauncher.launch("*/*") }) {
+                            Text(
+                                text = if (isAr) "+ ملف خط TTF" else "+ Load TTF",
+                                color = PureWhite,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                },
+                text = {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 320.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        fonts.forEach { fontItem ->
+                            val isSelected = subtitleStyleConfig.fontId == fontItem.id
+                            Row(
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isSelected) AccentCyan.copy(alpha = 0.16f) else Color.Transparent)
+                                    .clickable {
+                                        val updated = subtitleStyleConfig.copy(
+                                            fontId = fontItem.id,
+                                            customFontPath = if (fontItem.id == "CUSTOM_LOCAL") fontItem.filePath else subtitleStyleConfig.customFontPath
+                                        )
+                                        subtitleStyleConfig = updated
+                                        SubtitleAppearancePrefs.save(context, updated)
+                                        showFontPickerDialog = false
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                            ) {
+                                Text(
+                                    text = fontItem.displayName,
+                                    color = if (isSelected) AccentCyan else PureWhite,
+                                    fontSize = 14.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = AccentCyan,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showFontPickerDialog = false }) {
+                        Text(strings.close, color = AccentCyan)
+                    }
+                }
+            )
+        }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SubtitleOptionPill(
-    label: String,
-    selected: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
+private fun SubtitleColorGridDialog(
+    title: String,
+    selectedRgb: Int,
+    selectedAlpha: Float,
+    isAr: Boolean,
+    onSelect: (rgb: Int, alpha: Float) -> Unit,
+    onDismiss: () -> Unit
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isFocused by interactionSource.collectIsFocusedAsState()
-
-    Surface(
-        color = when {
-            selected -> AccentCyan.copy(alpha = 0.22f)
-            isFocused -> Slate800
-            else -> Slate850
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF2B2D30),
+        title = {
+            Text(
+                text = title,
+                color = PureWhite,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
         },
-        shape = RoundedCornerShape(8.dp),
-        border = BorderStroke(
-            width = if (isFocused) 2.dp else 1.dp,
-            color = when {
-                isFocused -> PureWhite
-                selected -> AccentCyan
-                else -> Slate700
-            }
-        ),
-        modifier = modifier
-            .focusable(interactionSource = interactionSource)
-            .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyUp &&
-                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // Circular Color Swatches Grid
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    onClick()
-                    true
-                } else false
+                    SubtitleColorPalette.forEach { color ->
+                        val rgb = color.toArgb() and 0x00FFFFFF
+                        val isSelected = rgb == (selectedRgb and 0x00FFFFFF)
+                        val checkTint = if (color.luminance() > 0.5f) Color.Black else Color.White
+
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .background(color)
+                                .border(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = if (isSelected) AccentCyan else Color.White.copy(alpha = 0.35f),
+                                    shape = CircleShape
+                                )
+                                .clickable { onSelect(rgb, selectedAlpha) }
+                        ) {
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = checkTint,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = Color.White.copy(alpha = 0.15f))
+
+                // Transparency / Opacity Circles Row (0% -> 100%)
+                Text(
+                    text = if (isAr) "الشفافية (${(selectedAlpha * 100).toInt()}%)" else "Transparency (${(selectedAlpha * 100).toInt()}%)",
+                    color = Slate300,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    val baseColor = Color(selectedRgb or 0xFF000000.toInt())
+                    TransparencySteps.forEach { alphaStep ->
+                        val isSelected = kotlin.math.abs(selectedAlpha - alphaStep) < 0.08f
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .border(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = if (isSelected) AccentCyan else Color.White.copy(alpha = 0.4f),
+                                    shape = CircleShape
+                                )
+                                .clickable { onSelect(selectedRgb, alphaStep) }
+                        ) {
+                            // Checkerboard background + color overlay
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                val cell = size.width / 4f
+                                for (row in 0..3) {
+                                    for (col in 0..3) {
+                                        drawRect(
+                                            color = if ((row + col) % 2 == 0) Color(0xFFCCCCCC) else Color(0xFF777777),
+                                            topLeft = Offset(col * cell, row * cell),
+                                            size = Size(cell, cell)
+                                        )
+                                    }
+                                }
+                                drawRect(color = baseColor.copy(alpha = alphaStep))
+                            }
+                        }
+                    }
+                }
             }
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-    ) {
-        Text(
-            text = label,
-            color = if (selected) AccentCyan else PureWhite,
-            fontSize = 11.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp)
-        )
-    }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = if (isAr) "تأكيد" else "SELECT",
+                    color = AccentCyan,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    )
 }
+
+private fun Modifier.verticalSlider(): Modifier =
+    this
+        .graphicsLayer {
+            rotationZ = 270f
+            transformOrigin = TransformOrigin(0.5f, 0.5f)
+        }
+        .layout { measurable, constraints ->
+            val placeable = measurable.measure(
+                Constraints(
+                    minWidth = constraints.minHeight,
+                    maxWidth = constraints.maxHeight,
+                    minHeight = constraints.minWidth,
+                    maxHeight = constraints.maxWidth,
+                )
+            )
+            layout(placeable.height, placeable.width) {
+                placeable.place(-placeable.width / 2 + placeable.height / 2, -placeable.height / 2 + placeable.width / 2)
+            }
+        }
 
 @Composable
 private fun PlayerCircleButton(
