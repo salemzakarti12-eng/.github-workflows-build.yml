@@ -2,8 +2,10 @@ package com.example.ui.player
 
 import android.app.Activity
 import android.content.Context
+import android.graphics.Color as AndroidColor
 import android.media.AudioManager
 import android.net.Uri
+import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -112,6 +114,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -121,7 +124,9 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.SubtitleView
 import coil.compose.AsyncImage
 import com.example.model.AspectRatioMode
 import com.example.model.IptvItem
@@ -156,6 +161,77 @@ private enum class VerticalSwipeHUD {
     NONE,
     BRIGHTNESS,
     VOLUME
+}
+
+private enum class SubtitleBgMode(val labelEn: String, val labelAr: String, val colorInt: Int) {
+    NONE("None", "شفاف", AndroidColor.TRANSPARENT),
+    SEMI("Soft", "ظل خفيف", AndroidColor.argb(115, 0, 0, 0)),
+    BOX("Box", "صندوق", AndroidColor.argb(215, 0, 0, 0))
+}
+
+private enum class SubtitleTextSize(val labelEn: String, val labelAr: String, val scale: Float) {
+    SMALL("S", "صغير", 0.85f),
+    MEDIUM("M", "متوسط", 1.05f),
+    LARGE("L", "كبير", 1.25f),
+    XLARGE("XL", "ضخم", 1.48f)
+}
+
+private enum class SubtitleTextColor(val labelEn: String, val labelAr: String, val colorInt: Int) {
+    WHITE("White", "أبيض", AndroidColor.WHITE),
+    YELLOW("Yellow", "أصفر", AndroidColor.YELLOW),
+    CYAN("Cyan", "سماوي", AndroidColor.CYAN)
+}
+
+private data class SubtitleAppearanceConfig(
+    val bgMode: SubtitleBgMode = SubtitleBgMode.NONE,
+    val textSize: SubtitleTextSize = SubtitleTextSize.MEDIUM,
+    val textColor: SubtitleTextColor = SubtitleTextColor.WHITE
+)
+
+private object SubtitleAppearancePrefs {
+    private const val PREFS_NAME = "hypnostream_subtitle_style_prefs"
+
+    fun load(context: Context): SubtitleAppearanceConfig {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val bg = SubtitleBgMode.entries.getOrElse(prefs.getInt("bg_mode", 0)) { SubtitleBgMode.NONE }
+        val size = SubtitleTextSize.entries.getOrElse(prefs.getInt("text_size", 1)) { SubtitleTextSize.MEDIUM }
+        val color = SubtitleTextColor.entries.getOrElse(prefs.getInt("text_color", 0)) { SubtitleTextColor.WHITE }
+        return SubtitleAppearanceConfig(bg, size, color)
+    }
+
+    fun save(context: Context, config: SubtitleAppearanceConfig) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+            .putInt("bg_mode", config.bgMode.ordinal)
+            .putInt("text_size", config.textSize.ordinal)
+            .putInt("text_color", config.textColor.ordinal)
+            .apply()
+    }
+}
+
+@OptIn(UnstableApi::class)
+private fun PlayerView.applySubtitleAppearance(config: SubtitleAppearanceConfig) {
+    val edgeType = if (config.bgMode == SubtitleBgMode.NONE) {
+        CaptionStyleCompat.EDGE_TYPE_OUTLINE
+    } else {
+        CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW
+    }
+
+    val captionStyle = CaptionStyleCompat(
+        config.textColor.colorInt,
+        config.bgMode.colorInt,
+        AndroidColor.TRANSPARENT,
+        edgeType,
+        AndroidColor.BLACK,
+        null
+    )
+
+    subtitleView?.apply {
+        layoutDirection = View.LAYOUT_DIRECTION_LOCALE
+        setApplyEmbeddedStyles(false)
+        setApplyEmbeddedFontSizes(false)
+        setStyle(captionStyle)
+        setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * config.textSize.scale)
+    }
 }
 
 @OptIn(UnstableApi::class)
@@ -289,6 +365,7 @@ fun VideoPlayerScreen(
     var showSubtitleDialog by remember { mutableStateOf(false) }
     var showSubtitleUrlInput by remember { mutableStateOf(false) }
     var subtitleUrlText by remember { mutableStateOf("") }
+    var subtitleStyleConfig by remember { mutableStateOf(SubtitleAppearancePrefs.load(context)) }
 
     val subtitleOffsetMs by playerManager.subtitleOffsetMs.collectAsState()
 
@@ -482,6 +559,7 @@ fun VideoPlayerScreen(
                     isFocusableInTouchMode = false
                     keepScreenOn = true
                     setKeepContentOnPlayerReset(true)
+                    applySubtitleAppearance(subtitleStyleConfig)
                     layoutParams = FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
@@ -494,6 +572,7 @@ fun VideoPlayerScreen(
                 if (playerView.player !== playerManager.player) {
                     playerView.player = playerManager.player
                 }
+                playerView.applySubtitleAppearance(subtitleStyleConfig)
                 playerView.resizeMode = when (uiState.aspectRatioMode) {
                     AspectRatioMode.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
                     AspectRatioMode.FILL -> AspectRatioFrameLayout.RESIZE_MODE_FILL
@@ -1192,7 +1271,7 @@ fun VideoPlayerScreen(
             )
         }
 
-        // Scrollable Subtitles & Timing Sync Dialog
+        // Scrollable Subtitles, Appearance & Timing Sync Dialog
         if (showSubtitleDialog) {
             AlertDialog(
                 onDismissRequest = { showSubtitleDialog = false },
@@ -1209,9 +1288,83 @@ fun VideoPlayerScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 280.dp)
+                            .heightIn(max = 360.dp)
                             .verticalScroll(rememberScrollState())
                     ) {
+                        // --- Subtitle Appearance Controls (Background, Size, Color) ---
+                        Text(
+                            text = if (isAr) "خلفية الترجمة:" else "Subtitle Background:",
+                            color = AccentCyan,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            SubtitleBgMode.entries.forEach { mode ->
+                                SubtitleOptionPill(
+                                    label = if (isAr) mode.labelAr else mode.labelEn,
+                                    selected = subtitleStyleConfig.bgMode == mode,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = {
+                                        val updated = subtitleStyleConfig.copy(bgMode = mode)
+                                        subtitleStyleConfig = updated
+                                        SubtitleAppearancePrefs.save(context, updated)
+                                    }
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = if (isAr) "حجم الخط:" else "Font Size:",
+                            color = AccentCyan,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            SubtitleTextSize.entries.forEach { size ->
+                                SubtitleOptionPill(
+                                    label = if (isAr) size.labelAr else size.labelEn,
+                                    selected = subtitleStyleConfig.textSize == size,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = {
+                                        val updated = subtitleStyleConfig.copy(textSize = size)
+                                        subtitleStyleConfig = updated
+                                        SubtitleAppearancePrefs.save(context, updated)
+                                    }
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = if (isAr) "لون النص:" else "Text Color:",
+                            color = AccentCyan,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            SubtitleTextColor.entries.forEach { colorOption ->
+                                SubtitleOptionPill(
+                                    label = if (isAr) colorOption.labelAr else colorOption.labelEn,
+                                    selected = subtitleStyleConfig.textColor == colorOption,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = {
+                                        val updated = subtitleStyleConfig.copy(textColor = colorOption)
+                                        subtitleStyleConfig = updated
+                                        SubtitleAppearancePrefs.save(context, updated)
+                                    }
+                                )
+                            }
+                        }
+
+                        // --- Subtitle Delay Sync ---
                         Text(
                             text = if (isAr) {
                                 "مزامنة الترجمة: ${String.format(Locale.US, "%+.1f", subtitleOffsetMs / 1000f)} ثانية"
@@ -1353,6 +1506,56 @@ fun VideoPlayerScreen(
                 }
             )
         }
+    }
+}
+
+@Composable
+private fun SubtitleOptionPill(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
+    Surface(
+        color = when {
+            selected -> AccentCyan.copy(alpha = 0.22f)
+            isFocused -> Slate800
+            else -> Slate850
+        },
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(
+            width = if (isFocused) 2.dp else 1.dp,
+            color = when {
+                isFocused -> PureWhite
+                selected -> AccentCyan
+                else -> Slate700
+            }
+        ),
+        modifier = modifier
+            .focusable(interactionSource = interactionSource)
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyUp &&
+                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                ) {
+                    onClick()
+                    true
+                } else false
+            }
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+    ) {
+        Text(
+            text = label,
+            color = if (selected) AccentCyan else PureWhite,
+            fontSize = 11.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp)
+        )
     }
 }
 
