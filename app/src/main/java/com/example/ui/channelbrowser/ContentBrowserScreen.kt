@@ -5,9 +5,11 @@ import android.content.res.Configuration
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -49,15 +51,20 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -69,6 +76,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
@@ -105,6 +114,7 @@ import com.example.ui.theme.Slate900
 import com.example.ui.theme.Slate950
 import com.example.util.CategoryTranslator
 import com.example.util.LocalIsTelevision
+import kotlinx.coroutines.delay
 import org.json.JSONArray
 
 @Composable
@@ -420,6 +430,7 @@ fun ContentBrowserScreen(
                         ContentGridCard(
                             item = item,
                             isVodPoster = isVodPoster,
+                            isAr = isAr,
                             onClick = {
                                 if (searchQuery.isNotBlank()) {
                                     recordSearchTerm(searchQuery)
@@ -580,6 +591,7 @@ fun ContentBrowserScreen(
                     ContentGridCard(
                         item = item,
                         isVodPoster = isVodPoster,
+                        isAr = isAr,
                         onClick = {
                             if (searchQuery.isNotBlank()) {
                                 recordSearchTerm(searchQuery)
@@ -806,15 +818,20 @@ private fun CategoryChipItem(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ContentGridCard(
     item: IptvItem,
     isVodPoster: Boolean,
+    isAr: Boolean,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit
 ) {
     val interaction = remember { MutableInteractionSource() }
     val isFocused by interaction.collectIsFocusedAsState()
+
+    var showContextDialog by remember { mutableStateOf(false) }
+    var remoteLongPressHandled by remember { mutableStateOf(false) }
 
     val epgInfo = remember(item.epgChannelId, item.type) {
         if (item.type == IptvType.LIVE_TV && !item.epgChannelId.isNullOrBlank()) {
@@ -845,14 +862,44 @@ private fun ContentGridCard(
             )
             .focusable(interactionSource = interaction)
             .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyUp &&
-                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                ) {
-                    onClick()
-                    true
-                } else false
+                val isSelectKey = event.key == Key.DirectionCenter ||
+                        event.key == Key.Enter ||
+                        event.key == Key.NumPadEnter
+
+                when {
+                    isSelectKey && event.type == KeyEventType.KeyDown -> {
+                        if (event.nativeKeyEvent.isLongPress || event.nativeKeyEvent.repeatCount > 0) {
+                            if (!remoteLongPressHandled) {
+                                remoteLongPressHandled = true
+                                showContextDialog = true
+                            }
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    isSelectKey && event.type == KeyEventType.KeyUp -> {
+                        if (remoteLongPressHandled) {
+                            remoteLongPressHandled = false
+                            true
+                        } else {
+                            onClick()
+                            true
+                        }
+                    }
+                    (event.key == Key.Menu || event.key == Key.Bookmark) && event.type == KeyEventType.KeyUp -> {
+                        showContextDialog = true
+                        true
+                    }
+                    else -> false
+                }
             }
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .combinedClickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = onClick,
+                onLongClick = { showContextDialog = true }
+            )
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (!item.logoUrl.isNullOrBlank()) {
@@ -996,5 +1043,162 @@ private fun ContentGridCard(
                 }
             }
         }
+    }
+
+    if (showContextDialog) {
+        val favFocusRequester = remember { FocusRequester() }
+        val favBtnInteraction = remember { MutableInteractionSource() }
+        val isFavBtnFocused by favBtnInteraction.collectIsFocusedAsState()
+
+        val playBtnInteraction = remember { MutableInteractionSource() }
+        val isPlayBtnFocused by playBtnInteraction.collectIsFocusedAsState()
+
+        LaunchedEffect(Unit) {
+            try {
+                delay(80L)
+                favFocusRequester.requestFocus()
+            } catch (_: Exception) {}
+        }
+
+        val typeLabel = when (item.type) {
+            IptvType.LIVE_TV -> if (isAr) "قناة بث مباشر" else "Live Channel"
+            IptvType.MOVIE -> if (isAr) "فيلم" else "Movie"
+            IptvType.SERIES -> if (isAr) "مسلسل" else "Series"
+        }
+
+        AlertDialog(
+            onDismissRequest = { showContextDialog = false },
+            containerColor = Slate900,
+            shape = RoundedCornerShape(20.dp),
+            title = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = typeLabel,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = AccentCyan
+                    )
+                    Text(
+                        text = item.name,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Black,
+                        color = PureWhite,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(
+                        onClick = {
+                            onToggleFavorite()
+                            showContextDialog = false
+                        },
+                        interactionSource = favBtnInteraction,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = when {
+                                isFavBtnFocused -> PureWhite
+                                item.isFavorite -> AccentRed
+                                else -> AccentCyan
+                            },
+                            contentColor = if (!isFavBtnFocused && item.isFavorite) PureWhite else Slate950
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .focusRequester(favFocusRequester)
+                            .border(
+                                width = if (isFavBtnFocused) 3.dp else 0.dp,
+                                color = PureWhite,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .focusable(interactionSource = favBtnInteraction)
+                            .onPreviewKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyUp &&
+                                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                ) {
+                                    onToggleFavorite()
+                                    showContextDialog = false
+                                    true
+                                } else false
+                            }
+                    ) {
+                        Icon(
+                            imageVector = if (item.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (item.isFavorite) {
+                                if (isAr) "إزالة من المفضلة" else "Remove from Favorites"
+                            } else {
+                                if (isAr) "إضافة إلى المفضلة" else "Add to Favorites"
+                            },
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            showContextDialog = false
+                            onClick()
+                        },
+                        interactionSource = playBtnInteraction,
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(
+                            width = if (isPlayBtnFocused) 2.5.dp else 1.dp,
+                            color = if (isPlayBtnFocused) AccentCyan else Slate700
+                        ),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = if (isPlayBtnFocused) Slate800 else Slate850,
+                            contentColor = PureWhite
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(46.dp)
+                            .focusable(interactionSource = playBtnInteraction)
+                            .onPreviewKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyUp &&
+                                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                ) {
+                                    showContextDialog = false
+                                    onClick()
+                                    true
+                                } else false
+                            }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = AccentCyan,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (item.type == IptvType.SERIES) {
+                                if (isAr) "عرض الحلقات" else "Open Episodes"
+                            } else {
+                                if (isAr) "تشغيل الآن" else "Play Now"
+                            },
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showContextDialog = false }) {
+                    Text(
+                        text = if (isAr) "إغلاق" else "Close",
+                        color = Slate400,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        )
     }
 }
