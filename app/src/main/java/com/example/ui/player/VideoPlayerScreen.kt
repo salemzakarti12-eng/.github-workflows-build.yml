@@ -65,7 +65,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FontDownload
 import androidx.compose.material.icons.filled.FormatColorFill
-import androidx.compose.material.icons.filled.FormatColorText
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Height
 import androidx.compose.material.icons.filled.Pause
@@ -741,7 +740,7 @@ fun VideoPlayerScreen(
             }
         )
 
-        // Interactive Vertical Subtitle Position Overlay (Matches Reference Player)
+        // Interactive Vertical Subtitle Position Overlay
         if (isAdjustingSubtitlePosition) {
             Box(
                 modifier = Modifier
@@ -1840,7 +1839,7 @@ fun VideoPlayerScreen(
             )
         }
 
-        // System & Local Font Picker Dialog (Matches Reference Player)
+        // System & Local Font Picker Dialog (Full TV D-Pad Focus Support)
         if (showFontPickerDialog) {
             val fonts = remember(subtitleStyleConfig.customFontPath) {
                 SubtitleAppearancePrefs.getAvailableFonts(context, subtitleStyleConfig.customFontPath)
@@ -1880,14 +1879,43 @@ fun VideoPlayerScreen(
                     ) {
                         fonts.forEach { fontItem ->
                             val isSelected = subtitleStyleConfig.fontId == fontItem.id
+                            val itemInteraction = remember { MutableInteractionSource() }
+                            val isFocused by itemInteraction.collectIsFocusedAsState()
+
                             Row(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isSelected) AccentCyan.copy(alpha = 0.16f) else Color.Transparent)
-                                    .clickable {
+                                    .background(
+                                        when {
+                                            isFocused -> Slate800
+                                            isSelected -> AccentCyan.copy(alpha = 0.16f)
+                                            else -> Color.Transparent
+                                        }
+                                    )
+                                    .border(
+                                        width = if (isFocused) 2.dp else 0.dp,
+                                        color = if (isFocused) PureWhite else Color.Transparent,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .focusable(interactionSource = itemInteraction)
+                                    .onPreviewKeyEvent { event ->
+                                        if (event.type == KeyEventType.KeyUp &&
+                                            (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                        ) {
+                                            val updated = subtitleStyleConfig.copy(
+                                                fontId = fontItem.id,
+                                                customFontPath = if (fontItem.id == "CUSTOM_LOCAL") fontItem.filePath else subtitleStyleConfig.customFontPath
+                                            )
+                                            subtitleStyleConfig = updated
+                                            SubtitleAppearancePrefs.save(context, updated)
+                                            showFontPickerDialog = false
+                                            true
+                                        } else false
+                                    }
+                                    .clickable(interactionSource = itemInteraction, indication = null) {
                                         val updated = subtitleStyleConfig.copy(
                                             fontId = fontItem.id,
                                             customFontPath = if (fontItem.id == "CUSTOM_LOCAL") fontItem.filePath else subtitleStyleConfig.customFontPath
@@ -1952,7 +1980,7 @@ private fun SubtitleColorGridDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // Circular Color Swatches Grid
+                // Circular Color Swatches Grid (TV D-Pad Focusable)
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -1962,19 +1990,36 @@ private fun SubtitleColorGridDialog(
                         val rgb = color.toArgb() and 0x00FFFFFF
                         val isSelected = rgb == (selectedRgb and 0x00FFFFFF)
                         val checkTint = if (color.luminance() > 0.5f) Color.Black else Color.White
+                        val swatchInteraction = remember { MutableInteractionSource() }
+                        val isFocused by swatchInteraction.collectIsFocusedAsState()
 
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier
-                                .size(34.dp)
+                                .size(if (isFocused) 38.dp else 34.dp)
                                 .clip(CircleShape)
                                 .background(color)
                                 .border(
-                                    width = if (isSelected) 2.dp else 1.dp,
-                                    color = if (isSelected) AccentCyan else Color.White.copy(alpha = 0.35f),
+                                    width = if (isFocused) 3.dp else if (isSelected) 2.dp else 1.dp,
+                                    color = when {
+                                        isFocused -> PureWhite
+                                        isSelected -> AccentCyan
+                                        else -> Color.White.copy(alpha = 0.35f)
+                                    },
                                     shape = CircleShape
                                 )
-                                .clickable { onSelect(rgb, selectedAlpha) }
+                                .focusable(interactionSource = swatchInteraction)
+                                .onPreviewKeyEvent { event ->
+                                    if (event.type == KeyEventType.KeyUp &&
+                                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                    ) {
+                                        onSelect(rgb, selectedAlpha)
+                                        true
+                                    } else false
+                                }
+                                .clickable(interactionSource = swatchInteraction, indication = null) {
+                                    onSelect(rgb, selectedAlpha)
+                                }
                         ) {
                             if (isSelected) {
                                 Icon(
@@ -1990,7 +2035,7 @@ private fun SubtitleColorGridDialog(
 
                 HorizontalDivider(color = Color.White.copy(alpha = 0.15f))
 
-                // Transparency / Opacity Circles Row (0% -> 100%)
+                // Transparency / Opacity Circles Row (TV D-Pad Focusable)
                 Text(
                     text = if (isAr) "الشفافية (${(selectedAlpha * 100).toInt()}%)" else "Transparency (${(selectedAlpha * 100).toInt()}%)",
                     color = Slate300,
@@ -2005,19 +2050,36 @@ private fun SubtitleColorGridDialog(
                     val baseColor = Color(selectedRgb or 0xFF000000.toInt())
                     TransparencySteps.forEach { alphaStep ->
                         val isSelected = kotlin.math.abs(selectedAlpha - alphaStep) < 0.08f
+                        val alphaInteraction = remember { MutableInteractionSource() }
+                        val isFocused by alphaInteraction.collectIsFocusedAsState()
+
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier
-                                .size(32.dp)
+                                .size(if (isFocused) 36.dp else 32.dp)
                                 .clip(CircleShape)
                                 .border(
-                                    width = if (isSelected) 2.dp else 1.dp,
-                                    color = if (isSelected) AccentCyan else Color.White.copy(alpha = 0.4f),
+                                    width = if (isFocused) 3.dp else if (isSelected) 2.dp else 1.dp,
+                                    color = when {
+                                        isFocused -> PureWhite
+                                        isSelected -> AccentCyan
+                                        else -> Color.White.copy(alpha = 0.4f)
+                                    },
                                     shape = CircleShape
                                 )
-                                .clickable { onSelect(selectedRgb, alphaStep) }
+                                .focusable(interactionSource = alphaInteraction)
+                                .onPreviewKeyEvent { event ->
+                                    if (event.type == KeyEventType.KeyUp &&
+                                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                    ) {
+                                        onSelect(selectedRgb, alphaStep)
+                                        true
+                                    } else false
+                                }
+                                .clickable(interactionSource = alphaInteraction, indication = null) {
+                                    onSelect(selectedRgb, alphaStep)
+                                }
                         ) {
-                            // Checkerboard background + color overlay
                             Canvas(modifier = Modifier.fillMaxSize()) {
                                 val cell = size.width / 4f
                                 for (row in 0..3) {
