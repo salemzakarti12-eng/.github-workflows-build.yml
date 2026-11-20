@@ -89,6 +89,9 @@ class ExoPlayerManager(
 
     private var activeSubtitleConfigs = mutableListOf<MediaItem.SubtitleConfiguration>()
 
+    // Track whether saved language preferences were already applied to the active item
+    private var appliedPreferencesForCurrentItem = false
+
     private var progressJob: Job? = null
     private var controlsHideJob: Job? = null
     private var reconnectJob: Job? = null
@@ -96,6 +99,8 @@ class ExoPlayerManager(
     private val maxRetries = 4
 
     init {
+        applyPersistedLanguageParameters()
+
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 when (playbackState) {
@@ -114,6 +119,7 @@ class ExoPlayerManager(
                             durationMs = player.duration.coerceAtLeast(0L),
                             errorMessage = null
                         )
+                        applyFallbackTrackMatchingIfNeeded(player.currentTracks)
                         updateTracksState(player.currentTracks)
                     }
                     Player.STATE_ENDED -> {
@@ -181,9 +187,160 @@ class ExoPlayerManager(
             }
 
             override fun onTracksChanged(tracks: Tracks) {
+                applyFallbackTrackMatchingIfNeeded(tracks)
                 updateTracksState(tracks)
             }
         })
+    }
+
+    // --- Preferred Audio & Subtitle Language Persistence ---
+
+    fun getPreferredAudioLanguage(): String? =
+        appPrefs.getString("pref_audio_lang", null)?.takeIf { it.isNotBlank() }
+
+    fun getPreferredSubtitleLanguage(): String? =
+        appPrefs.getString("pref_sub_lang", null)?.takeIf { it.isNotBlank() }
+
+    fun isSubtitlesPreferredOff(): Boolean =
+        appPrefs.getBoolean("pref_sub_disabled", false)
+
+    fun setPreferredAudioLanguage(langCode: String?, labelFallback: String? = null) {
+        appPrefs.edit()
+            .putString("pref_audio_lang", langCode.orEmpty())
+            .putString("pref_audio_label", labelFallback.orEmpty())
+            .apply()
+        applyPersistedLanguageParameters()
+    }
+
+    fun setPreferredSubtitleLanguage(langCode: String?, labelFallback: String? = null, disabled: Boolean = false) {
+        appPrefs.edit()
+            .putString("pref_sub_lang", langCode.orEmpty())
+            .putString("pref_sub_label", labelFallback.orEmpty())
+            .putBoolean("pref_sub_disabled", disabled)
+            .apply()
+        applyPersistedLanguageParameters()
+    }
+
+    private fun expandLanguageAliases(langCode: String?): Array<String> {
+        val clean = langCode?.trim()?.lowercase(Locale.US)?.takeIf { it.isNotEmpty() } ?: return emptyArray()
+        return when {
+            clean.startsWith("ar") -> arrayOf("ar", "ara", "arb")
+            clean.startsWith("en") -> arrayOf("en", "eng")
+            clean.startsWith("fr") -> arrayOf("fr", "fra", "fre")
+            clean.startsWith("es") -> arrayOf("es", "spa")
+            clean.startsWith("de") -> arrayOf("de", "deu", "ger")
+            clean.startsWith("tr") -> arrayOf("tr", "tur")
+            clean.startsWith("pl") -> arrayOf("pl", "pol")
+            else -> arrayOf(clean)
+        }
+    }
+
+    private fun applyPersistedLanguageParameters() {
+        val audioAliases = expandLanguageAliases(getPreferredAudioLanguage())
+        val subAliases = expandLanguageAliases(getPreferredSubtitleLanguage())
+        val subDisabled = isSubtitlesPreferredOff()
+
+        val builder = player.trackSelectionParameters
+            .buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, subDisabled)
+
+        if (audioAliases.isNotEmpty()) {
+            builder.setPreferredAudioLanguages(*audioAliases)
+        }
+        if (!subDisabled && subAliases.isNotEmpty()) {
+            builder.setPreferredTextLanguages(*subAliases)
+        }
+
+        player.trackSelectionParameters = builder.build()
+    }
+
+    /**
+     * Fallback matcher for servers that omit ISO language metadata and only put
+     * language names inside track labels (e.g., "Arabic", "عربي", "English").
+     */
+    private fun applyFallbackTrackMatchingIfNeeded(tracks: Tracks) {
+        if (appliedPreferencesForCurrentItem || tracks.groups.isEmpty()) return
+        appliedPreferencesForCurrentItem = true
+
+        val savedAudioLang = getPreferredAudioLanguage()
+        val savedAudioLabel = appPrefs.getString("pref_audio_label", null)?.takeIf { it.isNotBlank() }
+        val savedSubLang = getPreferredSubtitleLanguage()
+        val savedSubLabel = appPrefs.getString("pref_sub_label", null)?.takeIf { it.isNotBlank() }
+        val subDisabled = isSubtitlesPreferredOff()
+
+        var paramsBuilder = player.trackSelectionParameters.buildUpon()
+        var modified = false
+
+        // Match Audio Track if needed
+        if (!savedAudioLang.isNullOrBlank() || !savedAudioLabel.isNullOrBlank()) {
+            val matchedAudio = findMatchingTrackOverride(
+                tracks = tracks,
+                trackType = C.TRACK_TYPE_AUDIO,
+                targetLang = savedAudioLang,
+                targetLabel = savedAudioLabel
+            )
+            if (matchedAudio != null) {
+                paramsBuilder = paramsBuilder
+                    .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+                    .setOverrideForType(matchedAudio)
+                modified = true
+            }
+        }
+
+        // Match Subtitle Track if enabled and external subtitle wasn't manually loaded
+        if (!subDisabled && activeSubtitleConfigs.isEmpty() && (!savedSubLang.isNullOrBlank() || !savedSubLabel.isNullOrBlank())) {
+            val matchedSub = findMatchingTrackOverride(
+                tracks = tracks,
+                trackType = C.TRACK_TYPE_TEXT,
+                targetLang = savedSubLang,
+                targetLabel = savedSubLabel
+            )
+            if (matchedSub != null) {
+                paramsBuilder = paramsBuilder
+                    .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                    .setOverrideForType(matchedSub)
+                modified = true
+            }
+        }
+
+        if (modified) {
+            player.trackSelectionParameters = paramsBuilder.build()
+        }
+    }
+
+    private fun findMatchingTrackOverride(
+        tracks: Tracks,
+        trackType: Int,
+        targetLang: String?,
+        targetLabel: String?
+    ): TrackSelectionOverride? {
+        val aliases = expandLanguageAliases(targetLang)
+        val cleanTargetLabel = targetLabel?.substringBefore("•")?.trim()?.lowercase(Locale.US)
+
+        for (group in tracks.groups) {
+            if (group.type != trackType) continue
+            for (tIdx in 0 until group.length) {
+                val fmt = group.getTrackFormat(tIdx)
+                val fmtLang = fmt.language?.trim()?.lowercase(Locale.US)
+                val fmtLabel = fmt.label?.trim()?.lowercase(Locale.US)
+
+                val langMatches = !fmtLang.isNullOrEmpty() && aliases.any { alias ->
+                    fmtLang == alias || fmtLang.startsWith(alias)
+                }
+                val labelMatches = !cleanTargetLabel.isNullOrEmpty() && !fmtLabel.isNullOrEmpty() && (
+                    fmtLabel.contains(cleanTargetLabel) || cleanTargetLabel.contains(fmtLabel)
+                )
+
+                if (langMatches || labelMatches) {
+                    return TrackSelectionOverride(group.mediaTrackGroup, tIdx)
+                }
+            }
+        }
+        return null
     }
 
     fun isVodOrSeries(item: IptvItem): Boolean {
@@ -243,6 +400,10 @@ class ExoPlayerManager(
         activeSubtitleConfigs.clear()
         _externalSubtitleUri.value = null
         _subtitleOffsetMs.value = 0L
+        appliedPreferencesForCurrentItem = false
+
+        // Reset stale per-item track overrides and apply user's saved language preferences
+        applyPersistedLanguageParameters()
 
         val resumePos = getSavedPosition(item)
 
@@ -461,6 +622,8 @@ class ExoPlayerManager(
             val mediaSource = DefaultMediaSourceFactory(httpDataSourceFactory)
                 .createMediaSource(mediaItem)
 
+            appPrefs.edit().putBoolean("pref_sub_disabled", false).apply()
+
             player.trackSelectionParameters = player.trackSelectionParameters
                 .buildUpon()
                 .clearOverridesOfType(C.TRACK_TYPE_TEXT)
@@ -578,12 +741,25 @@ class ExoPlayerManager(
         if (track.groupIndex in groups.indices) {
             val group = groups[track.groupIndex]
             val override = TrackSelectionOverride(group.mediaTrackGroup, track.trackIndex)
-            player.trackSelectionParameters = player.trackSelectionParameters
+            val audioAliases = expandLanguageAliases(track.language)
+
+            // Persist user's chosen audio language & label for resume and next episodes
+            appPrefs.edit()
+                .putString("pref_audio_lang", track.language.orEmpty())
+                .putString("pref_audio_label", track.label)
+                .apply()
+
+            val builder = player.trackSelectionParameters
                 .buildUpon()
                 .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
                 .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
                 .setOverrideForType(override)
-                .build()
+
+            if (audioAliases.isNotEmpty()) {
+                builder.setPreferredAudioLanguages(*audioAliases)
+            }
+
+            player.trackSelectionParameters = builder.build()
             updateTracksState()
         }
     }
@@ -593,17 +769,36 @@ class ExoPlayerManager(
         if (track.groupIndex in groups.indices) {
             val group = groups[track.groupIndex]
             val override = TrackSelectionOverride(group.mediaTrackGroup, track.trackIndex)
-            player.trackSelectionParameters = player.trackSelectionParameters
+            val subAliases = expandLanguageAliases(track.language)
+
+            // Persist user's chosen subtitle language & label for resume and next episodes
+            appPrefs.edit()
+                .putString("pref_sub_lang", track.language.orEmpty())
+                .putString("pref_sub_label", track.label)
+                .putBoolean("pref_sub_disabled", false)
+                .apply()
+
+            val builder = player.trackSelectionParameters
                 .buildUpon()
                 .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
                 .setOverrideForType(override)
-                .build()
+
+            if (subAliases.isNotEmpty()) {
+                builder.setPreferredTextLanguages(*subAliases)
+            }
+
+            player.trackSelectionParameters = builder.build()
             updateTracksState()
         }
     }
 
     fun disableSubtitles() {
+        // Persist user's choice to keep subtitles turned off across episodes
+        appPrefs.edit()
+            .putBoolean("pref_sub_disabled", true)
+            .apply()
+
         player.trackSelectionParameters = player.trackSelectionParameters
             .buildUpon()
             .clearOverridesOfType(C.TRACK_TYPE_TEXT)
