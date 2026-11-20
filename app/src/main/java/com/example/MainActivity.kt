@@ -1,6 +1,7 @@
 package com.example
 
 import android.app.PictureInPictureParams
+import android.content.Context
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
@@ -54,27 +55,34 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -100,6 +108,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -122,6 +131,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -129,11 +139,13 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.LayoutDirection
@@ -155,6 +167,7 @@ import com.example.ui.MainViewModel
 import com.example.ui.Screen
 import com.example.ui.channelbrowser.ContentBrowserScreen
 import com.example.ui.dashboard.DashboardScreen
+import com.example.ui.locale.AppLanguageManager
 import com.example.ui.locale.LocalAppLanguage
 import com.example.ui.locale.LocalAppStrings
 import com.example.ui.locale.getAppStrings
@@ -392,6 +405,14 @@ fun HypnoStreamApp(
     onNavigateBack: () -> Unit = {},
     onFinishApp: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val onboardingPrefs = remember {
+        context.getSharedPreferences("hypnostream_prefs", Context.MODE_PRIVATE)
+    }
+    var showFirstRunOnboarding by remember {
+        mutableStateOf(!onboardingPrefs.getBoolean("has_completed_onboarding", false))
+    }
+
     val currentScreen by viewModel.currentScreen.collectAsState()
     var lastBrowseScreen by remember { mutableStateOf(Screen.DASHBOARD) }
 
@@ -429,7 +450,8 @@ fun HypnoStreamApp(
     val useSideRailLayout = isLandscape || isTablet || isTv
 
     val strings = LocalAppStrings.current
-    val isAr = LocalAppLanguage.current == "ar"
+    val currentLang = LocalAppLanguage.current
+    val isAr = currentLang == "ar"
 
     var pendingResumeItem by remember { mutableStateOf<IptvItem?>(null) }
     var pendingResumePosMs by remember { mutableLongStateOf(0L) }
@@ -1076,6 +1098,18 @@ fun HypnoStreamApp(
             )
         }
 
+        // First-Run Language Picker + Interactive Multi-Language Tutorial (Shown Once)
+        if (!showSplash && showFirstRunOnboarding) {
+            FirstRunLanguageAndTutorialOverlay(
+                selectedLanguage = currentLang,
+                onSelectLanguage = { langCode -> viewModel.setLanguage(langCode) },
+                onComplete = {
+                    onboardingPrefs.edit().putBoolean("has_completed_onboarding", true).apply()
+                    showFirstRunOnboarding = false
+                }
+            )
+        }
+
         AnimatedVisibility(
             visible = showSplash,
             enter = fadeIn(tween(220)),
@@ -1089,6 +1123,569 @@ fun HypnoStreamApp(
                 statusMessage = statusMessage,
                 totalLoadedItems = totalLoadedItems
             )
+        }
+    }
+}
+
+private data class TutorialCardData(
+    val icon: ImageVector,
+    val title: String,
+    val description: String,
+    val highlightTip: String
+)
+
+private fun getTutorialContentForLanguage(langCode: String): TupleTutorial {
+    return when (langCode.lowercase(Locale.US)) {
+        "ar" -> TupleTutorial(
+            chooseLangTitle = "اختر لغة العرض المفضلة",
+            chooseLangSubtitle = "سيتم ضبط واجهة التطبيق وترجمة الأقسام والدليل التعريفي حسب اختيارك",
+            skipLabel = "تخطي",
+            nextLabel = "التالي",
+            backLabel = "السابق",
+            startLabel = "ابدأ المشاهدة الآن",
+            cards = listOf(
+                TutorialCardData(
+                    icon = Icons.Default.LiveTv,
+                    title = "إضافة اشتراكك بسهولة",
+                    description = "أضف حساب Xtream Codes أو رابط M3U من قسم (المصادر)، وسيقوم التطبيق بترجمة أسماء الأقسام وجلب دليل البرامج (EPG) تلقائياً.",
+                    highlightTip = "يدعم البحث الفوري وسجل آخر عمليات البحث في كل قسم"
+                ),
+                TutorialCardData(
+                    icon = Icons.Default.TouchApp,
+                    title = "تحكم سريع باللمس والريموت",
+                    description = "اسحب للأعلى والأسفل على يسار الشاشة للسطوع وعلى اليمين للصوت، أو استخدم أزرار الريموت والـ Mini-Player للتنقل أثناء المشاهدة.",
+                    highlightTip = "افتح القائمة الجانبية داخل المشغل للتبديل السريع بين القنوات والحلقات"
+                ),
+                TutorialCardData(
+                    icon = Icons.Default.Subtitles,
+                    title = "ترجمة احترافية وتذكر تلقائي",
+                    description = "ارفع أو اخفض مكان الترجمة حياً على الشاشة، واختر خطك المفضل. التطبيق يتذكر لغة الصوت والترجمة ونقطة توقفك بين الحلقات تلقائياً.",
+                    highlightTip = "اختيارك للصوت والترجمة يستمر معك في جميع الحلقات التالية"
+                )
+            )
+        )
+        "fr" -> TupleTutorial(
+            chooseLangTitle = "Choisissez votre langue",
+            chooseLangSubtitle = "L'interface, les catégories et ce guide s'adapteront immédiatement",
+            skipLabel = "Passer",
+            nextLabel = "Suivant",
+            backLabel = "Précédent",
+            startLabel = "Commencer",
+            cards = listOf(
+                TutorialCardData(
+                    icon = Icons.Default.LiveTv,
+                    title = "Ajoutez vos sources IPTV",
+                    description = "Connectez votre compte Xtream Codes ou lien M3U dans Sources. Les catégories sont traduites et le guide TV (EPG) se charge automatiquement.",
+                    highlightTip = "Recherche rapide et historique intégrés dans chaque section"
+                ),
+                TutorialCardData(
+                    icon = Icons.Default.TouchApp,
+                    title = "Gestes tactiles & Télécommande TV",
+                    description = "Glissez à gauche pour la luminosité, à droite pour le volume, ou naviguez facilement avec la télécommande et le lecteur miniature.",
+                    highlightTip = "Ouvrez le tiroir latéral pour changer de chaîne ou d'épisode"
+                ),
+                TutorialCardData(
+                    icon = Icons.Default.Subtitles,
+                    title = "Sous-titres & Mémoire automatique",
+                    description = "Ajustez la position et la police des sous-titres en direct. Vos préférences audio, sous-titres et reprise sont mémorisées entre les épisodes.",
+                    highlightTip = "Vos choix de langue suivent automatiquement chaque épisode"
+                )
+            )
+        )
+        "es" -> TupleTutorial(
+            chooseLangTitle = "Elige tu idioma preferido",
+            chooseLangSubtitle = "La interfaz, las categorías y esta guía se adaptarán al instante",
+            skipLabel = "Omitir",
+            nextLabel = "Siguiente",
+            backLabel = "Atrás",
+            startLabel = "Empezar ahora",
+            cards = listOf(
+                TutorialCardData(
+                    icon = Icons.Default.LiveTv,
+                    title = "Conecta tus listas IPTV",
+                    description = "Añade tu cuenta Xtream Codes o enlace M3U en Fuentes. Las categorías se traducen y la guía EPG se sincroniza automáticamente.",
+                    highlightTip = "Búsqueda instantánea e historial reciente en cada sección"
+                ),
+                TutorialCardData(
+                    icon = Icons.Default.TouchApp,
+                    title = "Control táctil y mando TV",
+                    description = "Desliza a la izquierda para el brillo, a la derecha para el volumen, o controla todo con el mando D-Pad y el minireproductor.",
+                    highlightTip = "Usa la lista lateral en el reproductor para cambiar rápido de episodio"
+                ),
+                TutorialCardData(
+                    icon = Icons.Default.Subtitles,
+                    title = "Subtítulos y memoria inteligente",
+                    description = "Mueve la posición de los subtítulos en vivo y elige tu fuente. La app recuerda tu idioma de audio, subtítulos y punto de reproducción.",
+                    highlightTip = "Tu idioma elegido se mantiene en todos los siguientes episodios"
+                )
+            )
+        )
+        "de" -> TupleTutorial(
+            chooseLangTitle = "Anzeigesprache wählen",
+            chooseLangSubtitle = "Oberfläche, Kategorien und diese Einführung werden sofort angepasst",
+            skipLabel = "Überspringen",
+            nextLabel = "Weiter",
+            backLabel = "Zurück",
+            startLabel = "Jetzt starten",
+            cards = listOf(
+                TutorialCardData(
+                    icon = Icons.Default.LiveTv,
+                    title = "IPTV-Quellen verbinden",
+                    description = "Fügen Sie Xtream Codes oder M3U-Links unter Quellen hinzu. Kategorien werden übersetzt und der EPG-Programmführer automatisch geladen.",
+                    highlightTip = "Schnellsuche und Suchverlauf in jedem Bereich"
+                ),
+                TutorialCardData(
+                    icon = Icons.Default.TouchApp,
+                    title = "Gesten & TV-Fernbedienung",
+                    description = "Links wischen für Helligkeit, rechts für Lautstärke – oder bequem per TV-Fernbedienung und Mini-Player steuern.",
+                    highlightTip = "Seitenmenü im Player für schnellen Sender- und Episodenwechsel"
+                ),
+                TutorialCardData(
+                    icon = Icons.Default.Subtitles,
+                    title = "Untertitel & Auto-Speicher",
+                    description = "Untertitel-Position und Schriftart live anpassen. Audio- und Untertitelsprache sowie Wiedergabeposition bleiben über Episoden erhalten.",
+                    highlightTip = "Ihre Sprachauswahl gilt automatisch für alle weiteren Folgen"
+                )
+            )
+        )
+        "tr" -> TupleTutorial(
+            chooseLangTitle = "Görüntüleme Dilini Seçin",
+            chooseLangSubtitle = "Arayüz, kategoriler ve bu rehber seçiminize göre ayarlanacaktır",
+            skipLabel = "Atla",
+            nextLabel = "İleri",
+            backLabel = "Geri",
+            startLabel = "İzlemeye Başla",
+            cards = listOf(
+                TutorialCardData(
+                    icon = Icons.Default.LiveTv,
+                    title = "IPTV Kaynaklarınızı Ekleyin",
+                    description = "Kaynaklar bölümünden Xtream Codes veya M3U bağlantınızı ekleyin. Kategoriler otomatik çevrilir ve EPG yayın akışı yüklenir.",
+                    highlightTip = "Her bölümde anlık arama ve son aramalar geçmişi"
+                ),
+                TutorialCardData(
+                    icon = Icons.Default.TouchApp,
+                    title = "Dokunmatik ve TV Kumanda Kontrolü",
+                    description = "Parlaklık için sol, ses için sağ tarafı kaydırın veya TV kumandası ve Mini Oynatıcı ile kolayca gezinin.",
+                    highlightTip = "Hızlı kanal ve bölüm geçişi için yan çekmeceyi açın"
+                ),
+                TutorialCardData(
+                    icon = Icons.Default.Subtitles,
+                    title = "Gelişmiş Altyazı ve Otomatik Hafıza",
+                    description = "Altyazı konumunu ve yazı tipini canlı ayarlayın. Ses, altyazı dili ve kaldığınız yer sonraki bölümlerde otomatik hatırlanır.",
+                    highlightTip = "Seçtiğiniz dil sonraki tüm bölümlerde otomatik uygulanır"
+                )
+            )
+        )
+        "pl" -> TupleTutorial(
+            chooseLangTitle = "Wybierz język wyświetlania",
+            chooseLangSubtitle = "Interfejs, kategorie i ten samouczek dostosują się natychmiast",
+            skipLabel = "Pomiń",
+            nextLabel = "Dalej",
+            backLabel = "Wstecz",
+            startLabel = "Rozpocznij",
+            cards = listOf(
+                TutorialCardData(
+                    icon = Icons.Default.LiveTv,
+                    title = "Dodaj swoje źródła IPTV",
+                    description = "Połącz konto Xtream Codes lub link M3U w zakładce Źródła. Kategorie są tłumaczone, a przewodnik EPG ładuje się automatycznie.",
+                    highlightTip = "Szybkie wyszukiwanie i historia w każdej sekcji"
+                ),
+                TutorialCardData(
+                    icon = Icons.Default.TouchApp,
+                    title = "Gesty dotykowe i pilot TV",
+                    description = "Przesuń po lewej dla jasności, po prawej dla głośności lub steruj wygodnie pilotem TV i miniodtwarzaczem.",
+                    highlightTip = "Otwórz panel boczny w odtwarzaczu, aby szybko zmieniać odcinki"
+                ),
+                TutorialCardData(
+                    icon = Icons.Default.Subtitles,
+                    title = "Napisy na żywo i auto-zapamiętywanie",
+                    description = "Zmieniaj pozycję i czcionkę napisów na żywo. Wybrany język dźwięku, napisów i moment odtwarzania są zapamiętywane między odcinkami.",
+                    highlightTip = "Wybrany język przechodzi automatycznie na kolejne odcinki"
+                )
+            )
+        )
+        else -> TupleTutorial(
+            chooseLangTitle = "Choose Your Display Language",
+            chooseLangSubtitle = "The app interface, category translations, and this quick guide will adapt immediately",
+            skipLabel = "Skip",
+            nextLabel = "Next",
+            backLabel = "Back",
+            startLabel = "Start Watching",
+            cards = listOf(
+                TutorialCardData(
+                    icon = Icons.Default.LiveTv,
+                    title = "Connect Your IPTV Sources",
+                    description = "Add your Xtream Codes login or M3U playlist in Sources. Categories auto-translate and the EPG TV guide loads in the background.",
+                    highlightTip = "Instant search and recent search history in every section"
+                ),
+                TutorialCardData(
+                    icon = Icons.Default.TouchApp,
+                    title = "Touch Gestures & TV Remote Ready",
+                    description = "Swipe left for brightness, right for volume, or navigate seamlessly using your TV D-Pad remote and Picture-in-Picture mini player.",
+                    highlightTip = "Open the side drawer inside the player to switch channels or episodes fast"
+                ),
+                TutorialCardData(
+                    icon = Icons.Default.Subtitles,
+                    title = "Pro Subtitles & Smart Track Memory",
+                    description = "Adjust subtitle height and custom fonts live on screen. Your audio language, subtitle choice, and resume position carry over across episodes.",
+                    highlightTip = "Your chosen audio & subtitle tracks automatically follow you to the next episode"
+                )
+            )
+        )
+    }
+}
+
+private data class TupleTutorial(
+    val chooseLangTitle: String,
+    val chooseLangSubtitle: String,
+    val skipLabel: String,
+    val nextLabel: String,
+    val backLabel: String,
+    val startLabel: String,
+    val cards: List<TutorialCardData>
+)
+
+private fun getNativeLanguageDisplayName(code: String): String {
+    return when (code.lowercase(Locale.US)) {
+        "ar" -> "العربية"
+        "en" -> "English"
+        "fr" -> "Français"
+        "es" -> "Español"
+        "de" -> "Deutsch"
+        "tr" -> "Türkçe"
+        "pl" -> "Polski"
+        "pt" -> "Português"
+        "it" -> "Italiano"
+        "ru" -> "Русский"
+        "hi" -> "हिन्दी"
+        "ur" -> "اردو"
+        else -> Locale(code).getDisplayLanguage(Locale(code))
+            .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale(code)) else it.toString() }
+    }
+}
+
+@Composable
+private fun FirstRunLanguageAndTutorialOverlay(
+    selectedLanguage: String,
+    onSelectLanguage: (String) -> Unit,
+    onComplete: () -> Unit
+) {
+    // stepIndex == 0 -> Language Picker | stepIndex in 1..cards.size -> Tutorial Cards
+    var stepIndex by remember { mutableIntStateOf(0) }
+    val tutorial = remember(selectedLanguage) { getTutorialContentForLanguage(selectedLanguage) }
+    val supportedCodes = remember {
+        AppLanguageManager.supportedLanguages.map { it.code }.distinct().ifEmpty { listOf("ar", "en") }
+    }
+
+    val primaryButtonFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(stepIndex) {
+        try {
+            delay(100L)
+            primaryButtonFocusRequester.requestFocus()
+        } catch (_: Exception) {}
+    }
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xF2030712))
+            .padding(20.dp)
+    ) {
+        Surface(
+            color = Slate900,
+            shape = RoundedCornerShape(24.dp),
+            border = BorderStroke(1.5.dp, AccentCyan.copy(alpha = 0.6f)),
+            modifier = Modifier
+                .widthIn(max = 640.dp)
+                .fillMaxWidth()
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(24.dp)
+            ) {
+                // Top Row: Step Indicator + Skip Button
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        val totalSteps = tutorial.cards.size + 1
+                        for (i in 0 until totalSteps) {
+                            Box(
+                                modifier = Modifier
+                                    .width(if (i == stepIndex) 24.dp else 8.dp)
+                                    .height(8.dp)
+                                    .clip(CircleShape)
+                                    .background(if (i == stepIndex) AccentCyan else Slate700)
+                            )
+                        }
+                    }
+
+                    TextButton(onClick = onComplete) {
+                        Text(
+                            text = tutorial.skipLabel,
+                            color = Slate400,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                if (stepIndex == 0) {
+                    // STEP 0: Language Selection
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(AccentCyan.copy(alpha = 0.15f))
+                            .border(1.dp, AccentCyan.copy(alpha = 0.5f), CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Language,
+                            contentDescription = null,
+                            tint = AccentCyan,
+                            modifier = Modifier.size(30.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text(
+                        text = tutorial.chooseLangTitle,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Black,
+                        color = PureWhite,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = tutorial.chooseLangSubtitle,
+                        fontSize = 13.sp,
+                        color = Slate300,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        supportedCodes.chunked(2).forEach { rowCodes ->
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                rowCodes.forEach { code ->
+                                    val isSelected = selectedLanguage.equals(code, ignoreCase = true)
+                                    val langInteraction = remember { MutableInteractionSource() }
+                                    val isFocused by langInteraction.collectIsFocusedAsState()
+
+                                    Surface(
+                                        color = when {
+                                            isSelected -> AccentCyan.copy(alpha = 0.2f)
+                                            isFocused -> Slate800
+                                            else -> Slate850
+                                        },
+                                        shape = RoundedCornerShape(14.dp),
+                                        border = BorderStroke(
+                                            width = if (isFocused || isSelected) 2.dp else 1.dp,
+                                            color = when {
+                                                isFocused -> PureWhite
+                                                isSelected -> AccentCyan
+                                                else -> Slate700
+                                            }
+                                        ),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .focusable(interactionSource = langInteraction)
+                                            .onPreviewKeyEvent { event ->
+                                                if (event.type == KeyEventType.KeyUp &&
+                                                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                                ) {
+                                                    onSelectLanguage(code)
+                                                    true
+                                                } else false
+                                            }
+                                            .clickable(interactionSource = langInteraction, indication = null) {
+                                                onSelectLanguage(code)
+                                            }
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+                                        ) {
+                                            Text(
+                                                text = getNativeLanguageDisplayName(code),
+                                                fontSize = 14.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                                color = if (isSelected) AccentCyan else PureWhite
+                                            )
+                                            if (isSelected) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = null,
+                                                    tint = AccentCyan,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                if (rowCodes.size == 1) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(22.dp))
+
+                    val nextBtnInteraction = remember { MutableInteractionSource() }
+                    val isNextFocused by nextBtnInteraction.collectIsFocusedAsState()
+
+                    Button(
+                        onClick = { stepIndex = 1 },
+                        interactionSource = nextBtnInteraction,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isNextFocused) PureWhite else AccentCyan,
+                            contentColor = Slate950
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .focusRequester(primaryButtonFocusRequester)
+                    ) {
+                        Text(
+                            text = tutorial.nextLabel,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                    }
+                } else {
+                    // STEPS 1..N: Interactive Tutorial Card in Selected Language
+                    val card = tutorial.cards[(stepIndex - 1).coerceIn(0, tutorial.cards.lastIndex)]
+                    val isLastCard = stepIndex >= tutorial.cards.size
+
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(CircleShape)
+                            .background(AccentCyan.copy(alpha = 0.15f))
+                            .border(1.5.dp, AccentCyan, CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = card.icon,
+                            contentDescription = null,
+                            tint = AccentCyan,
+                            modifier = Modifier.size(34.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = card.title,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Black,
+                        color = PureWhite,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(
+                        text = card.description,
+                        fontSize = 14.sp,
+                        color = Slate300,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 20.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Surface(
+                        color = Slate850,
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, AccentCyan.copy(alpha = 0.35f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "✦ ${card.highlightTip}",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = AccentCyan,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(22.dp))
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        OutlinedButton(
+                            onClick = { stepIndex = (stepIndex - 1).coerceAtLeast(0) },
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(1.dp, Slate700),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = Slate850,
+                                contentColor = PureWhite
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+                        ) {
+                            Text(
+                                text = tutorial.backLabel,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        val actionInteraction = remember { MutableInteractionSource() }
+                        val isActionFocused by actionInteraction.collectIsFocusedAsState()
+
+                        Button(
+                            onClick = {
+                                if (isLastCard) onComplete() else stepIndex++
+                            },
+                            interactionSource = actionInteraction,
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isActionFocused) PureWhite else AccentCyan,
+                                contentColor = Slate950
+                            ),
+                            modifier = Modifier
+                                .weight(1.4f)
+                                .height(48.dp)
+                                .focusRequester(primaryButtonFocusRequester)
+                        ) {
+                            Text(
+                                text = if (isLastCard) tutorial.startLabel else tutorial.nextLabel,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
