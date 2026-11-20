@@ -53,6 +53,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -91,6 +92,7 @@ import com.example.model.IptvType
 import com.example.ui.Screen
 import com.example.ui.locale.LocalAppLanguage
 import com.example.ui.locale.LocalAppStrings
+import com.example.ui.player.EpgManager
 import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.AccentRed
 import com.example.ui.theme.PureWhite
@@ -814,6 +816,14 @@ private fun ContentGridCard(
     val interaction = remember { MutableInteractionSource() }
     val isFocused by interaction.collectIsFocusedAsState()
 
+    val epgInfo = remember(item.epgChannelId, item.type) {
+        if (item.type == IptvType.LIVE_TV && !item.epgChannelId.isNullOrBlank()) {
+            EpgManager.getNowAndNext(item.epgChannelId)
+        } else {
+            null
+        }
+    }
+
     val scale by animateFloatAsState(
         targetValue = if (isFocused) 1.04f else 1f,
         animationSpec = spring(dampingRatio = 0.75f, stiffness = 400f),
@@ -949,6 +959,7 @@ private fun ContentGridCard(
             }
 
             Column(
+                verticalArrangement = Arrangement.spacedBy(3.dp),
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .fillMaxWidth()
@@ -959,10 +970,30 @@ private fun ContentGridCard(
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = PureWhite,
-                    maxLines = 2,
+                    maxLines = if (epgInfo?.now != null) 1 else 2,
                     overflow = TextOverflow.Ellipsis,
                     lineHeight = 15.sp
                 )
+
+                epgInfo?.now?.let { nowProgram ->
+                    Text(
+                        text = "${nowProgram.formattedTimeRange()} • ${nowProgram.title}",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = AccentCyan,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    LinearProgressIndicator(
+                        progress = { nowProgram.progressFraction() },
+                        color = AccentCyan,
+                        trackColor = Slate800,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(2.5.dp)
+                            .clip(CircleShape)
+                    )
+                }
             }
         }
     }
