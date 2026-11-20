@@ -14,6 +14,7 @@ import com.example.parser.M3uParser
 import com.example.parser.XtreamCodesClient
 import com.example.parser.XtreamUrlDetector
 import com.example.ui.locale.AppLanguageManager
+import com.example.ui.player.EpgManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -150,6 +151,7 @@ class IptvRepository(context: Context) {
                             put("g", item.group)
                             if (!item.logoUrl.isNullOrBlank()) put("l", item.logoUrl)
                             put("u", item.streamUrl)
+                            if (!item.epgChannelId.isNullOrBlank()) put("epg", item.epgChannelId)
                             if (!item.seriesTitle.isNullOrBlank()) put("st", item.seriesTitle)
                             item.seasonNumber?.let { put("sn", it) }
                             item.episodeNumber?.let { put("en", it) }
@@ -197,6 +199,7 @@ class IptvRepository(context: Context) {
                             logoUrl = obj.optString("l", "").ifBlank { null },
                             streamUrl = obj.getString("u"),
                             type = type,
+                            epgChannelId = obj.optString("epg", "").ifBlank { null },
                             isFavorite = favs.contains(id),
                             seriesTitle = obj.optString("st", "").ifBlank { null },
                             seasonNumber = if (obj.has("sn")) obj.optInt("sn") else null,
@@ -216,6 +219,13 @@ class IptvRepository(context: Context) {
             else Triple(lives, movs, sers)
         } catch (_: Exception) {
             null
+        }
+    }
+
+    private fun triggerEpgSyncForXtream(serverUrl: String, username: String, password: String) {
+        repositoryScope.launch {
+            val epgUrl = EpgManager.buildXtreamEpgUrl(serverUrl, username, password)
+            EpgManager.loadEpgFromUrl(epgUrl)
         }
     }
 
@@ -279,6 +289,7 @@ class IptvRepository(context: Context) {
                 loadDemoContent(active)
             }
             SourceType.XTREAM_CODES -> {
+                triggerEpgSyncForXtream(active.serverUrl, active.username, active.password)
                 repositoryScope.launch {
                     val cached = loadCatalogCache(active.id)
                     if (cached != null) {
@@ -640,6 +651,17 @@ class IptvRepository(context: Context) {
 
                 val body = resp.body ?: throw Exception("Empty playlist stream")
                 val bufferedReader = body.byteStream().bufferedReader(Charsets.UTF_8)
+
+                // Extract url-tvg EPG link from #EXTM3U header if present
+                bufferedReader.mark(8192)
+                val firstLine = bufferedReader.readLine().orEmpty()
+                bufferedReader.reset()
+                EpgManager.extractM3uEpgUrl(firstLine)?.let { extractedEpgUrl ->
+                    repositoryScope.launch {
+                        EpgManager.loadEpgFromUrl(extractedEpgUrl)
+                    }
+                }
+
                 return M3uParser.parseStream(bufferedReader) { progress ->
                     if (!silent) {
                         _statusMessage.value = if (isAr) {
@@ -681,6 +703,8 @@ class IptvRepository(context: Context) {
         val cleanUrl = normalizeServerUrl(serverUrl)
         val cleanUser = username.trim()
         val cleanPass = password.trim()
+
+        triggerEpgSyncForXtream(cleanUrl, cleanUser, cleanPass)
 
         if (!isBackgroundRefresh) {
             _statusMessage.value = if (isAr) "جاري الاتصال بسيرفر Xtream..." else "Connecting to Xtream Codes server..."
@@ -835,6 +859,12 @@ class IptvRepository(context: Context) {
             } else {
                 if (rawContent.isBlank() || !rawContent.contains("#EXTM3U", ignoreCase = true)) {
                     throw Exception(if (isAr) "ملف M3U غير صالح" else "Invalid M3U playlist (missing #EXTM3U header)")
+                }
+                val firstLine = rawContent.lineSequence().firstOrNull().orEmpty()
+                EpgManager.extractM3uEpgUrl(firstLine)?.let { extractedEpgUrl ->
+                    repositoryScope.launch {
+                        EpgManager.loadEpgFromUrl(extractedEpgUrl)
+                    }
                 }
                 M3uParser.parse(rawContent)
             }
