@@ -35,8 +35,6 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -198,7 +196,6 @@ private val SubtitleColorPalette = listOf(
     Color(0xFFFF9800), // Orange
     Color(0xFF795548), // Brown
     Color(0xFF607D8B), // Blue Grey
-    Color(0xFF9E9E9E), // Grey
     Color(0xFF000000)  // Black
 )
 
@@ -214,9 +211,9 @@ private data class SubtitleAppearanceConfig(
     val textColorRgb: Int = 0xFFFFFF,
     val textAlpha: Float = 1.0f,
     val bgColorRgb: Int = 0x000000,
-    val bgAlpha: Float = 0.0f, // 0f = Transparent by default
+    val bgAlpha: Float = 0.0f,
     val textSizeScale: Float = 1.05f,
-    val bottomPaddingFraction: Float = 0.08f, // Vertical position (0.02f bottom -> 0.85f top)
+    val bottomPaddingFraction: Float = 0.08f,
     val fontId: String = "DEFAULT",
     val customFontPath: String? = null
 )
@@ -747,7 +744,6 @@ fun VideoPlayerScreen(
                     .fillMaxSize()
                     .background(Color(0x33000000))
             ) {
-                // Horizontal Guide Line matching current subtitle height
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -761,7 +757,6 @@ fun VideoPlayerScreen(
                     )
                 }
 
-                // Right-Side Vertical Position Slider Card
                 Surface(
                     color = Color(0xE61A1D24),
                     shape = RoundedCornerShape(16.dp),
@@ -1606,7 +1601,9 @@ fun VideoPlayerScreen(
                             OutlinedButton(
                                 onClick = {
                                     showSubtitleDialog = false
-                                    playerManager.hideControls()
+                                    if (uiState.isControlsVisible) {
+                                        playerManager.toggleControlsVisibility()
+                                    }
                                     isAdjustingSubtitlePosition = true
                                 },
                                 border = BorderStroke(1.dp, AccentCyan.copy(alpha = 0.7f)),
@@ -1954,7 +1951,6 @@ fun VideoPlayerScreen(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SubtitleColorGridDialog(
     title: String,
@@ -1980,54 +1976,60 @@ private fun SubtitleColorGridDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // Circular Color Swatches Grid (TV D-Pad Focusable)
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                // Circular Color Swatches Grid (6 per row, TV D-Pad Focusable)
+                Column(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    SubtitleColorPalette.forEach { color ->
-                        val rgb = color.toArgb() and 0x00FFFFFF
-                        val isSelected = rgb == (selectedRgb and 0x00FFFFFF)
-                        val checkTint = if (color.luminance() > 0.5f) Color.Black else Color.White
-                        val swatchInteraction = remember { MutableInteractionSource() }
-                        val isFocused by swatchInteraction.collectIsFocusedAsState()
-
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier
-                                .size(if (isFocused) 38.dp else 34.dp)
-                                .clip(CircleShape)
-                                .background(color)
-                                .border(
-                                    width = if (isFocused) 3.dp else if (isSelected) 2.dp else 1.dp,
-                                    color = when {
-                                        isFocused -> PureWhite
-                                        isSelected -> AccentCyan
-                                        else -> Color.White.copy(alpha = 0.35f)
-                                    },
-                                    shape = CircleShape
-                                )
-                                .focusable(interactionSource = swatchInteraction)
-                                .onPreviewKeyEvent { event ->
-                                    if (event.type == KeyEventType.KeyUp &&
-                                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                                    ) {
-                                        onSelect(rgb, selectedAlpha)
-                                        true
-                                    } else false
-                                }
-                                .clickable(interactionSource = swatchInteraction, indication = null) {
-                                    onSelect(rgb, selectedAlpha)
-                                }
+                    SubtitleColorPalette.chunked(6).forEach { rowColors ->
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            if (isSelected) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = null,
-                                    tint = checkTint,
-                                    modifier = Modifier.size(18.dp)
-                                )
+                            rowColors.forEach { color ->
+                                val rgb = color.toArgb() and 0x00FFFFFF
+                                val isSelected = rgb == (selectedRgb and 0x00FFFFFF)
+                                val checkTint = if (color.luminance() > 0.5f) Color.Black else Color.White
+                                val swatchInteraction = remember { MutableInteractionSource() }
+                                val isFocused by swatchInteraction.collectIsFocusedAsState()
+
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .size(if (isFocused) 38.dp else 34.dp)
+                                        .clip(CircleShape)
+                                        .background(color)
+                                        .border(
+                                            width = if (isFocused) 3.dp else if (isSelected) 2.dp else 1.dp,
+                                            color = when {
+                                                isFocused -> PureWhite
+                                                isSelected -> AccentCyan
+                                                else -> Color.White.copy(alpha = 0.35f)
+                                            },
+                                            shape = CircleShape
+                                        )
+                                        .focusable(interactionSource = swatchInteraction)
+                                        .onPreviewKeyEvent { event ->
+                                            if (event.type == KeyEventType.KeyUp &&
+                                                (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                            ) {
+                                                onSelect(rgb, selectedAlpha)
+                                                true
+                                            } else false
+                                        }
+                                        .clickable(interactionSource = swatchInteraction, indication = null) {
+                                            onSelect(rgb, selectedAlpha)
+                                        }
+                                ) {
+                                    if (isSelected) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = checkTint,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
