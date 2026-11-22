@@ -57,8 +57,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -91,9 +93,7 @@ import com.example.ui.locale.isRtlLanguage
 import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.AccentEmerald
 import com.example.ui.theme.AccentRed
-import com.example.ui.theme.MoviesGradient
 import com.example.ui.theme.PureWhite
-import com.example.ui.theme.SeriesGradient
 import com.example.ui.theme.Slate300
 import com.example.ui.theme.Slate400
 import com.example.ui.theme.Slate600
@@ -102,12 +102,13 @@ import com.example.ui.theme.Slate800
 import com.example.ui.theme.Slate850
 import com.example.ui.theme.Slate900
 import com.example.ui.theme.Slate950
-import com.example.ui.theme.TvChannelsGradient
 import java.util.Locale
 
-private val HistoryGradient = Brush.linearGradient(
-    colors = listOf(Color(0xFF0F172A), Color(0xFF064E3B), Color(0xFF0E7490))
-)
+// Ambient Glow Accent Colors for Dark Glassmorphism
+private val LiveTvAccent = Color(0xFFFF6B35)
+private val MoviesAccent = Color(0xFF8B5CF6)
+private val SeriesAccent = Color(0xFF00E5FF)
+private val HistoryAccent = Color(0xFF10B981)
 
 @Composable
 fun DashboardScreen(
@@ -152,7 +153,19 @@ fun DashboardScreen(
     val historyBadge = strings.historyBadge
 
     CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
-        BoxWithConstraints(modifier = modifier.fillMaxSize().background(Slate950)) {
+        BoxWithConstraints(
+            modifier = modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFF060B16),
+                            Slate950,
+                            Color(0xFF03060E)
+                        )
+                    )
+                )
+        ) {
             val isTv = com.example.util.LocalIsTelevision.current
             val isWideScreen = maxWidth >= 600.dp || isTv
 
@@ -184,16 +197,15 @@ fun DashboardScreen(
                 item {
                     Text(
                         text = strings.exploreEntertainment,
-                        fontSize = 12.sp,
+                        fontSize = 11.5.sp,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.2.sp,
+                        letterSpacing = 1.4.sp,
                         color = Slate400,
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
                     )
                 }
 
                 if (isWideScreen) {
-                    // Asymmetric Bento Layout: Featured Hero Live TV Card + Stacked Movies/Series + Sleek History Bar
                     item {
                         Column(
                             modifier = Modifier
@@ -207,12 +219,12 @@ fun DashboardScreen(
                                     .height(236.dp),
                                 horizontalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
-                                HypnotixGradientCard(
+                                GlassAmbientCard(
                                     title = strings.liveTv,
                                     subtitle = strings.liveTvSubtitle,
                                     countText = "%,d %s".format(Locale.US, liveCount, strings.channelsAvailable),
                                     icon = Icons.Default.LiveTv,
-                                    gradient = TvChannelsGradient,
+                                    accentColor = LiveTvAccent,
                                     testTag = "card_tv_channels",
                                     badgeText = strings.liveStreamingBadge,
                                     isLandscapeCard = true,
@@ -228,12 +240,12 @@ fun DashboardScreen(
                                         .fillMaxHeight(),
                                     verticalArrangement = Arrangement.spacedBy(14.dp)
                                 ) {
-                                    HypnotixGradientCard(
+                                    GlassAmbientCard(
                                         title = strings.movies,
                                         subtitle = strings.moviesSubtitle,
                                         countText = "%,d %s".format(Locale.US, moviesCount, strings.vodTitles),
                                         icon = Icons.Default.Movie,
-                                        gradient = MoviesGradient,
+                                        accentColor = MoviesAccent,
                                         testTag = "card_movies",
                                         badgeText = strings.cinemaVodBadge,
                                         isLandscapeCard = true,
@@ -242,12 +254,12 @@ fun DashboardScreen(
                                         modifier = Modifier.fillMaxWidth()
                                     )
 
-                                    HypnotixGradientCard(
+                                    GlassAmbientCard(
                                         title = strings.series,
                                         subtitle = strings.seriesSubtitle,
                                         countText = "%,d %s".format(Locale.US, seriesCount, strings.showsCatalog),
                                         icon = Icons.Default.VideoLibrary,
-                                        gradient = SeriesGradient,
+                                        accentColor = SeriesAccent,
                                         testTag = "card_series",
                                         badgeText = strings.episodicTvBadge,
                                         isLandscapeCard = true,
@@ -258,12 +270,12 @@ fun DashboardScreen(
                                 }
                             }
 
-                            HypnotixGradientCard(
+                            GlassAmbientCard(
                                 title = historyTitle,
                                 subtitle = historySubtitle,
                                 countText = historyCountText,
                                 icon = Icons.Default.History,
-                                gradient = HistoryGradient,
+                                accentColor = HistoryAccent,
                                 testTag = "card_history",
                                 badgeText = historyBadge,
                                 isLandscapeCard = true,
@@ -275,14 +287,13 @@ fun DashboardScreen(
                         }
                     }
                 } else {
-                    // Mobile Portrait Asymmetric Layout: Full Hero Live TV + 2-Column Movies/Series + Sleek History Strip
                     item {
-                        HypnotixGradientCard(
+                        GlassAmbientCard(
                             title = strings.liveTv,
                             subtitle = strings.liveTvSubtitle,
                             countText = "%,d %s".format(Locale.US, liveCount, strings.channelsAvailable),
                             icon = Icons.Default.LiveTv,
-                            gradient = TvChannelsGradient,
+                            accentColor = LiveTvAccent,
                             testTag = "card_tv_channels",
                             badgeText = strings.liveStreamingBadge,
                             isLandscapeCard = false,
@@ -299,12 +310,12 @@ fun DashboardScreen(
                                 .padding(horizontal = 20.dp, vertical = 6.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            HypnotixGradientCard(
+                            GlassAmbientCard(
                                 title = strings.movies,
                                 subtitle = strings.moviesSubtitle,
                                 countText = "%,d %s".format(Locale.US, moviesCount, strings.vodTitles),
                                 icon = Icons.Default.Movie,
-                                gradient = MoviesGradient,
+                                accentColor = MoviesAccent,
                                 testTag = "card_movies",
                                 badgeText = strings.cinemaVodBadge,
                                 isLandscapeCard = true,
@@ -313,12 +324,12 @@ fun DashboardScreen(
                                 modifier = Modifier.weight(1f)
                             )
 
-                            HypnotixGradientCard(
+                            GlassAmbientCard(
                                 title = strings.series,
                                 subtitle = strings.seriesSubtitle,
                                 countText = "%,d %s".format(Locale.US, seriesCount, strings.showsCatalog),
                                 icon = Icons.Default.VideoLibrary,
-                                gradient = SeriesGradient,
+                                accentColor = SeriesAccent,
                                 testTag = "card_series",
                                 badgeText = strings.episodicTvBadge,
                                 isLandscapeCard = true,
@@ -330,12 +341,12 @@ fun DashboardScreen(
                     }
 
                     item {
-                        HypnotixGradientCard(
+                        GlassAmbientCard(
                             title = historyTitle,
                             subtitle = historySubtitle,
                             countText = historyCountText,
                             icon = Icons.Default.History,
-                            gradient = HistoryGradient,
+                            accentColor = HistoryAccent,
                             testTag = "card_history",
                             badgeText = historyBadge,
                             isLandscapeCard = false,
@@ -346,7 +357,7 @@ fun DashboardScreen(
                     }
                 }
 
-                // Continue Watching Rail with Cyan Progress Bars & Resume Timestamps
+                // Continue Watching Rail
                 if (continueWatchingItems.isNotEmpty()) {
                     item {
                         Spacer(modifier = Modifier.height(16.dp))
@@ -465,10 +476,10 @@ fun DashboardHeader(
                 modifier = Modifier
                     .size(44.dp)
                     .clip(CircleShape)
-                    .background(if (isFocused) AccentCyan else Slate850)
+                    .background(if (isFocused) AccentCyan else Slate900.copy(alpha = 0.85f))
                     .border(
-                        width = if (isFocused) 3.dp else 1.dp,
-                        color = if (isFocused) PureWhite else Slate700,
+                        width = if (isFocused) 2.5.dp else 1.dp,
+                        color = if (isFocused) PureWhite else Slate700.copy(alpha = 0.7f),
                         shape = CircleShape
                     )
                     .focusable(interactionSource = interactionSource)
@@ -516,15 +527,21 @@ fun SourceInfoBanner(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 6.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(16.dp))
             .border(
                 width = 1.dp,
-                color = Slate800,
-                shape = RoundedCornerShape(14.dp)
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color(0x33FFFFFF),
+                        Slate800,
+                        Color(0x2200E5FF)
+                    )
+                ),
+                shape = RoundedCornerShape(16.dp)
             )
             .testTag("source_info_banner"),
-        color = Slate900,
-        shape = RoundedCornerShape(14.dp)
+        color = Color(0xCC0D1424),
+        shape = RoundedCornerShape(16.dp)
     ) {
         Row(
             modifier = Modifier
@@ -578,11 +595,11 @@ fun SourceInfoBanner(
                         onClick = { if (!isRefreshing) onRefreshSource() },
                         enabled = !isRefreshing,
                         interactionSource = refreshInteraction,
-                        color = if (isRefreshFocused) AccentCyan else AccentCyan.copy(alpha = 0.14f),
+                        color = if (isRefreshFocused) AccentCyan else AccentCyan.copy(alpha = 0.12f),
                         shape = RoundedCornerShape(10.dp),
                         border = BorderStroke(
                             width = if (isRefreshFocused) 2.dp else 1.dp,
-                            color = if (isRefreshFocused) PureWhite else AccentCyan.copy(alpha = 0.45f)
+                            color = if (isRefreshFocused) PureWhite else AccentCyan.copy(alpha = 0.35f)
                         ),
                         modifier = Modifier
                             .onPreviewKeyEvent { event ->
@@ -627,11 +644,11 @@ fun SourceInfoBanner(
                 Surface(
                     onClick = onSwitchSource,
                     interactionSource = switchInteraction,
-                    color = if (isSwitchFocused) AccentCyan else Slate850,
+                    color = if (isSwitchFocused) AccentCyan else Color(0xFF151F34),
                     shape = RoundedCornerShape(10.dp),
                     border = BorderStroke(
                         width = if (isSwitchFocused) 2.dp else 1.dp,
-                        color = if (isSwitchFocused) PureWhite else Slate700
+                        color = if (isSwitchFocused) PureWhite else Color(0x28FFFFFF)
                     ),
                     modifier = Modifier
                         .onPreviewKeyEvent { event ->
@@ -668,12 +685,12 @@ fun SourceInfoBanner(
 }
 
 @Composable
-fun HypnotixGradientCard(
+fun GlassAmbientCard(
     title: String,
     subtitle: String,
     countText: String,
     icon: ImageVector,
-    gradient: Brush,
+    accentColor: Color,
     testTag: String,
     badgeText: String,
     isLandscapeCard: Boolean,
@@ -688,27 +705,55 @@ fun HypnotixGradientCard(
     val isRtl = isRtlLanguage(LocalAppLanguage.current)
 
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.035f else 1f,
-        animationSpec = spring(dampingRatio = 0.72f, stiffness = 420f),
-        label = "cardScale"
+        targetValue = if (isFocused) 1.032f else 1f,
+        animationSpec = spring(dampingRatio = 0.75f, stiffness = 420f),
+        label = "glassCardScale"
     )
 
     val cardHeight = customHeight ?: if (isLandscapeCard) 150.dp else 134.dp
-    val paddingModifier = if (isLandscapeCard) modifier else modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp)
+    val paddingModifier = if (isLandscapeCard) {
+        modifier
+    } else {
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 6.dp)
+    }
+
+    val glassBaseGradient = Brush.linearGradient(
+        colors = listOf(
+            Color(0xE611192E),
+            Color(0xF20A101F),
+            Color(0xFA070B16)
+        )
+    )
+
+    val borderBrush = if (isFocused) {
+        Brush.linearGradient(
+            colors = listOf(PureWhite, accentColor, PureWhite)
+        )
+    } else {
+        Brush.linearGradient(
+            colors = listOf(
+                accentColor.copy(alpha = 0.50f),
+                Color(0x26FFFFFF),
+                accentColor.copy(alpha = 0.22f)
+            )
+        )
+    }
 
     Card(
         modifier = paddingModifier
             .height(cardHeight)
             .scale(scale)
             .shadow(
-                elevation = if (isFocused) 18.dp else 5.dp,
+                elevation = if (isFocused) 20.dp else 6.dp,
                 shape = RoundedCornerShape(22.dp),
-                spotColor = if (isFocused) AccentCyan else Color.Transparent,
-                ambientColor = if (isFocused) PureWhite else Color.Transparent
+                spotColor = if (isFocused) accentColor else Color(0x66000000),
+                ambientColor = if (isFocused) accentColor else Color.Transparent
             )
             .border(
-                width = if (isFocused) 3.dp else 1.dp,
-                color = if (isFocused) PureWhite else Color(0x38FFFFFF),
+                width = if (isFocused) 2.5.dp else 1.2.dp,
+                brush = borderBrush,
                 shape = RoundedCornerShape(22.dp)
             )
             .clip(RoundedCornerShape(22.dp))
@@ -729,15 +774,55 @@ fun HypnotixGradientCard(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(gradient)
+                .background(glassBaseGradient)
+                .drawBehind {
+                    // Primary ambient radial glow from top-end corner
+                    val glowRadius = size.maxDimension * (if (isHeroCard) 0.78f else 0.68f)
+                    val glowCenter = Offset(
+                        x = if (isRtl) size.width * 0.14f else size.width * 0.86f,
+                        y = size.height * 0.22f
+                    )
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                accentColor.copy(alpha = if (isFocused) 0.36f else 0.22f),
+                                accentColor.copy(alpha = if (isFocused) 0.12f else 0.06f),
+                                Color.Transparent
+                            ),
+                            center = glowCenter,
+                            radius = glowRadius
+                        ),
+                        radius = glowRadius,
+                        center = glowCenter
+                    )
+
+                    // Subtle secondary bottom-start ambient tint
+                    val secondaryCenter = Offset(
+                        x = if (isRtl) size.width * 0.88f else size.width * 0.12f,
+                        y = size.height * 0.92f
+                    )
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                accentColor.copy(alpha = 0.10f),
+                                Color.Transparent
+                            ),
+                            center = secondaryCenter,
+                            radius = size.maxDimension * 0.45f
+                        ),
+                        radius = size.maxDimension * 0.45f,
+                        center = secondaryCenter
+                    )
+                }
                 .padding(if (isCompactStrip) 14.dp else if (isHeroCard) 22.dp else 16.dp)
         ) {
+            // Subtle watermark icon in background
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = Color(0x18FFFFFF),
+                tint = accentColor.copy(alpha = if (isFocused) 0.14f else 0.08f),
                 modifier = Modifier
-                    .size(if (isCompactStrip) 68.dp else if (isHeroCard) 140.dp else 88.dp)
+                    .size(if (isCompactStrip) 64.dp else if (isHeroCard) 136.dp else 86.dp)
                     .align(Alignment.CenterEnd)
             )
 
@@ -753,15 +838,16 @@ fun HypnotixGradientCard(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(42.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0x28FFFFFF)),
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(13.dp))
+                                .background(accentColor.copy(alpha = 0.16f))
+                                .border(1.dp, accentColor.copy(alpha = 0.45f), RoundedCornerShape(13.dp)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = icon,
                                 contentDescription = null,
-                                tint = PureWhite,
+                                tint = accentColor,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -778,7 +864,7 @@ fun HypnotixGradientCard(
                             Text(
                                 text = "$countText • $subtitle",
                                 fontSize = 11.sp,
-                                color = Color(0xDDFFFFFF),
+                                color = Slate300,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -792,20 +878,21 @@ fun HypnotixGradientCard(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0x40000000))
+                                .background(accentColor.copy(alpha = 0.16f))
+                                .border(1.dp, accentColor.copy(alpha = 0.40f), RoundedCornerShape(8.dp))
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 text = badgeText,
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = AccentCyan
+                                color = accentColor
                             )
                         }
                         Icon(
                             imageVector = if (isRtl) Icons.Default.ChevronLeft else Icons.Default.ChevronRight,
                             contentDescription = "Open",
-                            tint = PureWhite,
+                            tint = if (isFocused) PureWhite else accentColor,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -826,19 +913,24 @@ fun HypnotixGradientCard(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(if (isHeroCard) 46.dp else 36.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0x33FFFFFF)),
+                                    .size(if (isHeroCard) 48.dp else 38.dp)
+                                    .clip(RoundedCornerShape(13.dp))
+                                    .background(accentColor.copy(alpha = 0.18f))
+                                    .border(
+                                        width = 1.dp,
+                                        color = accentColor.copy(alpha = 0.50f),
+                                        shape = RoundedCornerShape(13.dp)
+                                    ),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = icon,
                                     contentDescription = null,
-                                    tint = PureWhite,
+                                    tint = accentColor,
                                     modifier = Modifier.size(if (isHeroCard) 26.dp else 20.dp)
                                 )
                             }
-                            Spacer(modifier = Modifier.width(10.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text(
                                     text = title,
@@ -853,7 +945,7 @@ fun HypnotixGradientCard(
                                     text = countText,
                                     fontSize = if (isHeroCard) 12.sp else 10.5.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xE6FFFFFF),
+                                    color = accentColor,
                                     maxLines = 1
                                 )
                             }
@@ -864,7 +956,8 @@ fun HypnotixGradientCard(
                             horizontalArrangement = Arrangement.spacedBy(5.dp),
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0x44000000))
+                                .background(accentColor.copy(alpha = 0.16f))
+                                .border(1.dp, accentColor.copy(alpha = 0.40f), RoundedCornerShape(8.dp))
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             if (isHeroCard) {
@@ -893,7 +986,7 @@ fun HypnotixGradientCard(
                         Text(
                             text = subtitle,
                             fontSize = if (isHeroCard) 12.sp else 10.5.sp,
-                            color = Color(0xEEFFFFFF),
+                            color = Slate300,
                             maxLines = if (isHeroCard) 2 else 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
@@ -902,14 +995,15 @@ fun HypnotixGradientCard(
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier
-                                .size(if (isHeroCard) 32.dp else 24.dp)
+                                .size(if (isHeroCard) 34.dp else 26.dp)
                                 .clip(CircleShape)
-                                .background(Color(0x33FFFFFF))
+                                .background(if (isFocused) accentColor else accentColor.copy(alpha = 0.18f))
+                                .border(1.dp, accentColor.copy(alpha = 0.45f), CircleShape)
                         ) {
                             Icon(
                                 imageVector = if (isRtl) Icons.Default.ChevronLeft else Icons.Default.ChevronRight,
                                 contentDescription = "Open",
-                                tint = PureWhite,
+                                tint = if (isFocused) Slate950 else PureWhite,
                                 modifier = Modifier.size(if (isHeroCard) 20.dp else 16.dp)
                             )
                         }
