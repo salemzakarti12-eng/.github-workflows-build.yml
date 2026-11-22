@@ -138,6 +138,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.SubtitleView
 import coil.compose.AsyncImage
@@ -256,7 +257,7 @@ private object SubtitleAppearancePrefs {
             textColorRgb = prefs.getInt("text_rgb", 0xFFFFFF),
             textAlpha = prefs.getFloat("text_alpha", 1.0f).coerceIn(0.15f, 1.0f),
             bgColorRgb = prefs.getInt("bg_rgb", 0x000000),
-            bgAlpha = prefs.getFloat("bg_alpha", 0.0f).coerceIn(0f, 1.0f),
+            bgAlpha = prefs.getFloat("bg_alpha", 0.0f).coerceIn(0f, 1f),
             textSizeScale = prefs.getFloat("size_scale", 1.05f).coerceIn(0.6f, 2.0f),
             bottomPaddingFraction = prefs.getFloat("bottom_pad", 0.08f).coerceIn(0.02f, 0.85f),
             fontId = prefs.getString("font_id", "DEFAULT") ?: "DEFAULT",
