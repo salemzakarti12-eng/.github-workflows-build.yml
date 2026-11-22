@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 enum class Screen {
     DASHBOARD,
     LIVE_CHANNELS,
+    EPG_GUIDE,
     MOVIES,
     SERIES,
     SERIES_DETAIL,
@@ -137,7 +138,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     ) { screen, lastBrowse, liveCats, movCats, serCats ->
         val effectiveScreen = if (screen == Screen.PLAYER || screen == Screen.SERIES_DETAIL) lastBrowse else screen
         when (effectiveScreen) {
-            Screen.LIVE_CHANNELS -> liveCats
+            Screen.LIVE_CHANNELS, Screen.EPG_GUIDE -> liveCats
             Screen.MOVIES -> movCats
             Screen.SERIES -> serCats
             else -> emptyList()
@@ -150,7 +151,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         repository.totalSeriesCount,
         repository.favorites
     ) { live, mov, ser, favs ->
-        live + mov + ser + favs.size
+        listOf(live, mov, ser, favs)
     }
 
     val currentFilteredItems: StateFlow<List<IptvItem>> = combine(
@@ -162,7 +163,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     ) { screen, lastBrowse, category, query, limit ->
         val effectiveScreen = if (screen == Screen.PLAYER || screen == Screen.SERIES_DETAIL) lastBrowse else screen
         val type = when (effectiveScreen) {
-            Screen.LIVE_CHANNELS -> IptvType.LIVE_TV
+            Screen.LIVE_CHANNELS, Screen.EPG_GUIDE -> IptvType.LIVE_TV
             Screen.MOVIES -> IptvType.MOVIE
             Screen.SERIES -> IptvType.SERIES
             else -> IptvType.LIVE_TV
@@ -182,7 +183,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _screenHistory.add(previousScreen)
             _currentScreen.value = screen
 
-            val isMainBrowseTab = screen == Screen.LIVE_CHANNELS || screen == Screen.MOVIES || screen == Screen.SERIES || screen == Screen.DASHBOARD || screen == Screen.SOURCES || screen == Screen.HISTORY
+            val isMainBrowseTab = screen == Screen.LIVE_CHANNELS ||
+                screen == Screen.EPG_GUIDE ||
+                screen == Screen.MOVIES ||
+                screen == Screen.SERIES ||
+                screen == Screen.DASHBOARD ||
+                screen == Screen.SOURCES ||
+                screen == Screen.HISTORY
             if (isMainBrowseTab && screen != _lastBrowseScreen.value) {
                 _lastBrowseScreen.value = screen
                 _searchQuery.value = ""
@@ -206,7 +213,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (_screenHistory.isNotEmpty()) {
             val prev = _screenHistory.removeLast()
             _currentScreen.value = prev
-            if (prev == Screen.LIVE_CHANNELS || prev == Screen.MOVIES || prev == Screen.SERIES || prev == Screen.DASHBOARD || prev == Screen.SOURCES || prev == Screen.HISTORY) {
+            if (prev == Screen.LIVE_CHANNELS ||
+                prev == Screen.EPG_GUIDE ||
+                prev == Screen.MOVIES ||
+                prev == Screen.SERIES ||
+                prev == Screen.DASHBOARD ||
+                prev == Screen.SOURCES ||
+                prev == Screen.HISTORY
+            ) {
                 _lastBrowseScreen.value = prev
             }
             return true
