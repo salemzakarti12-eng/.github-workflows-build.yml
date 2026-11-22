@@ -2094,18 +2094,39 @@ fun HypnoOrbitalSplashOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(
-                        Color(0xFF071A3E),
-                        Color(0xFF030917),
-                        Color(0xFF000000)
-                    ),
-                    radius = 950f
-                )
-            ),
+            .background(Color(0xFF03060E)),
         contentAlignment = Alignment.Center
     ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color(0x24FF6B35), Color.Transparent),
+                    center = Offset(size.width * 0.22f, size.height * 0.28f),
+                    radius = size.maxDimension * 0.42f
+                ),
+                radius = size.maxDimension * 0.42f,
+                center = Offset(size.width * 0.22f, size.height * 0.28f)
+            )
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color(0x269D4EDD), Color.Transparent),
+                    center = Offset(size.width * 0.78f, size.height * 0.30f),
+                    radius = size.maxDimension * 0.42f
+                ),
+                radius = size.maxDimension * 0.42f,
+                center = Offset(size.width * 0.78f, size.height * 0.30f)
+            )
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color(0x2B00E5FF), Color.Transparent),
+                    center = Offset(size.width * 0.50f, size.height * 0.65f),
+                    radius = size.maxDimension * 0.50f
+                ),
+                radius = size.maxDimension * 0.50f,
+                center = Offset(size.width * 0.50f, size.height * 0.65f)
+            )
+        }
+
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
@@ -2113,31 +2134,37 @@ fun HypnoOrbitalSplashOverlay(
         ) {
             Box(
                 modifier = Modifier
-                    .size(210.dp)
+                    .size(204.dp)
+                    .shadow(
+                        elevation = 28.dp,
+                        shape = RoundedCornerShape(46.dp),
+                        spotColor = Color(0xFF00E5FF)
+                    )
                     .clip(RoundedCornerShape(46.dp))
                     .background(
                         Brush.linearGradient(
                             colors = listOf(
-                                Color(0xFF071C44),
-                                Color(0xFF030B1B),
-                                Color(0xFF051533)
+                                Color(0xCC0B1324),
+                                Color(0xE6050914),
+                                Color(0xCC09162B)
                             )
                         )
                     )
                     .border(
-                        width = 2.dp,
+                        width = 1.5.dp,
                         brush = Brush.linearGradient(
                             colors = listOf(
-                                Color(0xFF00E5FF),
-                                Color(0xFF1D4ED8),
-                                Color(0xFF00E5FF)
+                                Color(0x9900E5FF),
+                                Color(0x669D4EDD),
+                                Color(0x88FF6B35),
+                                Color(0x9900E5FF)
                             )
                         ),
                         shape = RoundedCornerShape(46.dp)
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Canvas(modifier = Modifier.size(170.dp)) {
+                Canvas(modifier = Modifier.size(166.dp)) {
                     val w = size.width
                     val h = size.height
                     val cx = w / 2f
@@ -2147,7 +2174,7 @@ fun HypnoOrbitalSplashOverlay(
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                Color(0x4400E5FF),
+                                Color(0x3800E5FF),
                                 Color.Transparent
                             ),
                             center = Offset(cx, cy),
@@ -2164,13 +2191,13 @@ fun HypnoOrbitalSplashOverlay(
                         val ry = ovalSize.height / 2f
 
                         drawArc(
-                            color = Color(0xFF0284C7).copy(alpha = 0.55f),
+                            color = Color(0xFF0284C7).copy(alpha = 0.45f),
                             startAngle = 180f,
                             sweepAngle = 180f,
                             useCenter = false,
                             topLeft = ovalTopLeft,
                             size = ovalSize,
-                            style = Stroke(width = 7.dp.toPx(), cap = StrokeCap.Round)
+                            style = Stroke(width = 6.5.dp.toPx(), cap = StrokeCap.Round)
                         )
 
                         for (i in 0..14) {
@@ -2181,8 +2208,8 @@ fun HypnoOrbitalSplashOverlay(
                                 val dotY = cy + ry * sin(rad).toFloat()
                                 val fraction = 1f - (i / 15f)
                                 drawCircle(
-                                    color = Color.White.copy(alpha = 0.70f * fraction),
-                                    radius = 3.2.dp.toPx() * fraction,
+                                    color = Color.White.copy(alpha = 0.65f * fraction),
+                                    radius = 3.dp.toPx() * fraction,
                                     center = Offset(dotX, dotY)
                                 )
                             }
@@ -2195,7 +2222,7 @@ fun HypnoOrbitalSplashOverlay(
                     val tvTop = cy - (tvHeight / 2f) - 6.dp.toPx()
 
                     drawRoundRect(
-                        color = Color(0xFF020712),
+                        color = Color(0xE6040812),
                         topLeft = Offset(tvLeft, tvTop),
                         size = Size(tvWidth, tvHeight),
                         cornerRadius = CornerRadius(14.dp.toPx(), 14.dp.toPx())
@@ -2203,12 +2230,12 @@ fun HypnoOrbitalSplashOverlay(
 
                     drawRoundRect(
                         brush = Brush.linearGradient(
-                            colors = listOf(Color(0xFF00E5FF), Color(0xFF2979FF), Color(0xFF00E5FF))
+                            colors = listOf(Color(0xFF00E5FF), Color(0xFF9D4EDD), Color(0xFF00E5FF))
                         ),
                         topLeft = Offset(tvLeft, tvTop),
                         size = Size(tvWidth, tvHeight),
                         cornerRadius = CornerRadius(14.dp.toPx(), 14.dp.toPx()),
-                        style = Stroke(width = 5.5.dp.toPx())
+                        style = Stroke(width = 4.5.dp.toPx())
                     )
 
                     val barY = tvTop + 13.dp.toPx()
@@ -2216,29 +2243,29 @@ fun HypnoOrbitalSplashOverlay(
                     val barSpacing = tvWidth * 0.06f
                     val startX = cx - ((barWidth * 3 + barSpacing * 2) / 2f)
 
-                    val redAlpha = if (barPhase.toInt() == 0) 1f else 0.72f
+                    val orangeAlpha = if (barPhase.toInt() == 0) 1f else 0.72f
                     val purpleAlpha = if (barPhase.toInt() == 1) 1f else 0.72f
                     val cyanAlpha = if (barPhase.toInt() == 2) 1f else 0.72f
 
                     drawLine(
-                        color = Color(0xFFFF2A54).copy(alpha = redAlpha),
+                        color = Color(0xFFFF6B35).copy(alpha = orangeAlpha),
                         start = Offset(startX, barY),
                         end = Offset(startX + barWidth, barY),
-                        strokeWidth = 6.dp.toPx(),
+                        strokeWidth = 5.5.dp.toPx(),
                         cap = StrokeCap.Round
                     )
                     drawLine(
-                        color = Color(0xFF8B5CF6).copy(alpha = purpleAlpha),
+                        color = Color(0xFF9D4EDD).copy(alpha = purpleAlpha),
                         start = Offset(startX + barWidth + barSpacing, barY),
                         end = Offset(startX + barWidth * 2 + barSpacing, barY),
-                        strokeWidth = 6.dp.toPx(),
+                        strokeWidth = 5.5.dp.toPx(),
                         cap = StrokeCap.Round
                     )
                     drawLine(
                         color = Color(0xFF00E5FF).copy(alpha = cyanAlpha),
                         start = Offset(startX + (barWidth + barSpacing) * 2, barY),
                         end = Offset(startX + barWidth * 3 + barSpacing * 2, barY),
-                        strokeWidth = 6.dp.toPx(),
+                        strokeWidth = 5.5.dp.toPx(),
                         cap = StrokeCap.Round
                     )
 
@@ -2267,19 +2294,19 @@ fun HypnoOrbitalSplashOverlay(
                     val standTop = tvTop + tvHeight
                     val standBottom = standTop + 11.dp.toPx()
                     drawLine(
-                        color = Color(0xFF00B0FF),
+                        color = Color(0xFF00E5FF),
                         start = Offset(cx, standTop),
                         end = Offset(cx, standBottom),
-                        strokeWidth = 6.dp.toPx(),
+                        strokeWidth = 5.dp.toPx(),
                         cap = StrokeCap.Round
                     )
                     drawLine(
                         brush = Brush.horizontalGradient(
-                            colors = listOf(Color(0xFF2979FF), Color(0xFF00E5FF), Color(0xFF2979FF))
+                            colors = listOf(Color(0xFF9D4EDD), Color(0xFF00E5FF), Color(0xFFFF6B35))
                         ),
                         start = Offset(cx - 22.dp.toPx(), standBottom),
                         end = Offset(cx + 22.dp.toPx(), standBottom),
-                        strokeWidth = 5.5.dp.toPx(),
+                        strokeWidth = 4.5.dp.toPx(),
                         cap = StrokeCap.Round
                     )
 
@@ -2294,7 +2321,7 @@ fun HypnoOrbitalSplashOverlay(
                                 colors = listOf(
                                     Color(0xFF00E5FF),
                                     Color(0xFF7CE8FF),
-                                    Color(0xFF00B0FF)
+                                    Color(0xFF9D4EDD)
                                 )
                             ),
                             startAngle = 0f,
@@ -2302,7 +2329,7 @@ fun HypnoOrbitalSplashOverlay(
                             useCenter = false,
                             topLeft = ovalTopLeft,
                             size = ovalSize,
-                            style = Stroke(width = 8.5.dp.toPx(), cap = StrokeCap.Round)
+                            style = Stroke(width = 7.5.dp.toPx(), cap = StrokeCap.Round)
                         )
 
                         for (i in 0..16) {
@@ -2315,12 +2342,12 @@ fun HypnoOrbitalSplashOverlay(
 
                                 drawCircle(
                                     color = Color(0xFF00E5FF).copy(alpha = 0.45f * fraction),
-                                    radius = 6.5.dp.toPx() * fraction,
+                                    radius = 6.dp.toPx() * fraction,
                                     center = Offset(dotX, dotY)
                                 )
                                 drawCircle(
                                     color = Color.White.copy(alpha = fraction),
-                                    radius = 3.8.dp.toPx() * fraction,
+                                    radius = 3.5.dp.toPx() * fraction,
                                     center = Offset(dotX, dotY)
                                 )
                             }
@@ -2329,7 +2356,7 @@ fun HypnoOrbitalSplashOverlay(
                 }
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(26.dp))
 
             Text(
                 text = buildAnnotatedString {
@@ -2344,7 +2371,7 @@ fun HypnoOrbitalSplashOverlay(
                 letterSpacing = 0.5.sp
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             val displayStatus = when {
                 totalLoadedItems > 0 -> if (isAr) {
@@ -2360,24 +2387,36 @@ fun HypnoOrbitalSplashOverlay(
                 }
             }
 
-            Text(
-                text = displayStatus,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                color = Slate300,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Surface(
+                color = Color(0x880B1221),
+                shape = CircleShape,
+                border = BorderStroke(
+                    width = 1.dp,
+                    brush = Brush.horizontalGradient(
+                        listOf(Color(0x44FF6B35), Color(0x5500E5FF), Color(0x449D4EDD))
+                    )
+                )
+            ) {
+                Text(
+                    text = displayStatus,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Slate300,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
+                )
+            }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             LinearProgressIndicator(
                 color = Color(0xFF00E5FF),
-                trackColor = Slate800,
+                trackColor = Color(0x441E293B),
                 modifier = Modifier
-                    .width(190.dp)
-                    .height(5.dp)
-                    .clip(RoundedCornerShape(3.dp))
+                    .width(200.dp)
+                    .height(4.5.dp)
+                    .clip(CircleShape)
             )
         }
     }
