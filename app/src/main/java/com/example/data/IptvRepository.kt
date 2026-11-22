@@ -104,6 +104,19 @@ class IptvRepository(context: Context) {
     private val isAr: Boolean
         get() = _appLanguage.value == "ar"
 
+    private fun favKey(type: IptvType, itemId: String): String = "${type.name}::$itemId"
+
+    private fun isItemFavorite(type: IptvType, itemId: String, favs: Set<String> = _favorites.value): Boolean {
+        val scopedKey = favKey(type, itemId)
+        if (favs.contains(scopedKey)) return true
+        // Fallback for legacy un-prefixed IDs that don't carry "::"
+        if (!itemId.contains("::") && favs.contains(itemId)) {
+            val hasAnyScopedForType = favs.any { it.startsWith("${type.name}::") }
+            return !hasAnyScopedForType
+        }
+        return false
+    }
+
     fun setAppLanguage(lang: String) {
         val supportedCodes = AppLanguageManager.supportedLanguages.map { it.code }.toSet()
         val normalized = lang.lowercase().takeIf { it in supportedCodes } ?: "en"
@@ -200,7 +213,7 @@ class IptvRepository(context: Context) {
                             streamUrl = obj.getString("u"),
                             type = type,
                             epgChannelId = obj.optString("epg", "").ifBlank { null },
-                            isFavorite = favs.contains(id),
+                            isFavorite = isItemFavorite(type, id, favs),
                             seriesTitle = obj.optString("st", "").ifBlank { null },
                             seasonNumber = if (obj.has("sn")) obj.optInt("sn") else null,
                             episodeNumber = if (obj.has("en")) obj.optInt("en") else null,
@@ -428,19 +441,34 @@ class IptvRepository(context: Context) {
         prefs.edit().putString("saved_sources", array.toString()).apply()
     }
 
-    fun toggleFavorite(itemId: String) {
+    fun toggleFavorite(itemId: String, type: IptvType? = null) {
+        val resolvedType = type ?: when {
+            allLiveList.any { it.id == itemId } -> IptvType.LIVE_TV
+            allMoviesList.any { it.id == itemId } -> IptvType.MOVIE
+            allSeriesList.any { it.id == itemId } -> IptvType.SERIES
+            else -> IptvType.LIVE_TV
+        }
+        val scopedKey = favKey(resolvedType, itemId)
         val current = _favorites.value.toMutableSet()
-        if (current.contains(itemId)) {
+        val nowFav = if (current.contains(scopedKey)) {
+            current.remove(scopedKey)
             current.remove(itemId)
+            false
         } else {
-            current.add(itemId)
+            current.add(scopedKey)
+            current.remove(itemId)
+            true
         }
         _favorites.value = current
         prefs.edit().putStringSet("favorites", current).apply()
 
         _displayedItems.value = _displayedItems.value.map {
-            if (it.id == itemId) it.copy(isFavorite = current.contains(itemId)) else it
+            if (it.id == itemId && it.type == resolvedType) it.copy(isFavorite = nowFav) else it
         }
+    }
+
+    fun toggleFavorite(item: IptvItem) {
+        toggleFavorite(item.id, item.type)
     }
 
     fun recordRecentlyWatched(item: IptvItem) {
@@ -511,9 +539,9 @@ class IptvRepository(context: Context) {
 
     fun loadDemoContent(source: IptvSource? = null) {
         val currentFavs = _favorites.value
-        val lives = DemoStreams.demoChannels.map { it.copy(isFavorite = currentFavs.contains(it.id)) }
-        val movs = DemoStreams.demoMovies.map { it.copy(isFavorite = currentFavs.contains(it.id)) }
-        val sers = DemoStreams.demoSeries.map { it.copy(isFavorite = currentFavs.contains(it.id)) }
+        val lives = DemoStreams.demoChannels.map { it.copy(isFavorite = isItemFavorite(IptvType.LIVE_TV, it.id, currentFavs)) }
+        val movs = DemoStreams.demoMovies.map { it.copy(isFavorite = isItemFavorite(IptvType.MOVIE, it.id, currentFavs)) }
+        val sers = DemoStreams.demoSeries.map { it.copy(isFavorite = isItemFavorite(IptvType.SERIES, it.id, currentFavs)) }
 
         indexStreams(lives, movs, sers)
 
@@ -599,7 +627,7 @@ class IptvRepository(context: Context) {
                     IptvType.MOVIE -> allMoviesList
                     IptvType.SERIES -> allSeriesList
                 }
-                fullList.asSequence().filter { favs.contains(it.id) }
+                fullList.asSequence().filter { isItemFavorite(type, it.id, favs) }
             }
             category.equals("All", ignoreCase = true) || category == "الكل" -> {
                 val fullList = when (type) {
@@ -626,7 +654,8 @@ class IptvRepository(context: Context) {
 
         val offset = page * pageSize
         return filtered.drop(offset).take(pageSize).map {
-            if (favs.contains(it.id)) it.copy(isFavorite = true) else it
+            val isFav = isItemFavorite(type, it.id, favs)
+            if (it.isFavorite != isFav) it.copy(isFavorite = isFav) else it
         }.toList()
     }
 
