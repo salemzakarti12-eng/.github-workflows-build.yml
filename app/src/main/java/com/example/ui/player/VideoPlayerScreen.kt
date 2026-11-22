@@ -103,6 +103,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
@@ -137,7 +138,6 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.SubtitleView
 import coil.compose.AsyncImage
@@ -148,7 +148,6 @@ import com.example.model.PlayerUiState
 import com.example.player.ExoPlayerManager
 import com.example.ui.locale.LocalAppLanguage
 import com.example.ui.locale.LocalAppStrings
-import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.AccentRed
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.Slate300
@@ -163,6 +162,36 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.Locale
 import kotlinx.coroutines.delay
+
+private data class PlayerThemeColors(
+    val accent: Color,
+    val accentSoft: Color,
+    val glowBorder: Color,
+    val glassSurface: Color
+)
+
+private fun getPlayerThemeColors(type: IptvType?): PlayerThemeColors {
+    return when (type) {
+        IptvType.LIVE_TV -> PlayerThemeColors(
+            accent = Color(0xFFFF6B35),
+            accentSoft = Color(0x33FF6B35),
+            glowBorder = Color(0x66FF6B35),
+            glassSurface = Color(0xCC0D0A0B)
+        )
+        IptvType.MOVIE -> PlayerThemeColors(
+            accent = Color(0xFF9D4EDD),
+            accentSoft = Color(0x339D4EDD),
+            glowBorder = Color(0x669D4EDD),
+            glassSurface = Color(0xCC0B0914)
+        )
+        IptvType.SERIES, null -> PlayerThemeColors(
+            accent = Color(0xFF00E5FF),
+            accentSoft = Color(0x3300E5FF),
+            glowBorder = Color(0x6600E5FF),
+            glassSurface = Color(0xCC070E18)
+        )
+    }
+}
 
 private enum class PlayerGestureFeedback {
     NONE,
@@ -357,6 +386,7 @@ fun VideoPlayerScreen(
     val currentItem = uiState.currentItem
     val isLive = currentItem?.type == IptvType.LIVE_TV || playerManager.isCurrentStreamLive()
     val hasDrawerItems = allChannels.isNotEmpty() && currentItem?.type != IptvType.MOVIE
+    val playerColors = remember(currentItem?.type) { getPlayerThemeColors(currentItem?.type) }
 
     // --- True Fullscreen Immersive Mode ---
     DisposableEffect(localView) {
@@ -752,15 +782,15 @@ fun VideoPlayerScreen(
                 ) {
                     HorizontalDivider(
                         thickness = 1.5.dp,
-                        color = PureWhite.copy(alpha = 0.75f),
+                        color = playerColors.accent.copy(alpha = 0.85f),
                         modifier = Modifier.align(Alignment.TopCenter)
                     )
                 }
 
                 Surface(
-                    color = Color(0xE61A1D24),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, Slate700),
+                    color = playerColors.glassSurface,
+                    shape = RoundedCornerShape(18.dp),
+                    border = BorderStroke(1.dp, playerColors.glowBorder),
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .padding(end = 20.dp)
@@ -802,7 +832,7 @@ fun VideoPlayerScreen(
                                 valueRange = 0.02f..0.85f,
                                 colors = SliderDefaults.colors(
                                     thumbColor = PureWhite,
-                                    activeTrackColor = AccentCyan,
+                                    activeTrackColor = playerColors.accent,
                                     inactiveTrackColor = Slate700
                                 ),
                                 modifier = Modifier
@@ -813,7 +843,7 @@ fun VideoPlayerScreen(
 
                         Text(
                             text = "${(subtitleStyleConfig.bottomPaddingFraction * 100).toInt()}%",
-                            color = AccentCyan,
+                            color = playerColors.accent,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -822,7 +852,7 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Vertical Brightness / Volume Swipe HUD Pill
+        // Vertical Brightness / Volume Swipe Glassmorphic HUD Pill
         AnimatedVisibility(
             visible = activeSwipeHud != VerticalSwipeHUD.NONE && !isAdjustingSubtitlePosition,
             enter = fadeIn(tween(120)),
@@ -832,10 +862,12 @@ fun VideoPlayerScreen(
             )
         ) {
             Surface(
-                color = Color(0xCC040D1A),
-                shape = RoundedCornerShape(20.dp),
-                border = BorderStroke(1.5.dp, AccentCyan.copy(alpha = 0.8f)),
-                modifier = Modifier.padding(horizontal = 24.dp)
+                color = playerColors.glassSurface,
+                shape = RoundedCornerShape(22.dp),
+                border = BorderStroke(1.5.dp, playerColors.glowBorder),
+                modifier = Modifier
+                    .padding(horizontal = 24.dp)
+                    .shadow(16.dp, RoundedCornerShape(22.dp), spotColor = playerColors.accent)
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -853,7 +885,7 @@ fun VideoPlayerScreen(
                         } else {
                             strings.volumeLabel
                         },
-                        tint = AccentCyan,
+                        tint = playerColors.accent,
                         modifier = Modifier.size(22.dp)
                     )
 
@@ -862,7 +894,7 @@ fun VideoPlayerScreen(
                             .width(6.dp)
                             .height(110.dp)
                             .clip(CircleShape)
-                            .background(Slate800)
+                            .background(Color(0x661E293B))
                     ) {
                         Box(
                             modifier = Modifier
@@ -870,7 +902,7 @@ fun VideoPlayerScreen(
                                 .fillMaxWidth()
                                 .fillMaxHeight(swipeHudLevel.coerceIn(0f, 1f))
                                 .clip(CircleShape)
-                                .background(AccentCyan)
+                                .background(playerColors.accent)
                         )
                     }
 
@@ -884,7 +916,7 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Kinetic Double-Tap Ripple Pill Overlay
+        // Kinetic Double-Tap Glassmorphic Ripple Pill Overlay
         AnimatedVisibility(
             visible = gestureFeedback != PlayerGestureFeedback.NONE && !isAdjustingSubtitlePosition,
             enter = fadeIn(tween(140)) + scaleIn(initialScale = 0.85f, animationSpec = tween(180, easing = FastOutSlowInEasing)),
@@ -904,12 +936,13 @@ fun VideoPlayerScreen(
             )
 
             Surface(
-                color = Color(0xCC040D1A),
+                color = playerColors.glassSurface,
                 shape = RoundedCornerShape(24.dp),
-                border = BorderStroke(1.5.dp, AccentCyan.copy(alpha = 0.85f)),
+                border = BorderStroke(1.5.dp, playerColors.glowBorder),
                 modifier = Modifier
                     .padding(horizontal = 36.dp)
                     .scale(pulseScale)
+                    .shadow(18.dp, RoundedCornerShape(24.dp), spotColor = playerColors.accent)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -934,7 +967,7 @@ fun VideoPlayerScreen(
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = AccentCyan,
+                        tint = playerColors.accent,
                         modifier = Modifier.size(28.dp)
                     )
                     Text(
@@ -948,21 +981,23 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Binge-Mode Auto-Play Next Episode Card
+        // Binge-Mode Auto-Play Next Episode Glass Card
         AnimatedVisibility(
             visible = isNearEpisodeEnd && nextEpisodeItem != null && !isAdjustingSubtitlePosition,
             enter = fadeIn(tween(220)) + slideInHorizontally(initialOffsetX = { it }),
             exit = fadeOut(tween(180)) + slideOutHorizontally(targetOffsetX = { it }),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 20.dp, bottom = if (uiState.isControlsVisible) 96.dp else 24.dp)
+                .padding(end = 20.dp, bottom = if (uiState.isControlsVisible) 118.dp else 24.dp)
         ) {
             val nextEp = nextEpisodeItem ?: return@AnimatedVisibility
             Surface(
-                color = Color(0xE6071120),
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.5.dp, AccentCyan),
-                modifier = Modifier.width(290.dp)
+                color = playerColors.glassSurface,
+                shape = RoundedCornerShape(18.dp),
+                border = BorderStroke(1.5.dp, playerColors.glowBorder),
+                modifier = Modifier
+                    .width(295.dp)
+                    .shadow(20.dp, RoundedCornerShape(18.dp), spotColor = playerColors.accent)
             ) {
                 Column(
                     modifier = Modifier.padding(14.dp),
@@ -975,7 +1010,7 @@ fun VideoPlayerScreen(
                     ) {
                         Text(
                             text = if (isAr) "الحلقة التالية خلال ${nextEpCountdownSec}ث" else "Next episode in ${nextEpCountdownSec}s",
-                            color = AccentCyan,
+                            color = playerColors.accent,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Black
                         )
@@ -998,7 +1033,7 @@ fun VideoPlayerScreen(
 
                     LinearProgressIndicator(
                         progress = { (10 - nextEpCountdownSec).coerceIn(0, 10) / 10f },
-                        color = AccentCyan,
+                        color = playerColors.accent,
                         trackColor = Slate800,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1012,7 +1047,7 @@ fun VideoPlayerScreen(
                     ) {
                         Button(
                             onClick = { onPlayNext() },
-                            colors = ButtonDefaults.buttonColors(containerColor = AccentCyan, contentColor = Slate950),
+                            colors = ButtonDefaults.buttonColors(containerColor = playerColors.accent, contentColor = Slate950),
                             shape = RoundedCornerShape(10.dp),
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                             modifier = Modifier.weight(1f)
@@ -1028,7 +1063,7 @@ fun VideoPlayerScreen(
 
                         OutlinedButton(
                             onClick = { nextEpDismissedForId = true },
-                            border = BorderStroke(1.dp, Slate700),
+                            border = BorderStroke(1.dp, Color(0x33FFFFFF)),
                             shape = RoundedCornerShape(10.dp),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
                         ) {
@@ -1043,30 +1078,39 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Buffering Spinner
+        // Glassmorphic Buffering Spinner
         if (uiState.isBuffering) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(
-                        color = AccentCyan,
-                        strokeWidth = 3.5.dp,
-                        modifier = Modifier.size(52.dp)
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = strings.parsingStreams,
-                        color = PureWhite,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                Surface(
+                    color = playerColors.glassSurface,
+                    shape = RoundedCornerShape(20.dp),
+                    border = BorderStroke(1.dp, playerColors.glowBorder)
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 18.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            color = playerColors.accent,
+                            strokeWidth = 3.5.dp,
+                            modifier = Modifier.size(46.dp)
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = strings.parsingStreams,
+                            color = PureWhite,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
         }
 
-        // Error Overlay
+        // Glassmorphic Error Overlay
         if (uiState.errorMessage != null) {
             Box(
                 modifier = Modifier
@@ -1078,9 +1122,9 @@ fun VideoPlayerScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
                         .padding(24.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Slate900)
-                        .border(1.dp, Slate700, RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(playerColors.glassSurface)
+                        .border(1.5.dp, playerColors.glowBorder, RoundedCornerShape(20.dp))
                         .padding(24.dp)
                 ) {
                     Icon(
@@ -1100,7 +1144,7 @@ fun VideoPlayerScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Button(
                             onClick = { playerManager.retryPlayback() },
-                            colors = ButtonDefaults.buttonColors(containerColor = AccentCyan, contentColor = Slate950)
+                            colors = ButtonDefaults.buttonColors(containerColor = playerColors.accent, contentColor = Slate950)
                         ) {
                             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
@@ -1108,6 +1152,7 @@ fun VideoPlayerScreen(
                         }
                         OutlinedButton(
                             onClick = onBack,
+                            border = BorderStroke(1.dp, Color(0x33FFFFFF)),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = PureWhite)
                         ) {
                             Text(strings.back)
@@ -1117,229 +1162,276 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Top & Bottom Player Controls Overlay
+        // Top & Bottom Dark Glassmorphic Player Controls Overlay
         AnimatedVisibility(
             visible = uiState.isControlsVisible && !isAdjustingSubtitlePosition,
             enter = fadeIn(),
             exit = fadeOut()
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                Row(
+                // Top Glassmorphic Header Pill
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.TopCenter)
                         .background(
                             Brush.verticalGradient(
-                                colors = listOf(Color(0xDD000000), Color.Transparent)
+                                colors = listOf(Color(0xCC000000), Color.Transparent)
                             )
                         )
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
                 ) {
-                    PlayerCircleButton(
-                        icon = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = strings.back,
-                        onClick = onBack
-                    )
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
+                    Surface(
+                        color = playerColors.glassSurface,
+                        shape = RoundedCornerShape(18.dp),
+                        border = BorderStroke(
+                            width = 1.dp,
+                            brush = Brush.horizontalGradient(
+                                listOf(playerColors.glowBorder, Color(0x26FFFFFF), playerColors.glowBorder)
+                            )
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            if (isLive) {
-                                Surface(
-                                    color = AccentRed,
-                                    shape = RoundedCornerShape(6.dp)
+                            PlayerCircleButton(
+                                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = strings.back,
+                                playerColors = playerColors,
+                                onClick = onBack
+                            )
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
+                                    if (isLive) {
+                                        Surface(
+                                            color = AccentRed,
+                                            shape = RoundedCornerShape(6.dp)
+                                        ) {
+                                            Text(
+                                                text = if (isAr) "مباشر" else "LIVE",
+                                                color = PureWhite,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Black,
+                                                letterSpacing = 0.6.sp,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
                                     Text(
-                                        text = if (isAr) "مباشر" else "LIVE",
+                                        text = currentItem?.name ?: "",
                                         color = PureWhite,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Black,
-                                        letterSpacing = 0.6.sp,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
+                                Text(
+                                    text = currentItem?.group ?: "",
+                                    color = playerColors.accent,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
-                            Text(
-                                text = currentItem?.name ?: "",
-                                color = PureWhite,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+
+                            PlayerCircleButton(
+                                icon = Icons.Default.Audiotrack,
+                                contentDescription = strings.audio,
+                                playerColors = playerColors,
+                                onClick = { showAudioDialog = true }
                             )
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            PlayerCircleButton(
+                                icon = Icons.Default.Subtitles,
+                                contentDescription = strings.subtitles,
+                                playerColors = playerColors,
+                                onClick = { showSubtitleDialog = true }
+                            )
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            PlayerCircleButton(
+                                icon = Icons.Default.AspectRatio,
+                                contentDescription = strings.fitScreen,
+                                playerColors = playerColors,
+                                onClick = { playerManager.cycleAspectRatio() }
+                            )
+
+                            if (hasDrawerItems) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                PlayerCircleButton(
+                                    icon = Icons.AutoMirrored.Filled.FormatListBulleted,
+                                    contentDescription = strings.quickChannels,
+                                    playerColors = playerColors,
+                                    onClick = { playerManager.toggleQuickChannelList() }
+                                )
+                            }
                         }
-                        Text(
-                            text = currentItem?.group ?: "",
-                            color = AccentCyan,
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    PlayerCircleButton(
-                        icon = Icons.Default.Audiotrack,
-                        contentDescription = strings.audio,
-                        onClick = { showAudioDialog = true }
-                    )
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    PlayerCircleButton(
-                        icon = Icons.Default.Subtitles,
-                        contentDescription = strings.subtitles,
-                        onClick = { showSubtitleDialog = true }
-                    )
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    PlayerCircleButton(
-                        icon = Icons.Default.AspectRatio,
-                        contentDescription = strings.fitScreen,
-                        onClick = { playerManager.cycleAspectRatio() }
-                    )
-
-                    if (hasDrawerItems) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        PlayerCircleButton(
-                            icon = Icons.AutoMirrored.Filled.FormatListBulleted,
-                            contentDescription = strings.quickChannels,
-                            onClick = { playerManager.toggleQuickChannelList() }
-                        )
                     }
                 }
 
-                Column(
+                // Bottom Glassmorphic Transport Dock
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
                         .background(
                             Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, Color(0xEE000000))
+                                colors = listOf(Color.Transparent, Color(0xD9000000))
                             )
                         )
-                        .padding(horizontal = 16.dp, vertical = 14.dp)
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
                 ) {
-                    if (!isLive && uiState.durationMs > 0L) {
-                        val sliderInteraction = remember { MutableInteractionSource() }
-                        val isSliderFocused by sliderInteraction.collectIsFocusedAsState()
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = formatPlayerTime(uiState.currentPositionMs),
-                                color = PureWhite,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium
+                    Surface(
+                        color = playerColors.glassSurface,
+                        shape = RoundedCornerShape(20.dp),
+                        border = BorderStroke(
+                            width = 1.dp,
+                            brush = Brush.horizontalGradient(
+                                listOf(playerColors.glowBorder, Color(0x26FFFFFF), playerColors.glowBorder)
                             )
-                            Slider(
-                                value = uiState.currentPositionMs.toFloat(),
-                                onValueChange = { playerManager.seekTo(it.toLong()) },
-                                valueRange = 0f..uiState.durationMs.toFloat().coerceAtLeast(1f),
-                                interactionSource = sliderInteraction,
-                                colors = SliderDefaults.colors(
-                                    thumbColor = if (isSliderFocused) PureWhite else AccentCyan,
-                                    activeTrackColor = AccentCyan,
-                                    inactiveTrackColor = Slate700
-                                ),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(horizontal = 10.dp)
-                                    .border(
-                                        width = if (isSliderFocused) 2.dp else 0.dp,
-                                        color = if (isSliderFocused) PureWhite else Color.Transparent,
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
-                                    .focusable(interactionSource = sliderInteraction)
-                                    .onPreviewKeyEvent { event ->
-                                        if (event.type == KeyEventType.KeyDown) {
-                                            playerManager.showControlsTemporarily()
-                                            when (event.key) {
-                                                Key.DirectionLeft -> {
-                                                    playerManager.seekRelative(-15_000L)
-                                                    true
-                                                }
-                                                Key.DirectionRight -> {
-                                                    playerManager.seekRelative(15_000L)
-                                                    true
-                                                }
-                                                else -> false
-                                            }
-                                        } else false
-                                    }
-                            )
-                            Text(
-                                text = formatPlayerTime(uiState.durationMs),
-                                color = Slate300,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
+                        ),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        PlayerCircleButton(
-                            icon = if (isLive) Icons.Default.SkipPrevious else Icons.Default.Replay10,
-                            contentDescription = "Previous / Rewind 10s",
-                            onClick = {
-                                if (isLive) {
-                                    gestureFeedback = PlayerGestureFeedback.PREV_CHANNEL
-                                    feedbackTriggerKey++
-                                    onPlayPrevious()
-                                } else {
-                                    accumulatedSkipSeconds = if (gestureFeedback == PlayerGestureFeedback.REWIND_VOD) accumulatedSkipSeconds + 10 else 10
-                                    gestureFeedback = PlayerGestureFeedback.REWIND_VOD
-                                    feedbackTriggerKey++
-                                    playerManager.seekRelative(-10_000L)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 10.dp)
+                        ) {
+                            if (!isLive && uiState.durationMs > 0L) {
+                                val sliderInteraction = remember { MutableInteractionSource() }
+                                val isSliderFocused by sliderInteraction.collectIsFocusedAsState()
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = formatPlayerTime(uiState.currentPositionMs),
+                                        color = PureWhite,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Slider(
+                                        value = uiState.currentPositionMs.toFloat(),
+                                        onValueChange = { playerManager.seekTo(it.toLong()) },
+                                        valueRange = 0f..uiState.durationMs.toFloat().coerceAtLeast(1f),
+                                        interactionSource = sliderInteraction,
+                                        colors = SliderDefaults.colors(
+                                            thumbColor = if (isSliderFocused) PureWhite else playerColors.accent,
+                                            activeTrackColor = playerColors.accent,
+                                            inactiveTrackColor = Color(0x55334155)
+                                        ),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(horizontal = 10.dp)
+                                            .border(
+                                                width = if (isSliderFocused) 2.dp else 0.dp,
+                                                color = if (isSliderFocused) PureWhite else Color.Transparent,
+                                                shape = RoundedCornerShape(8.dp)
+                                            )
+                                            .focusable(interactionSource = sliderInteraction)
+                                            .onPreviewKeyEvent { event ->
+                                                if (event.type == KeyEventType.KeyDown) {
+                                                    playerManager.showControlsTemporarily()
+                                                    when (event.key) {
+                                                        Key.DirectionLeft -> {
+                                                            playerManager.seekRelative(-15_000L)
+                                                            true
+                                                        }
+                                                        Key.DirectionRight -> {
+                                                            playerManager.seekRelative(15_000L)
+                                                            true
+                                                        }
+                                                        else -> false
+                                                    }
+                                                } else false
+                                            }
+                                    )
+                                    Text(
+                                        text = formatPlayerTime(uiState.durationMs),
+                                        color = Slate300,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
                                 }
                             }
-                        )
 
-                        Spacer(modifier = Modifier.width(20.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                PlayerCircleButton(
+                                    icon = if (isLive) Icons.Default.SkipPrevious else Icons.Default.Replay10,
+                                    contentDescription = "Previous / Rewind 10s",
+                                    playerColors = playerColors,
+                                    onClick = {
+                                        if (isLive) {
+                                            gestureFeedback = PlayerGestureFeedback.PREV_CHANNEL
+                                            feedbackTriggerKey++
+                                            onPlayPrevious()
+                                        } else {
+                                            accumulatedSkipSeconds = if (gestureFeedback == PlayerGestureFeedback.REWIND_VOD) accumulatedSkipSeconds + 10 else 10
+                                            gestureFeedback = PlayerGestureFeedback.REWIND_VOD
+                                            feedbackTriggerKey++
+                                            playerManager.seekRelative(-10_000L)
+                                        }
+                                    }
+                                )
 
-                        PlayerCircleButton(
-                            icon = if (uiState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = strings.play,
-                            isPrimary = true,
-                            focusRequester = playPauseFocus,
-                            onClick = { playerManager.togglePlayPause() }
-                        )
+                                Spacer(modifier = Modifier.width(22.dp))
 
-                        Spacer(modifier = Modifier.width(20.dp))
+                                PlayerCircleButton(
+                                    icon = if (uiState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    contentDescription = strings.play,
+                                    isPrimary = true,
+                                    playerColors = playerColors,
+                                    focusRequester = playPauseFocus,
+                                    onClick = { playerManager.togglePlayPause() }
+                                )
 
-                        PlayerCircleButton(
-                            icon = if (isLive) Icons.Default.SkipNext else Icons.Default.Forward10,
-                            contentDescription = "Next / Forward 10s",
-                            onClick = {
-                                if (isLive) {
-                                    gestureFeedback = PlayerGestureFeedback.NEXT_CHANNEL
-                                    feedbackTriggerKey++
-                                    onPlayNext()
-                                } else {
-                                    accumulatedSkipSeconds = if (gestureFeedback == PlayerGestureFeedback.FORWARD_VOD) accumulatedSkipSeconds + 10 else 10
-                                    gestureFeedback = PlayerGestureFeedback.FORWARD_VOD
-                                    feedbackTriggerKey++
-                                    playerManager.seekRelative(10_000L)
-                                }
+                                Spacer(modifier = Modifier.width(22.dp))
+
+                                PlayerCircleButton(
+                                    icon = if (isLive) Icons.Default.SkipNext else Icons.Default.Forward10,
+                                    contentDescription = "Next / Forward 10s",
+                                    playerColors = playerColors,
+                                    onClick = {
+                                        if (isLive) {
+                                            gestureFeedback = PlayerGestureFeedback.NEXT_CHANNEL
+                                            feedbackTriggerKey++
+                                            onPlayNext()
+                                        } else {
+                                            accumulatedSkipSeconds = if (gestureFeedback == PlayerGestureFeedback.FORWARD_VOD) accumulatedSkipSeconds + 10 else 10
+                                            gestureFeedback = PlayerGestureFeedback.FORWARD_VOD
+                                            feedbackTriggerKey++
+                                            playerManager.seekRelative(10_000L)
+                                        }
+                                    }
+                                )
                             }
-                        )
+                        }
                     }
                 }
             }
         }
 
-        // Quick Side Drawer
+        // Glassmorphic Quick Side Drawer
         AnimatedVisibility(
             visible = uiState.isQuickChannelListOpen && hasDrawerItems && !isAdjustingSubtitlePosition,
             enter = slideInHorizontally(initialOffsetX = { it }),
@@ -1347,11 +1439,18 @@ fun VideoPlayerScreen(
             modifier = Modifier.align(Alignment.CenterEnd)
         ) {
             Surface(
-                color = Slate950.copy(alpha = 0.96f),
+                color = Color(0xEB070C17),
                 modifier = Modifier
-                    .width(300.dp)
+                    .width(305.dp)
                     .fillMaxHeight()
-                    .border(BorderStroke(1.dp, Slate800))
+                    .border(
+                        BorderStroke(
+                            width = 1.dp,
+                            brush = Brush.verticalGradient(
+                                listOf(playerColors.glowBorder, Color(0x26FFFFFF))
+                            )
+                        )
+                    )
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Row(
@@ -1361,16 +1460,28 @@ fun VideoPlayerScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = if (currentItem?.type == IptvType.SERIES) {
-                                strings.episodes
-                            } else {
-                                strings.quickChannels
-                            },
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = PureWhite
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(3.dp)
+                                    .height(18.dp)
+                                    .clip(CircleShape)
+                                    .background(playerColors.accent)
+                            )
+                            Text(
+                                text = if (currentItem?.type == IptvType.SERIES) {
+                                    strings.episodes
+                                } else {
+                                    strings.quickChannels
+                                },
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = PureWhite
+                            )
+                        }
                         IconButton(onClick = { playerManager.closeQuickChannelList() }) {
                             Icon(Icons.Default.Close, contentDescription = strings.close, tint = Slate400)
                         }
@@ -1388,14 +1499,18 @@ fun VideoPlayerScreen(
 
                             Surface(
                                 color = when {
-                                    isItemFocused -> Slate800
-                                    isCurrent -> AccentCyan.copy(alpha = 0.2f)
-                                    else -> Slate900
+                                    isItemFocused -> Color(0x991E293B)
+                                    isCurrent -> playerColors.accentSoft
+                                    else -> Color(0x660F172A)
                                 },
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 border = BorderStroke(
-                                    width = if (isItemFocused) 2.dp else 1.dp,
-                                    color = if (isItemFocused) PureWhite else if (isCurrent) AccentCyan else Slate800
+                                    width = if (isItemFocused || isCurrent) 1.5.dp else 1.dp,
+                                    color = when {
+                                        isItemFocused -> PureWhite
+                                        isCurrent -> playerColors.accent
+                                        else -> Color(0x1AFFFFFF)
+                                    }
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1420,14 +1535,14 @@ fun VideoPlayerScreen(
                                             contentDescription = null,
                                             modifier = Modifier
                                                 .size(34.dp)
-                                                .clip(RoundedCornerShape(6.dp))
+                                                .clip(RoundedCornerShape(8.dp))
                                         )
                                         Spacer(modifier = Modifier.width(10.dp))
                                     }
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = ch.name,
-                                            color = if (isCurrent) AccentCyan else PureWhite,
+                                            color = if (isCurrent) playerColors.accent else PureWhite,
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.Bold,
                                             maxLines = 1,
@@ -1454,6 +1569,7 @@ fun VideoPlayerScreen(
             AlertDialog(
                 onDismissRequest = { showAudioDialog = false },
                 containerColor = Slate900,
+                shape = RoundedCornerShape(20.dp),
                 title = {
                     Text(
                         text = strings.selectAudioTrack,
@@ -1477,9 +1593,9 @@ fun VideoPlayerScreen(
                         ) {
                             uiState.audioTracks.forEach { track ->
                                 Surface(
-                                    color = if (track.isSelected) AccentCyan.copy(alpha = 0.2f) else Slate850,
+                                    color = if (track.isSelected) playerColors.accentSoft else Slate850,
                                     shape = RoundedCornerShape(10.dp),
-                                    border = BorderStroke(1.dp, if (track.isSelected) AccentCyan else Slate700),
+                                    border = BorderStroke(1.dp, if (track.isSelected) playerColors.accent else Slate700),
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable {
@@ -1494,7 +1610,7 @@ fun VideoPlayerScreen(
                                     ) {
                                         Text(track.label, color = PureWhite, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                                         if (track.isSelected) {
-                                            Icon(Icons.Default.Check, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(18.dp))
+                                            Icon(Icons.Default.Check, contentDescription = null, tint = playerColors.accent, modifier = Modifier.size(18.dp))
                                         }
                                     }
                                 }
@@ -1504,7 +1620,7 @@ fun VideoPlayerScreen(
                 },
                 confirmButton = {
                     TextButton(onClick = { showAudioDialog = false }) {
-                        Text(strings.close, color = AccentCyan)
+                        Text(strings.close, color = playerColors.accent)
                     }
                 }
             )
@@ -1515,6 +1631,7 @@ fun VideoPlayerScreen(
             AlertDialog(
                 onDismissRequest = { showSubtitleDialog = false },
                 containerColor = Slate900,
+                shape = RoundedCornerShape(20.dp),
                 title = {
                     Text(
                         text = strings.selectSubtitleTrack,
@@ -1565,7 +1682,7 @@ fun VideoPlayerScreen(
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Icon(Icons.Default.FormatColorFill, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.FormatColorFill, contentDescription = null, tint = playerColors.accent, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = if (isAr) "لون الخلفية" else "Background",
@@ -1588,7 +1705,7 @@ fun VideoPlayerScreen(
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Icon(Icons.Default.FontDownload, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.FontDownload, contentDescription = null, tint = playerColors.accent, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = if (isAr) "نوع الخط" else "Font",
@@ -1606,16 +1723,16 @@ fun VideoPlayerScreen(
                                     }
                                     isAdjustingSubtitlePosition = true
                                 },
-                                border = BorderStroke(1.dp, AccentCyan.copy(alpha = 0.7f)),
+                                border = BorderStroke(1.dp, playerColors.accent.copy(alpha = 0.7f)),
                                 shape = RoundedCornerShape(10.dp),
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Icon(Icons.Default.Height, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.Height, contentDescription = null, tint = playerColors.accent, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = if (isAr) "مكان الترجمة" else "Position",
-                                    color = AccentCyan,
+                                    color = playerColors.accent,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1
@@ -1637,7 +1754,7 @@ fun VideoPlayerScreen(
                                 )
                                 Text(
                                     text = "${(subtitleStyleConfig.textSizeScale * 100).toInt()}%",
-                                    color = AccentCyan,
+                                    color = playerColors.accent,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -1651,8 +1768,8 @@ fun VideoPlayerScreen(
                                 },
                                 valueRange = 0.6f..2.0f,
                                 colors = SliderDefaults.colors(
-                                    thumbColor = AccentCyan,
-                                    activeTrackColor = AccentCyan,
+                                    thumbColor = playerColors.accent,
+                                    activeTrackColor = playerColors.accent,
                                     inactiveTrackColor = Slate700
                                 )
                             )
@@ -1665,7 +1782,7 @@ fun VideoPlayerScreen(
                             } else {
                                 "Subtitle Delay: ${String.format(Locale.US, "%+.1f", subtitleOffsetMs / 1000f)}s"
                             },
-                            color = AccentCyan,
+                            color = playerColors.accent,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -1683,7 +1800,7 @@ fun VideoPlayerScreen(
                                 onClick = { playerManager.resetSubtitleOffset() },
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Text("0.0s", color = AccentCyan, fontSize = 12.sp)
+                                Text("0.0s", color = playerColors.accent, fontSize = 12.sp)
                             }
                             OutlinedButton(
                                 onClick = { playerManager.adjustSubtitleOffset(500L) },
@@ -1703,7 +1820,7 @@ fun VideoPlayerScreen(
                                     showSubtitleDialog = false
                                     subtitlePickerLauncher.launch("*/*")
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = AccentCyan, contentColor = Slate950),
+                                colors = ButtonDefaults.buttonColors(containerColor = playerColors.accent, contentColor = Slate950),
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Text(if (isAr) "ملف SRT/VTT" else "Load File", fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -1725,7 +1842,7 @@ fun VideoPlayerScreen(
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedTextColor = PureWhite,
                                     unfocusedTextColor = PureWhite,
-                                    focusedBorderColor = AccentCyan,
+                                    focusedBorderColor = playerColors.accent,
                                     unfocusedBorderColor = Slate700
                                 ),
                                 modifier = Modifier.fillMaxWidth()
@@ -1738,7 +1855,7 @@ fun VideoPlayerScreen(
                                         showSubtitleDialog = false
                                     }
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = AccentCyan, contentColor = Slate950),
+                                colors = ButtonDefaults.buttonColors(containerColor = playerColors.accent, contentColor = Slate950),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(if (isAr) "تفعيل الرابط" else "Apply Subtitle URL", fontWeight = FontWeight.Bold)
@@ -1747,9 +1864,9 @@ fun VideoPlayerScreen(
 
                         // 6. Subtitle Track Selection
                         Surface(
-                            color = if (uiState.isSubtitleOff) AccentCyan.copy(alpha = 0.2f) else Slate850,
+                            color = if (uiState.isSubtitleOff) playerColors.accentSoft else Slate850,
                             shape = RoundedCornerShape(10.dp),
-                            border = BorderStroke(1.dp, if (uiState.isSubtitleOff) AccentCyan else Slate700),
+                            border = BorderStroke(1.dp, if (uiState.isSubtitleOff) playerColors.accent else Slate700),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
@@ -1764,16 +1881,16 @@ fun VideoPlayerScreen(
                             ) {
                                 Text(strings.off, color = PureWhite, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                                 if (uiState.isSubtitleOff) {
-                                    Icon(Icons.Default.Check, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(18.dp))
+                                    Icon(Icons.Default.Check, contentDescription = null, tint = playerColors.accent, modifier = Modifier.size(18.dp))
                                 }
                             }
                         }
 
                         uiState.subtitleTracks.forEach { track ->
                             Surface(
-                                color = if (track.isSelected && !uiState.isSubtitleOff) AccentCyan.copy(alpha = 0.2f) else Slate850,
+                                color = if (track.isSelected && !uiState.isSubtitleOff) playerColors.accentSoft else Slate850,
                                 shape = RoundedCornerShape(10.dp),
-                                border = BorderStroke(1.dp, if (track.isSelected && !uiState.isSubtitleOff) AccentCyan else Slate700),
+                                border = BorderStroke(1.dp, if (track.isSelected && !uiState.isSubtitleOff) playerColors.accent else Slate700),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
@@ -1788,7 +1905,7 @@ fun VideoPlayerScreen(
                                 ) {
                                     Text(track.label, color = PureWhite, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                                     if (track.isSelected && !uiState.isSubtitleOff) {
-                                        Icon(Icons.Default.Check, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(18.dp))
+                                        Icon(Icons.Default.Check, contentDescription = null, tint = playerColors.accent, modifier = Modifier.size(18.dp))
                                     }
                                 }
                             }
@@ -1797,7 +1914,7 @@ fun VideoPlayerScreen(
                 },
                 confirmButton = {
                     TextButton(onClick = { showSubtitleDialog = false }) {
-                        Text(strings.close, color = AccentCyan)
+                        Text(strings.close, color = playerColors.accent)
                     }
                 }
             )
@@ -1809,6 +1926,7 @@ fun VideoPlayerScreen(
                 title = if (isAr) "اختر لون الترجمة" else "Select subtitle color",
                 selectedRgb = subtitleStyleConfig.textColorRgb,
                 selectedAlpha = subtitleStyleConfig.textAlpha,
+                accentColor = playerColors.accent,
                 isAr = isAr,
                 onSelect = { rgb, alpha ->
                     val safeAlpha = alpha.coerceAtLeast(0.15f)
@@ -1826,6 +1944,7 @@ fun VideoPlayerScreen(
                 title = if (isAr) "اختر لون خلفية الترجمة" else "Select subtitle background color",
                 selectedRgb = subtitleStyleConfig.bgColorRgb,
                 selectedAlpha = subtitleStyleConfig.bgAlpha,
+                accentColor = playerColors.accent,
                 isAr = isAr,
                 onSelect = { rgb, alpha ->
                     val updated = subtitleStyleConfig.copy(bgColorRgb = rgb, bgAlpha = alpha)
@@ -1844,6 +1963,7 @@ fun VideoPlayerScreen(
             AlertDialog(
                 onDismissRequest = { showFontPickerDialog = false },
                 containerColor = Slate900,
+                shape = RoundedCornerShape(20.dp),
                 title = {
                     Row(
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -1852,7 +1972,7 @@ fun VideoPlayerScreen(
                     ) {
                         Text(
                             text = if (isAr) "خطوط النظام والمحلية" else "SYSTEM & LOCAL FONTS",
-                            color = AccentCyan,
+                            color = playerColors.accent,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -1888,7 +2008,7 @@ fun VideoPlayerScreen(
                                     .background(
                                         when {
                                             isFocused -> Slate800
-                                            isSelected -> AccentCyan.copy(alpha = 0.16f)
+                                            isSelected -> playerColors.accentSoft
                                             else -> Color.Transparent
                                         }
                                     )
@@ -1925,7 +2045,7 @@ fun VideoPlayerScreen(
                             ) {
                                 Text(
                                     text = fontItem.displayName,
-                                    color = if (isSelected) AccentCyan else PureWhite,
+                                    color = if (isSelected) playerColors.accent else PureWhite,
                                     fontSize = 14.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                 )
@@ -1933,7 +2053,7 @@ fun VideoPlayerScreen(
                                     Icon(
                                         imageVector = Icons.Default.Check,
                                         contentDescription = null,
-                                        tint = AccentCyan,
+                                        tint = playerColors.accent,
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
@@ -1943,7 +2063,7 @@ fun VideoPlayerScreen(
                 },
                 confirmButton = {
                     TextButton(onClick = { showFontPickerDialog = false }) {
-                        Text(strings.close, color = AccentCyan)
+                        Text(strings.close, color = playerColors.accent)
                     }
                 }
             )
@@ -1956,6 +2076,7 @@ private fun SubtitleColorGridDialog(
     title: String,
     selectedRgb: Int,
     selectedAlpha: Float,
+    accentColor: Color,
     isAr: Boolean,
     onSelect: (rgb: Int, alpha: Float) -> Unit,
     onDismiss: () -> Unit
@@ -1963,6 +2084,7 @@ private fun SubtitleColorGridDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Color(0xFF2B2D30),
+        shape = RoundedCornerShape(20.dp),
         title = {
             Text(
                 text = title,
@@ -1976,7 +2098,6 @@ private fun SubtitleColorGridDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // Circular Color Swatches Grid (6 per row, TV D-Pad Focusable)
                 Column(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.fillMaxWidth()
@@ -2003,7 +2124,7 @@ private fun SubtitleColorGridDialog(
                                             width = if (isFocused) 3.dp else if (isSelected) 2.dp else 1.dp,
                                             color = when {
                                                 isFocused -> PureWhite
-                                                isSelected -> AccentCyan
+                                                isSelected -> accentColor
                                                 else -> Color.White.copy(alpha = 0.35f)
                                             },
                                             shape = CircleShape
@@ -2037,7 +2158,6 @@ private fun SubtitleColorGridDialog(
 
                 HorizontalDivider(color = Color.White.copy(alpha = 0.15f))
 
-                // Transparency / Opacity Circles Row (TV D-Pad Focusable)
                 Text(
                     text = if (isAr) "الشفافية (${(selectedAlpha * 100).toInt()}%)" else "Transparency (${(selectedAlpha * 100).toInt()}%)",
                     color = Slate300,
@@ -2064,7 +2184,7 @@ private fun SubtitleColorGridDialog(
                                     width = if (isFocused) 3.dp else if (isSelected) 2.dp else 1.dp,
                                     color = when {
                                         isFocused -> PureWhite
-                                        isSelected -> AccentCyan
+                                        isSelected -> accentColor
                                         else -> Color.White.copy(alpha = 0.4f)
                                     },
                                     shape = CircleShape
@@ -2104,7 +2224,7 @@ private fun SubtitleColorGridDialog(
             TextButton(onClick = onDismiss) {
                 Text(
                     text = if (isAr) "تأكيد" else "SELECT",
-                    color = AccentCyan,
+                    color = accentColor,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -2136,6 +2256,7 @@ private fun Modifier.verticalSlider(): Modifier =
 private fun PlayerCircleButton(
     icon: ImageVector,
     contentDescription: String,
+    playerColors: PlayerThemeColors,
     isPrimary: Boolean = false,
     focusRequester: FocusRequester? = null,
     onClick: () -> Unit
@@ -2155,13 +2276,13 @@ private fun PlayerCircleButton(
             .background(
                 when {
                     isFocused -> PureWhite
-                    isPrimary -> AccentCyan
-                    else -> Color(0x990F172A)
+                    isPrimary -> playerColors.accent
+                    else -> Color(0x88111827)
                 }
             )
             .border(
                 width = if (isFocused) 2.5.dp else 1.dp,
-                color = if (isFocused) AccentCyan else Slate700,
+                color = if (isFocused) playerColors.accent else playerColors.glowBorder,
                 shape = CircleShape
             )
             .focusable(interactionSource = interactionSource)
