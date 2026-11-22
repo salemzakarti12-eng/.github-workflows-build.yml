@@ -444,7 +444,29 @@ fun HypnoStreamApp(
     val isLoading by viewModel.isLoading.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
 
-    val favoriteItems = recentlyWatched.filter { favorites.contains(it.id) }
+    val favoriteItems = remember(recentlyWatched, favorites) {
+        recentlyWatched.filter { item ->
+            favorites.contains("${item.type.name}::${item.id}") || favorites.contains(item.id)
+        }
+    }
+
+    val liveFavCount = remember(favorites, totalLiveCount) {
+        val scoped = favorites.count { it.startsWith("${IptvType.LIVE_TV.name}::") }
+        if (scoped > 0 || favorites.any { it.contains("::") }) scoped
+        else viewModel.repository.getAllLiveChannels().count { favorites.contains(it.id) }
+    }
+
+    val movieFavCount = remember(favorites, totalMoviesCount) {
+        val scoped = favorites.count { it.startsWith("${IptvType.MOVIE.name}::") }
+        if (scoped > 0 || favorites.any { it.contains("::") }) scoped
+        else viewModel.repository.getAllMovies().count { favorites.contains(it.id) }
+    }
+
+    val seriesFavCount = remember(favorites, totalSeriesCount) {
+        val scoped = favorites.count { it.startsWith("${IptvType.SERIES.name}::") }
+        if (scoped > 0 || favorites.any { it.contains("::") }) scoped
+        else viewModel.repository.getAllSeries().count { favorites.contains(it.id) }
+    }
 
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -579,7 +601,12 @@ fun HypnoStreamApp(
                             Screen.SERIES -> totalSeriesCount
                             else -> filteredItems.size
                         },
-                        favoriteCount = favorites.size,
+                        favoriteCount = when (displayedBrowseScreen) {
+                            Screen.LIVE_CHANNELS -> liveFavCount
+                            Screen.MOVIES -> movieFavCount
+                            Screen.SERIES -> seriesFavCount
+                            else -> favorites.size
+                        },
                         onSearchChange = { viewModel.setSearchQuery(it) },
                         onCategoryChange = { viewModel.setSelectedCategory(it) },
                         onLoadMore = { viewModel.loadMoreItems() },
