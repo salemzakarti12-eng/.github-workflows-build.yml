@@ -145,6 +145,21 @@ fun ContentBrowserScreen(
     val isTv = LocalIsTelevision.current
     val useSideCategoryPanel = isLandscape || isTablet || isTv
 
+    val typePrefix = when (screen) {
+        Screen.LIVE_CHANNELS -> "${IptvType.LIVE_TV.name}::"
+        Screen.MOVIES -> "${IptvType.MOVIE.name}::"
+        Screen.SERIES -> "${IptvType.SERIES.name}::"
+        else -> null
+    }
+    val typeFavCount = remember(items, selectedCategory, favoriteCount, typePrefix) {
+        val isFavTab = selectedCategory.equals("Favorites", true) || selectedCategory == "المفضلة"
+        if (isFavTab) {
+            items.size
+        } else {
+            items.count { it.isFavorite }.coerceAtLeast(if (typePrefix == null) favoriteCount else 0)
+        }
+    }
+
     val searchPrefs = remember {
         context.getSharedPreferences("hypnostream_search_history", Context.MODE_PRIVATE)
     }
@@ -286,7 +301,7 @@ fun ContentBrowserScreen(
                     item(key = "cat_fav") {
                         CategoryRowItem(
                             displayName = strings.favorites,
-                            count = favoriteCount,
+                            count = typeFavCount,
                             isSelected = selectedCategory.equals("Favorites", true) || selectedCategory == "المفضلة",
                             onClick = { onCategoryChange("Favorites") }
                         )
@@ -562,7 +577,7 @@ fun ContentBrowserScreen(
                 }
                 item(key = "chip_fav") {
                     CategoryChipItem(
-                        displayName = "${strings.favorites} ($favoriteCount)",
+                        displayName = "${strings.favorites} ($typeFavCount)",
                         isSelected = selectedCategory.equals("Favorites", true) || selectedCategory == "المفضلة",
                         onClick = { onCategoryChange("Favorites") }
                     )
