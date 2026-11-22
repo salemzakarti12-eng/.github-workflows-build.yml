@@ -1,42 +1,13 @@
-package com.example
+package com.example.ui.player
 
-import android.app.PictureInPictureParams
-import android.content.Context
-import android.content.res.Configuration
-import android.os.Build
-import android.os.Bundle
-import android.util.Rational
-import android.view.KeyEvent
-import android.view.ViewGroup
-import android.view.WindowManager
-import android.widget.FrameLayout
-import androidx.activity.ComponentActivity
-import androidx.activity.OnBackPressedCallback
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.activity.viewModels
-import androidx.annotation.OptIn
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleOut
+import android.util.Xml
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -45,139 +16,73 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.LiveTv
-import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Replay
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Subtitles
-import androidx.compose.material.icons.filled.TouchApp
-import androidx.compose.material.icons.filled.VideoLibrary
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.NavigationRail
-import androidx.compose.material3.NavigationRailItem
-import androidx.compose.material3.NavigationRailItemDefaults
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
+import com.example.model.CategoryInfo
 import com.example.model.IptvItem
-import com.example.model.IptvType
-import com.example.player.ExoPlayerManager
-import com.example.ui.MainViewModel
-import com.example.ui.Screen
-import com.example.ui.channelbrowser.ContentBrowserScreen
-import com.example.ui.dashboard.DashboardScreen
-import com.example.ui.locale.AppLanguageManager
 import com.example.ui.locale.LocalAppLanguage
 import com.example.ui.locale.LocalAppStrings
-import com.example.ui.locale.getAppStrings
-import com.example.ui.locale.isRtlLanguage
-import com.example.ui.player.VideoPlayerScreen
-import com.example.ui.series.SeriesDetailScreen
-import com.example.ui.sources.SourcesScreen
 import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.AccentRed
-import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.Slate300
 import com.example.ui.theme.Slate400
@@ -186,1539 +91,302 @@ import com.example.ui.theme.Slate800
 import com.example.ui.theme.Slate850
 import com.example.ui.theme.Slate900
 import com.example.ui.theme.Slate950
-import com.example.util.DeviceUtils
-import com.example.util.LocalIsTelevision
+import com.example.util.CategoryTranslator
+import java.io.InputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
-import kotlin.math.cos
-import kotlin.math.sin
+import java.util.TimeZone
+import java.util.concurrent.ConcurrentHashMap
+import java.util.zip.GZIPInputStream
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-
-class MainActivity : ComponentActivity() {
-
-    private val mainViewModel: MainViewModel by viewModels()
-    private var isInPipModeState by mutableStateOf(false)
-    private var showExitDialogState by mutableStateOf(false)
-    private var lastBrowseScreenState by mutableStateOf(Screen.DASHBOARD)
-    private var previousScreenBeforeSeriesDetailState by mutableStateOf(Screen.SERIES)
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            window.attributes = window.attributes.apply {
-                layoutInDisplayCutoutMode =
-                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-            }
-        }
-
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                handleSystemBackNavigation()
-            }
-        })
-
-        val isTvDevice = try {
-            DeviceUtils.isTelevision(this)
-        } catch (_: Exception) {
-            false
-        }
-
-        try {
-            DeviceUtils.configureDeviceOrientation(this)
-        } catch (_: Exception) {}
-
-        if (!isTvDevice && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            try {
-                enableEdgeToEdge()
-            } catch (_: Exception) {}
-        }
-
-        hideSystemStatusBar()
-
-        setContent {
-            val isTelevision = remember { isTvDevice }
-            val currentLanguage by mainViewModel.currentLanguage.collectAsState()
-            val layoutDirection = if (isRtlLanguage(currentLanguage)) LayoutDirection.Rtl else LayoutDirection.Ltr
-            val strings = remember(currentLanguage) { getAppStrings(currentLanguage) }
-
-            CompositionLocalProvider(
-                LocalIsTelevision provides isTelevision,
-                LocalAppLanguage provides currentLanguage,
-                LocalAppStrings provides strings,
-                LocalLayoutDirection provides layoutDirection
-            ) {
-                MyApplicationTheme {
-                    HypnoStreamApp(
-                        viewModel = mainViewModel,
-                        isInPipMode = isInPipModeState,
-                        showExitDialog = showExitDialogState,
-                        onShowExitDialogChange = { showExitDialogState = it },
-                        onLastBrowseScreenChange = { lastBrowseScreenState = it },
-                        onSeriesDetailOpenedFrom = { origin ->
-                            previousScreenBeforeSeriesDetailState = origin
-                        },
-                        onNavigateBack = { handleSystemBackNavigation() },
-                        onFinishApp = {
-                            mainViewModel.playerManager.saveCurrentPlaybackPosition()
-                            mainViewModel.playerManager.stop()
-                            finishAndRemoveTask()
-                        }
-                    )
-                }
-            }
-        }
-    }
-
-    private fun hideSystemStatusBar() {
-        try {
-            WindowCompat.setDecorFitsSystemWindows(window, false)
-            WindowCompat.getInsetsController(window, window.decorView).apply {
-                hide(WindowInsetsCompat.Type.statusBars())
-                systemBarsBehavior =
-                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            }
-        } catch (_: Exception) {}
-    }
-
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
-            hideSystemStatusBar()
-        }
-    }
-
-    private fun handleSystemBackNavigation() {
-        val screen = mainViewModel.currentScreen.value
-        when {
-            showExitDialogState -> {
-                showExitDialogState = false
-            }
-            screen == Screen.PLAYER -> {
-                mainViewModel.playerManager.closeQuickChannelList()
-                val target = if (lastBrowseScreenState == Screen.PLAYER) Screen.DASHBOARD else lastBrowseScreenState
-                mainViewModel.navigateTo(target)
-            }
-            screen == Screen.SERIES_DETAIL -> {
-                val returnTarget = when (previousScreenBeforeSeriesDetailState) {
-                    Screen.HISTORY, Screen.DASHBOARD, Screen.SERIES -> previousScreenBeforeSeriesDetailState
-                    else -> Screen.SERIES
-                }
-                mainViewModel.navigateTo(returnTarget)
-            }
-            screen != Screen.DASHBOARD -> {
-                mainViewModel.navigateTo(Screen.DASHBOARD)
-            }
-            else -> {
-                showExitDialogState = true
-            }
-        }
-    }
-
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.action == KeyEvent.ACTION_UP) {
-            when (event.keyCode) {
-                KeyEvent.KEYCODE_BACK,
-                KeyEvent.KEYCODE_ESCAPE -> {
-                    handleSystemBackNavigation()
-                    return true
-                }
-                KeyEvent.KEYCODE_HOME -> {
-                    if (mainViewModel.currentScreen.value != Screen.DASHBOARD) {
-                        mainViewModel.navigateTo(Screen.DASHBOARD)
-                        return true
-                    }
-                }
-            }
-        }
-        return super.dispatchKeyEvent(event)
-    }
-
-    override fun onResume() {
-        super.onResume()
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        hideSystemStatusBar()
-    }
-
-    override fun onUserLeaveHint() {
-        super.onUserLeaveHint()
-        try {
-            val isTvOrBox = DeviceUtils.isTelevision(this) ||
-                resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-            val hasActiveStream = mainViewModel.playerUiState.value.currentItem != null
-            val isPlaying = mainViewModel.playerUiState.value.isPlaying
-
-            if (isTvOrBox) {
-                if (hasActiveStream) {
-                    mainViewModel.playerManager.saveCurrentPlaybackPosition()
-                    mainViewModel.playerManager.stop()
-                }
-            } else if (hasActiveStream && isPlaying) {
-                enterPipMode()
-            }
-        } catch (_: Exception) {}
-    }
-
-    override fun onStop() {
-        super.onStop()
-        try {
-            if (!isInPictureInPictureMode && !isChangingConfigurations) {
-                mainViewModel.playerManager.saveCurrentPlaybackPosition()
-                mainViewModel.playerManager.stop()
-            }
-        } catch (_: Exception) {}
-    }
-
-    override fun onPictureInPictureModeChanged(
-        isInPictureInPictureMode: Boolean,
-        newConfig: Configuration
-    ) {
-        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        isInPipModeState = isInPictureInPictureMode
-        if (isInPictureInPictureMode) {
-            mainViewModel.playerManager.closeQuickChannelList()
-        }
-    }
-
-    fun enterPipMode() {
-        if (DeviceUtils.isTelevision(this)) return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            try {
-                val params = PictureInPictureParams.Builder()
-                    .setAspectRatio(Rational(16, 9))
-                    .build()
-                enterPictureInPictureMode(params)
-            } catch (_: Exception) {}
-        }
-    }
-}
-
-@Composable
-fun HypnoStreamApp(
-    viewModel: MainViewModel = viewModel(),
-    isInPipMode: Boolean = false,
-    showExitDialog: Boolean = false,
-    onShowExitDialogChange: (Boolean) -> Unit = {},
-    onLastBrowseScreenChange: (Screen) -> Unit = {},
-    onSeriesDetailOpenedFrom: (Screen) -> Unit = {},
-    onNavigateBack: () -> Unit = {},
-    onFinishApp: () -> Unit = {}
-) {
-    val context = LocalContext.current
-    val onboardingPrefs = remember {
-        context.getSharedPreferences("hypnostream_prefs", Context.MODE_PRIVATE)
-    }
-    var showFirstRunOnboarding by remember {
-        mutableStateOf(!onboardingPrefs.getBoolean("has_completed_onboarding", false))
-    }
-
-    val currentScreen by viewModel.currentScreen.collectAsState()
-    var lastBrowseScreen by remember { mutableStateOf(Screen.DASHBOARD) }
-
-    LaunchedEffect(currentScreen) {
-        if (currentScreen != Screen.PLAYER) {
-            lastBrowseScreen = currentScreen
-            onLastBrowseScreenChange(currentScreen)
-        }
-    }
-
-    val activeSource by viewModel.activeSource.collectAsState()
-    val sources by viewModel.sources.collectAsState()
-    val totalLiveCount by viewModel.totalLiveCount.collectAsState()
-    val totalMoviesCount by viewModel.totalMoviesCount.collectAsState()
-    val totalSeriesCount by viewModel.totalSeriesCount.collectAsState()
-    val currentCategories by viewModel.currentCategories.collectAsState()
-    val favorites by viewModel.favorites.collectAsState()
-    val recentlyWatched by viewModel.recentlyWatched.collectAsState()
-    val filteredItems by viewModel.currentFilteredItems.collectAsState()
-    val searchQuery by viewModel.searchQuery.collectAsState()
-    val selectedCategory by viewModel.selectedCategory.collectAsState()
-    val playerUiState by viewModel.playerUiState.collectAsState()
-    val seriesDetails by viewModel.seriesDetails.collectAsState()
-    val currentSeriesEpisodes by viewModel.currentSeriesEpisodes.collectAsState()
-    val isSeriesLoading by viewModel.isSeriesLoading.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val statusMessage by viewModel.statusMessage.collectAsState()
-
-    val favoriteItems = recentlyWatched.filter { favorites.contains(it.id) }
-
-    val configuration = LocalConfiguration.current
-    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val isTablet = configuration.smallestScreenWidthDp >= 600
-    val isTv = LocalIsTelevision.current
-    val useSideRailLayout = isLandscape || isTablet || isTv
-
-    val strings = LocalAppStrings.current
-    val currentLang = LocalAppLanguage.current
-    val isAr = currentLang == "ar"
-
-    var pendingResumeItem by remember { mutableStateOf<IptvItem?>(null) }
-    var pendingResumePosMs by remember { mutableLongStateOf(0L) }
-
-    val performBack = {
-        if (pendingResumeItem != null) {
-            pendingResumeItem = null
-        } else {
-            onNavigateBack()
-        }
-    }
-
-    val handlePlayWithResumePrompt = { item: IptvItem ->
-        val savedPos = viewModel.playerManager.getSavedPosition(item)
-        if (savedPos > 5_000L && item.type != IptvType.LIVE_TV) {
-            pendingResumeItem = item
-            pendingResumePosMs = savedPos
-        } else {
-            viewModel.playStream(item)
-        }
-    }
-
-    val handleOpenHistoryOrDashboardItem = { item: IptvItem ->
-        if (item.type == IptvType.SERIES) {
-            onSeriesDetailOpenedFrom(currentScreen)
-            val matchedSeries = viewModel.repository.getAllSeries().firstOrNull {
-                it.name.equals(item.name, ignoreCase = true) ||
-                (!item.seriesTitle.isNullOrBlank() && it.seriesTitle?.equals(item.seriesTitle, ignoreCase = true) == true)
-            } ?: item
-            viewModel.openSeriesDetail(matchedSeries)
-        } else {
-            handlePlayWithResumePrompt(item)
-        }
-    }
-
-    val totalLoadedItems = totalLiveCount + totalMoviesCount + totalSeriesCount
-    var minSplashTimePassed by remember { mutableStateOf(false) }
-    var initialLoadCompleted by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        delay(900L)
-        minSplashTimePassed = true
-        delay(10000L)
-        initialLoadCompleted = true
-    }
-
-    LaunchedEffect(minSplashTimePassed, isLoading, totalLoadedItems) {
-        if (minSplashTimePassed && (!isLoading && (totalLoadedItems > 0 || activeSource == null))) {
-            delay(150L)
-            initialLoadCompleted = true
-        }
-    }
-
-    val showSplash = !initialLoadCompleted
-    val isPlayerOpen = (currentScreen == Screen.PLAYER && playerUiState.currentItem != null) || isInPipMode
-    val displayedBrowseScreen = if (currentScreen == Screen.PLAYER) lastBrowseScreen else currentScreen
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Slate950)
-    ) {
-        val navItems = listOf(
-            Triple(Screen.DASHBOARD, Icons.Default.Home, strings.home),
-            Triple(Screen.LIVE_CHANNELS, Icons.Default.LiveTv, strings.liveTv),
-            Triple(Screen.MOVIES, Icons.Default.Movie, strings.movies),
-            Triple(Screen.SERIES, Icons.Default.VideoLibrary, strings.series),
-            Triple(Screen.HISTORY, Icons.Default.History, strings.history),
-            Triple(Screen.SOURCES, Icons.Default.Settings, strings.sources)
-        )
-
-        val screenContent: @Composable () -> Unit = {
-            when (displayedBrowseScreen) {
-                Screen.DASHBOARD -> {
-                    DashboardScreen(
-                        activeSource = activeSource,
-                        liveCount = totalLiveCount,
-                        moviesCount = totalMoviesCount,
-                        seriesCount = totalSeriesCount,
-                        favorites = favoriteItems,
-                        recentlyWatched = recentlyWatched,
-                        onNavigate = { viewModel.navigateTo(it) },
-                        onPlayItem = handleOpenHistoryOrDashboardItem,
-                        onToggleLanguage = { viewModel.toggleLanguage() },
-                        onSelectLanguage = { viewModel.setLanguage(it) },
-                        isRefreshing = isLoading,
-                        statusMessage = statusMessage,
-                        onRefreshSource = { viewModel.refreshActiveSource() }
-                    )
-                }
-
-                Screen.HISTORY -> {
-                    WatchHistoryScreen(
-                        items = recentlyWatched,
-                        onPlayItem = handleOpenHistoryOrDashboardItem,
-                        onRemoveItem = { viewModel.removeFromHistory(it) },
-                        onClearAll = { viewModel.clearHistory() },
-                        onBack = { performBack() }
-                    )
-                }
-
-                Screen.LIVE_CHANNELS, Screen.MOVIES, Screen.SERIES -> {
-                    ContentBrowserScreen(
-                        screen = displayedBrowseScreen,
-                        categories = currentCategories,
-                        items = filteredItems,
-                        searchQuery = searchQuery,
-                        selectedCategory = selectedCategory,
-                        totalCount = when (displayedBrowseScreen) {
-                            Screen.LIVE_CHANNELS -> totalLiveCount
-                            Screen.MOVIES -> totalMoviesCount
-                            Screen.SERIES -> totalSeriesCount
-                            else -> filteredItems.size
-                        },
-                        favoriteCount = favorites.size,
-                        onSearchChange = { viewModel.setSearchQuery(it) },
-                        onCategoryChange = { viewModel.setSelectedCategory(it) },
-                        onLoadMore = { viewModel.loadMoreItems() },
-                        onPlayItem = { handlePlayWithResumePrompt(it) },
-                        onOpenSeries = { seriesItem ->
-                            onSeriesDetailOpenedFrom(Screen.SERIES)
-                            viewModel.openSeriesDetail(seriesItem)
-                        },
-                        onToggleFavorite = { viewModel.toggleFavorite(it) },
-                        onBack = { performBack() }
-                    )
-                }
-
-                Screen.SERIES_DETAIL -> {
-                    SeriesDetailScreen(
-                        details = seriesDetails,
-                        isLoading = isSeriesLoading,
-                        onPlayEpisode = { episode ->
-                            val series = viewModel.selectedSeries.value
-                            val seriesTitle = seriesDetails?.title ?: series?.seriesTitle ?: series?.name ?: if (isAr) "مسلسل" else "TV Series"
-                            val group = if (isAr) "الموسم ${episode.seasonNumber}" else "Season ${episode.seasonNumber}"
-                            val epItem = episode.toIptvItem(seriesTitle, group).copy(
-                                type = IptvType.SERIES,
-                                seasonNumber = episode.seasonNumber,
-                                episodeNumber = episode.episodeNumber
-                            )
-                            handlePlayWithResumePrompt(epItem)
-                        },
-                        onBack = { performBack() }
-                    )
-                }
-
-                Screen.SOURCES -> {
-                    SourcesScreen(
-                        sources = sources,
-                        activeSource = activeSource,
-                        isLoading = isLoading,
-                        statusMessage = statusMessage,
-                        onConnectXtream = { server, user, pass, name ->
-                            viewModel.connectXtream(server, user, pass, name)
-                        },
-                        onLoadM3u = { url, content, name ->
-                            viewModel.loadM3u(url, content, name)
-                        },
-                        onLoadDemo = { viewModel.loadDemoShowcase() },
-                        onSwitchSource = { viewModel.switchActiveSource(it) },
-                        onDeleteSource = { viewModel.deleteSource(it) },
-                        onBack = { performBack() },
-                        onToggleLanguage = { viewModel.toggleLanguage() },
-                        onSelectLanguage = { viewModel.setLanguage(it) }
-                    )
-                }
-
-                Screen.PLAYER -> {}
-            }
-        }
-
-        if (useSideRailLayout) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Slate950)
-            ) {
-                NavigationRail(
-                    containerColor = Slate900,
-                    contentColor = PureWhite,
-                    modifier = Modifier
-                        .width(if (isTablet || isTv) 88.dp else 76.dp)
-                        .fillMaxHeight()
-                        .focusGroup()
-                        .border(BorderStroke(1.dp, Slate800))
-                        .testTag("main_navigation_rail")
-                ) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    navItems.forEach { (screen, icon, label) ->
-                        val isSelected = displayedBrowseScreen == screen || (screen == Screen.SERIES && displayedBrowseScreen == Screen.SERIES_DETAIL)
-                        val navInteraction = remember { MutableInteractionSource() }
-                        val isNavFocused by navInteraction.collectIsFocusedAsState()
-
-                        NavigationRailItem(
-                            selected = isSelected,
-                            onClick = { viewModel.navigateTo(screen) },
-                            interactionSource = navInteraction,
-                            alwaysShowLabel = true,
-                            icon = {
-                                Icon(
-                                    imageVector = icon,
-                                    contentDescription = label,
-                                    tint = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
-                                    modifier = Modifier.size(if (isNavFocused) 24.dp else 20.dp)
-                                )
-                            },
-                            label = {
-                                Text(
-                                    text = label,
-                                    fontSize = 10.sp,
-                                    fontWeight = if (isSelected || isNavFocused) FontWeight.Bold else FontWeight.SemiBold,
-                                    color = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
-                                    maxLines = 1
-                                )
-                            },
-                            colors = navigationRailItemColors(),
-                            modifier = Modifier
-                                .padding(vertical = 2.dp)
-                                .border(
-                                    width = if (isNavFocused) 2.dp else 0.dp,
-                                    color = if (isNavFocused) AccentCyan else Color.Transparent,
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                        )
-                    }
-                }
-
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                    ) {
-                        screenContent()
-                    }
-
-                    if (!isPlayerOpen && playerUiState.currentItem != null) {
-                        MiniPlayerBar(
-                            playerManager = viewModel.playerManager,
-                            item = playerUiState.currentItem!!,
-                            isPlaying = playerUiState.isPlaying,
-                            isCompact = !isTablet,
-                            onExpand = { viewModel.navigateTo(Screen.PLAYER) },
-                            onTogglePlayPause = { viewModel.playerManager.togglePlayPause() },
-                            onDismiss = { viewModel.dismissMiniPlayer() }
-                        )
-                    }
-                }
-            }
-        } else {
-            Scaffold(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Slate950),
-                bottomBar = {
-                    Column(modifier = Modifier.navigationBarsPadding()) {
-                        if (!isPlayerOpen && playerUiState.currentItem != null) {
-                            MiniPlayerBar(
-                                playerManager = viewModel.playerManager,
-                                item = playerUiState.currentItem!!,
-                                isPlaying = playerUiState.isPlaying,
-                                isCompact = false,
-                                onExpand = { viewModel.navigateTo(Screen.PLAYER) },
-                                onTogglePlayPause = { viewModel.playerManager.togglePlayPause() },
-                                onDismiss = { viewModel.dismissMiniPlayer() }
-                            )
-                        }
-
-                        NavigationBar(
-                            containerColor = Slate900,
-                            contentColor = PureWhite,
-                            modifier = Modifier
-                                .height(68.dp)
-                                .focusGroup()
-                                .border(BorderStroke(1.dp, Slate800))
-                                .testTag("main_navigation_bar")
-                        ) {
-                            navItems.forEach { (screen, icon, label) ->
-                                val isSelected = displayedBrowseScreen == screen || (screen == Screen.SERIES && displayedBrowseScreen == Screen.SERIES_DETAIL)
-                                val navInteraction = remember { MutableInteractionSource() }
-                                val isNavFocused by navInteraction.collectIsFocusedAsState()
-
-                                NavigationBarItem(
-                                    selected = isSelected,
-                                    onClick = { viewModel.navigateTo(screen) },
-                                    interactionSource = navInteraction,
-                                    alwaysShowLabel = true,
-                                    icon = {
-                                        Icon(
-                                            imageVector = icon,
-                                            contentDescription = label,
-                                            tint = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
-                                            modifier = Modifier.size(if (isNavFocused) 24.dp else 20.dp)
-                                        )
-                                    },
-                                    label = {
-                                        Text(
-                                            text = label,
-                                            fontSize = 10.sp,
-                                            fontWeight = if (isSelected || isNavFocused) FontWeight.Bold else FontWeight.SemiBold,
-                                            color = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
-                                            maxLines = 1
-                                        )
-                                    },
-                                    colors = navigationBarItemColors(),
-                                    modifier = Modifier
-                                        .border(
-                                            width = if (isNavFocused) 2.dp else 0.dp,
-                                            color = if (isNavFocused) AccentCyan else Color.Transparent,
-                                            shape = RoundedCornerShape(12.dp)
-                                        )
-                                )
-                            }
-                        }
-                    }
-                }
-            ) { innerPadding ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                        .displayCutoutPadding()
-                ) {
-                    screenContent()
-                }
-            }
-        }
-
-        if (isPlayerOpen) {
-            val activeItem = playerUiState.currentItem
-            val sideDrawerItems = when (activeItem?.type) {
-                IptvType.LIVE_TV -> viewModel.repository.getAllLiveChannels()
-                IptvType.SERIES -> currentSeriesEpisodes
-                else -> emptyList()
-            }
-
-            VideoPlayerScreen(
-                playerManager = viewModel.playerManager,
-                uiState = playerUiState,
-                allChannels = sideDrawerItems,
-                onBack = { performBack() },
-                onPlayNext = { viewModel.playNextChannel() },
-                onPlayPrevious = { viewModel.playPreviousChannel() },
-                onSelectChannel = { handlePlayWithResumePrompt(it) },
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-
-        if (pendingResumeItem != null) {
-            val targetItem = pendingResumeItem!!
-            val formattedTime = remember(pendingResumePosMs) {
-                val totalSeconds = (pendingResumePosMs / 1000).coerceAtLeast(0)
-                val minutes = totalSeconds / 60
-                val seconds = totalSeconds % 60
-                val hours = minutes / 60
-                if (hours > 0) {
-                    String.format(Locale.US, "%d:%02d:%02d", hours, minutes % 60, seconds)
-                } else {
-                    String.format(Locale.US, "%02d:%02d", minutes, seconds)
-                }
-            }
-
-            val resumeFocusRequester = remember { FocusRequester() }
-            val resumeInteraction = remember { MutableInteractionSource() }
-            val isResumeFocused by resumeInteraction.collectIsFocusedAsState()
-
-            val restartInteraction = remember { MutableInteractionSource() }
-            val isRestartFocused by restartInteraction.collectIsFocusedAsState()
-
-            LaunchedEffect(targetItem.id) {
-                try {
-                    delay(80L)
-                    resumeFocusRequester.requestFocus()
-                } catch (_: Exception) {}
-            }
-
-            AlertDialog(
-                onDismissRequest = { pendingResumeItem = null },
-                containerColor = Slate900,
-                shape = RoundedCornerShape(20.dp),
-                title = {
-                    Text(
-                        text = if (isAr) "استئناف المشاهدة؟" else "Resume Playback?",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = PureWhite
-                    )
-                },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(
-                            text = targetItem.name,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = AccentCyan,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = if (isAr) {
-                                "توقفت عند الدقيقة $formattedTime. هل تريد إكمال المشاهدة أو البدء من البداية؟"
-                            } else {
-                                "You left off at $formattedTime. Would you like to resume or start from the beginning?"
-                            },
-                            fontSize = 13.sp,
-                            color = Slate300
-                        )
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        Button(
-                            onClick = {
-                                val itemToPlay = targetItem
-                                pendingResumeItem = null
-                                viewModel.playStream(itemToPlay)
-                            },
-                            interactionSource = resumeInteraction,
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isResumeFocused) PureWhite else AccentCyan,
-                                contentColor = Slate950
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                                .focusRequester(resumeFocusRequester)
-                                .border(
-                                    width = if (isResumeFocused) 3.dp else 0.dp,
-                                    color = PureWhite,
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                                .focusable(interactionSource = resumeInteraction)
-                                .onPreviewKeyEvent { event ->
-                                    if (event.type == KeyEventType.KeyUp &&
-                                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                                    ) {
-                                        val itemToPlay = targetItem
-                                        pendingResumeItem = null
-                                        viewModel.playStream(itemToPlay)
-                                        true
-                                    } else false
-                                }
-                        ) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = if (isAr) "استئناف من $formattedTime" else "Resume from $formattedTime",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
-                        }
-
-                        OutlinedButton(
-                            onClick = {
-                                val itemToPlay = targetItem
-                                pendingResumeItem = null
-                                viewModel.playerManager.clearSavedPosition(itemToPlay)
-                                viewModel.playStream(itemToPlay)
-                            },
-                            interactionSource = restartInteraction,
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(
-                                width = if (isRestartFocused) 2.5.dp else 1.dp,
-                                color = if (isRestartFocused) AccentCyan else Slate700
-                            ),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = if (isRestartFocused) Slate800 else Slate850,
-                                contentColor = PureWhite
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                                .focusable(interactionSource = restartInteraction)
-                                .onPreviewKeyEvent { event ->
-                                    if (event.type == KeyEventType.KeyUp &&
-                                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                                    ) {
-                                        val itemToPlay = targetItem
-                                        pendingResumeItem = null
-                                        viewModel.playerManager.clearSavedPosition(itemToPlay)
-                                        viewModel.playStream(itemToPlay)
-                                        true
-                                    } else false
-                                }
-                        ) {
-                            Icon(Icons.Default.Replay, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = if (isAr) "البدء من البداية (00:00)" else "Start from Beginning (00:00)",
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 13.sp
-                            )
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = { pendingResumeItem = null }) {
-                        Text(
-                            text = if (isAr) "إلغاء" else "Cancel",
-                            color = Slate400,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            )
-        }
-
-        if (showExitDialog) {
-            val stayFocusRequester = remember { FocusRequester() }
-            val stayInteraction = remember { MutableInteractionSource() }
-            val isStayFocused by stayInteraction.collectIsFocusedAsState()
-
-            val exitInteraction = remember { MutableInteractionSource() }
-            val isExitFocused by exitInteraction.collectIsFocusedAsState()
-
-            LaunchedEffect(Unit) {
-                try {
-                    delay(80L)
-                    stayFocusRequester.requestFocus()
-                } catch (_: Exception) {}
-            }
-
-            AlertDialog(
-                onDismissRequest = { onShowExitDialogChange(false) },
-                containerColor = Slate900,
-                shape = RoundedCornerShape(20.dp),
-                title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                            contentDescription = null,
-                            tint = AccentRed,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Text(
-                            text = if (isAr) "الخروج من التطبيق؟" else "Exit HypnoStream?",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = PureWhite
-                        )
-                    }
-                },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(
-                            text = if (isAr) {
-                                "هل أنت متأكد من إغلاق التطبيق وإيقاف البث؟"
-                            } else {
-                                "Are you sure you want to exit the application and stop playback?"
-                            },
-                            fontSize = 14.sp,
-                            color = Slate300
-                        )
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Button(
-                            onClick = { onShowExitDialogChange(false) },
-                            interactionSource = stayInteraction,
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isStayFocused) PureWhite else AccentCyan,
-                                contentColor = Slate950
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                                .focusRequester(stayFocusRequester)
-                                .border(
-                                    width = if (isStayFocused) 3.dp else 0.dp,
-                                    color = PureWhite,
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                                .focusable(interactionSource = stayInteraction)
-                                .onPreviewKeyEvent { event ->
-                                    if (event.type == KeyEventType.KeyUp &&
-                                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                                    ) {
-                                        onShowExitDialogChange(false)
-                                        true
-                                    } else false
-                                }
-                        ) {
-                            Text(
-                                text = if (isAr) "البقاء في التطبيق" else "Stay in App",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
-                        }
-
-                        OutlinedButton(
-                            onClick = {
-                                onShowExitDialogChange(false)
-                                onFinishApp()
-                            },
-                            interactionSource = exitInteraction,
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(
-                                width = if (isExitFocused) 2.5.dp else 1.5.dp,
-                                color = if (isExitFocused) PureWhite else AccentRed
-                            ),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = if (isExitFocused) AccentRed else Slate850,
-                                contentColor = PureWhite
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                                .focusable(interactionSource = exitInteraction)
-                                .onPreviewKeyEvent { event ->
-                                    if (event.type == KeyEventType.KeyUp &&
-                                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                                    ) {
-                                        onShowExitDialogChange(false)
-                                        onFinishApp()
-                                        true
-                                    } else false
-                                }
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                                contentDescription = null,
-                                tint = PureWhite,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = if (isAr) "خروج وإيقاف البث" else "Exit & Stop Playback",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
-                        }
-                    }
-                },
-                confirmButton = {}
-            )
-        }
-
-        // First-Run Language Picker + Interactive Multi-Language Tutorial (Shown Once)
-        if (!showSplash && showFirstRunOnboarding) {
-            FirstRunLanguageAndTutorialOverlay(
-                selectedLanguage = currentLang,
-                onSelectLanguage = { langCode -> viewModel.setLanguage(langCode) },
-                onComplete = {
-                    onboardingPrefs.edit().putBoolean("has_completed_onboarding", true).apply()
-                    showFirstRunOnboarding = false
-                }
-            )
-        }
-
-        AnimatedVisibility(
-            visible = showSplash,
-            enter = fadeIn(tween(220)),
-            exit = fadeOut(tween(420)) + scaleOut(
-                targetScale = 1.08f,
-                animationSpec = tween(420, easing = FastOutSlowInEasing)
-            )
-        ) {
-            HypnoOrbitalSplashOverlay(
-                isAr = isAr,
-                statusMessage = statusMessage,
-                totalLoadedItems = totalLoadedItems
-            )
-        }
-    }
-}
-
-private data class TutorialCardData(
-    val icon: ImageVector,
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.xmlpull.v1.XmlPullParser
+
+data class EpgProgram(
+    val channelId: String,
     val title: String,
     val description: String,
-    val highlightTip: String
-)
-
-private fun getTutorialContentForLanguage(langCode: String): TupleTutorial {
-    return when (langCode.lowercase(Locale.US)) {
-        "ar" -> TupleTutorial(
-            chooseLangTitle = "اختر لغة العرض المفضلة",
-            chooseLangSubtitle = "سيتم ضبط واجهة التطبيق وترجمة الأقسام والدليل التعريفي حسب اختيارك",
-            skipLabel = "تخطي",
-            nextLabel = "التالي",
-            backLabel = "السابق",
-            startLabel = "ابدأ المشاهدة الآن",
-            cards = listOf(
-                TutorialCardData(
-                    icon = Icons.Default.LiveTv,
-                    title = "إضافة اشتراكك بسهولة",
-                    description = "أضف حساب Xtream Codes أو رابط M3U من قسم (المصادر)، وسيقوم التطبيق بترجمة أسماء الأقسام وجلب دليل البرامج (EPG) تلقائياً.",
-                    highlightTip = "يدعم البحث الفوري وسجل آخر عمليات البحث في كل قسم"
-                ),
-                TutorialCardData(
-                    icon = Icons.Default.TouchApp,
-                    title = "تحكم سريع باللمس والريموت",
-                    description = "اسحب للأعلى والأسفل على يسار الشاشة للسطوع وعلى اليمين للصوت، أو استخدم أزرار الريموت والـ Mini-Player للتنقل أثناء المشاهدة.",
-                    highlightTip = "افتح القائمة الجانبية داخل المشغل للتبديل السريع بين القنوات والحلقات"
-                ),
-                TutorialCardData(
-                    icon = Icons.Default.Subtitles,
-                    title = "ترجمة احترافية وتذكر تلقائي",
-                    description = "ارفع أو اخفض مكان الترجمة حياً على الشاشة، واختر خطك المفضل. التطبيق يتذكر لغة الصوت والترجمة ونقطة توقفك بين الحلقات تلقائياً.",
-                    highlightTip = "اختيارك للصوت والترجمة يستمر معك في جميع الحلقات التالية"
-                )
-            )
-        )
-        "fr" -> TupleTutorial(
-            chooseLangTitle = "Choisissez votre langue",
-            chooseLangSubtitle = "L'interface, les catégories et ce guide s'adapteront immédiatement",
-            skipLabel = "Passer",
-            nextLabel = "Suivant",
-            backLabel = "Précédent",
-            startLabel = "Commencer",
-            cards = listOf(
-                TutorialCardData(
-                    icon = Icons.Default.LiveTv,
-                    title = "Ajoutez vos sources IPTV",
-                    description = "Connectez votre compte Xtream Codes ou lien M3U dans Sources. Les catégories sont traduites et le guide TV (EPG) se charge automatiquement.",
-                    highlightTip = "Recherche rapide et historique intégrés dans chaque section"
-                ),
-                TutorialCardData(
-                    icon = Icons.Default.TouchApp,
-                    title = "Gestes tactiles & Télécommande TV",
-                    description = "Glissez à gauche pour la luminosité, à droite pour le volume, ou naviguez facilement avec la télécommande et le lecteur miniature.",
-                    highlightTip = "Ouvrez le tiroir latéral pour changer de chaîne ou d'épisode"
-                ),
-                TutorialCardData(
-                    icon = Icons.Default.Subtitles,
-                    title = "Sous-titres & Mémoire automatique",
-                    description = "Ajustez la position et la police des sous-titres en direct. Vos préférences audio, sous-titres et reprise sont mémorisées entre les épisodes.",
-                    highlightTip = "Vos choix de langue suivent automatiquement chaque épisode"
-                )
-            )
-        )
-        "es" -> TupleTutorial(
-            chooseLangTitle = "Elige tu idioma preferido",
-            chooseLangSubtitle = "La interfaz, las categorías y esta guía se adaptarán al instante",
-            skipLabel = "Omitir",
-            nextLabel = "Siguiente",
-            backLabel = "Atrás",
-            startLabel = "Empezar ahora",
-            cards = listOf(
-                TutorialCardData(
-                    icon = Icons.Default.LiveTv,
-                    title = "Conecta tus listas IPTV",
-                    description = "Añade tu cuenta Xtream Codes o enlace M3U en Fuentes. Las categorías se traducen y la guía EPG se sincroniza automáticamente.",
-                    highlightTip = "Búsqueda instantánea e historial reciente en cada sección"
-                ),
-                TutorialCardData(
-                    icon = Icons.Default.TouchApp,
-                    title = "Control táctil y mando TV",
-                    description = "Desliza a la izquierda para el brillo, a la derecha para el volumen, o controla todo con el mando D-Pad y el minireproductor.",
-                    highlightTip = "Usa la lista lateral en el reproductor para cambiar rápido de episodio"
-                ),
-                TutorialCardData(
-                    icon = Icons.Default.Subtitles,
-                    title = "Subtítulos y memoria inteligente",
-                    description = "Mueve la posición de los subtítulos en vivo y elige tu fuente. La app recuerda tu idioma de audio, subtítulos y punto de reproducción.",
-                    highlightTip = "Tu idioma elegido se mantiene en todos los siguientes episodios"
-                )
-            )
-        )
-        "de" -> TupleTutorial(
-            chooseLangTitle = "Anzeigesprache wählen",
-            chooseLangSubtitle = "Oberfläche, Kategorien und diese Einführung werden sofort angepasst",
-            skipLabel = "Überspringen",
-            nextLabel = "Weiter",
-            backLabel = "Zurück",
-            startLabel = "Jetzt starten",
-            cards = listOf(
-                TutorialCardData(
-                    icon = Icons.Default.LiveTv,
-                    title = "IPTV-Quellen verbinden",
-                    description = "Fügen Sie Xtream Codes oder M3U-Links unter Quellen hinzu. Kategorien werden übersetzt und der EPG-Programmführer automatisch geladen.",
-                    highlightTip = "Schnellsuche und Suchverlauf in jedem Bereich"
-                ),
-                TutorialCardData(
-                    icon = Icons.Default.TouchApp,
-                    title = "Gesten & TV-Fernbedienung",
-                    description = "Links wischen für Helligkeit, rechts für Lautstärke – oder bequem per TV-Fernbedienung und Mini-Player steuern.",
-                    highlightTip = "Seitenmenü im Player für schnellen Sender- und Episodenwechsel"
-                ),
-                TutorialCardData(
-                    icon = Icons.Default.Subtitles,
-                    title = "Untertitel & Auto-Speicher",
-                    description = "Untertitel-Position und Schriftart live anpassen. Audio- und Untertitelsprache sowie Wiedergabeposition bleiben über Episoden erhalten.",
-                    highlightTip = "Ihre Sprachauswahl gilt automatisch für alle weiteren Folgen"
-                )
-            )
-        )
-        "tr" -> TupleTutorial(
-            chooseLangTitle = "Görüntüleme Dilini Seçin",
-            chooseLangSubtitle = "Arayüz, kategoriler ve bu rehber seçiminize göre ayarlanacaktır",
-            skipLabel = "Atla",
-            nextLabel = "İleri",
-            backLabel = "Geri",
-            startLabel = "İzlemeye Başla",
-            cards = listOf(
-                TutorialCardData(
-                    icon = Icons.Default.LiveTv,
-                    title = "IPTV Kaynaklarınızı Ekleyin",
-                    description = "Kaynaklar bölümünden Xtream Codes veya M3U bağlantınızı ekleyin. Kategoriler otomatik çevrilir ve EPG yayın akışı yüklenir.",
-                    highlightTip = "Her bölümde anlık arama ve son aramalar geçmişi"
-                ),
-                TutorialCardData(
-                    icon = Icons.Default.TouchApp,
-                    title = "Dokunmatik ve TV Kumanda Kontrolü",
-                    description = "Parlaklık için sol, ses için sağ tarafı kaydırın veya TV kumandası ve Mini Oynatıcı ile kolayca gezinin.",
-                    highlightTip = "Hızlı kanal ve bölüm geçişi için yan çekmeceyi açın"
-                ),
-                TutorialCardData(
-                    icon = Icons.Default.Subtitles,
-                    title = "Gelişmiş Altyazı ve Otomatik Hafıza",
-                    description = "Altyazı konumunu ve yazı tipini canlı ayarlayın. Ses, altyazı dili ve kaldığınız yer sonraki bölümlerde otomatik hatırlanır.",
-                    highlightTip = "Seçtiğiniz dil sonraki tüm bölümlerde otomatik uygulanır"
-                )
-            )
-        )
-        "pl" -> TupleTutorial(
-            chooseLangTitle = "Wybierz język wyświetlania",
-            chooseLangSubtitle = "Interfejs, kategorie i ten samouczek dostosują się natychmiast",
-            skipLabel = "Pomiń",
-            nextLabel = "Dalej",
-            backLabel = "Wstecz",
-            startLabel = "Rozpocznij",
-            cards = listOf(
-                TutorialCardData(
-                    icon = Icons.Default.LiveTv,
-                    title = "Dodaj swoje źródła IPTV",
-                    description = "Połącz konto Xtream Codes lub link M3U w zakładce Źródła. Kategorie są tłumaczone, a przewodnik EPG ładuje się automatycznie.",
-                    highlightTip = "Szybkie wyszukiwanie i historia w każdej sekcji"
-                ),
-                TutorialCardData(
-                    icon = Icons.Default.TouchApp,
-                    title = "Gesty dotykowe i pilot TV",
-                    description = "Przesuń po lewej dla jasności, po prawej dla głośności lub steruj wygodnie pilotem TV i miniodtwarzaczem.",
-                    highlightTip = "Otwórz panel boczny w odtwarzaczu, aby szybko zmieniać odcinki"
-                ),
-                TutorialCardData(
-                    icon = Icons.Default.Subtitles,
-                    title = "Napisy na żywo i auto-zapamiętywanie",
-                    description = "Zmieniaj pozycję i czcionkę napisów na żywo. Wybrany język dźwięku, napisów i moment odtwarzania są zapamiętywane między odcinkami.",
-                    highlightTip = "Wybrany język przechodzi automatycznie na kolejne odcinki"
-                )
-            )
-        )
-        else -> TupleTutorial(
-            chooseLangTitle = "Choose Your Display Language",
-            chooseLangSubtitle = "The app interface, category translations, and this quick guide will adapt immediately",
-            skipLabel = "Skip",
-            nextLabel = "Next",
-            backLabel = "Back",
-            startLabel = "Start Watching",
-            cards = listOf(
-                TutorialCardData(
-                    icon = Icons.Default.LiveTv,
-                    title = "Connect Your IPTV Sources",
-                    description = "Add your Xtream Codes login or M3U playlist in Sources. Categories auto-translate and the EPG TV guide loads in the background.",
-                    highlightTip = "Instant search and recent search history in every section"
-                ),
-                TutorialCardData(
-                    icon = Icons.Default.TouchApp,
-                    title = "Touch Gestures & TV Remote Ready",
-                    description = "Swipe left for brightness, right for volume, or navigate seamlessly using your TV D-Pad remote and Picture-in-Picture mini player.",
-                    highlightTip = "Open the side drawer inside the player to switch channels or episodes fast"
-                ),
-                TutorialCardData(
-                    icon = Icons.Default.Subtitles,
-                    title = "Pro Subtitles & Smart Track Memory",
-                    description = "Adjust subtitle height and custom fonts live on screen. Your audio language, subtitle choice, and resume position carry over across episodes.",
-                    highlightTip = "Your chosen audio & subtitle tracks automatically follow you to the next episode"
-                )
-            )
-        )
-    }
-}
-
-private data class TupleTutorial(
-    val chooseLangTitle: String,
-    val chooseLangSubtitle: String,
-    val skipLabel: String,
-    val nextLabel: String,
-    val backLabel: String,
-    val startLabel: String,
-    val cards: List<TutorialCardData>
-)
-
-private fun getNativeLanguageDisplayName(code: String): String {
-    return when (code.lowercase(Locale.US)) {
-        "ar" -> "العربية"
-        "en" -> "English"
-        "fr" -> "Français"
-        "es" -> "Español"
-        "de" -> "Deutsch"
-        "tr" -> "Türkçe"
-        "pl" -> "Polski"
-        "pt" -> "Português"
-        "it" -> "Italiano"
-        "ru" -> "Русский"
-        "hi" -> "हिन्दी"
-        "ur" -> "اردو"
-        else -> Locale(code).getDisplayLanguage(Locale(code))
-            .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale(code)) else it.toString() }
-    }
-}
-
-@Composable
-private fun FirstRunLanguageAndTutorialOverlay(
-    selectedLanguage: String,
-    onSelectLanguage: (String) -> Unit,
-    onComplete: () -> Unit
+    val startTimeMs: Long,
+    val endTimeMs: Long
 ) {
-    // stepIndex == 0 -> Language Picker | stepIndex in 1..cards.size -> Tutorial Cards
-    var stepIndex by remember { mutableIntStateOf(0) }
-    val tutorial = remember(selectedLanguage) { getTutorialContentForLanguage(selectedLanguage) }
-    val supportedCodes = remember {
-        AppLanguageManager.supportedLanguages.map { it.code }.distinct().ifEmpty { listOf("ar", "en") }
+    fun isLiveAt(nowMs: Long = System.currentTimeMillis()): Boolean =
+        nowMs in startTimeMs until endTimeMs
+
+    fun progressFraction(nowMs: Long = System.currentTimeMillis()): Float {
+        val total = (endTimeMs - startTimeMs).coerceAtLeast(1L)
+        return ((nowMs - startTimeMs).toFloat() / total.toFloat()).coerceIn(0f, 1f)
     }
 
-    val primaryButtonFocusRequester = remember { FocusRequester() }
+    fun formattedTimeRange(): String {
+        val fmt = SimpleDateFormat("HH:mm", Locale.US)
+        return "${fmt.format(startTimeMs)} - ${fmt.format(endTimeMs)}"
+    }
+}
 
-    LaunchedEffect(stepIndex) {
-        try {
-            delay(100L)
-            primaryButtonFocusRequester.requestFocus()
-        } catch (_: Exception) {}
+data class ChannelEpgNowNext(
+    val now: EpgProgram?,
+    val next: EpgProgram?
+)
+
+object EpgManager {
+    private val programsByChannel = ConcurrentHashMap<String, List<EpgProgram>>()
+    private var lastLoadedUrl: String? = null
+    private var lastLoadedTimeMs: Long = 0L
+
+    // 1. بناء رابط XMLTV تلقائياً لحسابات Xtream Codes
+    fun buildXtreamEpgUrl(serverUrl: String, username: String, password: String): String {
+        val cleanBase = serverUrl.trimEnd('/')
+        return "$cleanBase/xmltv.php?username=$username&password=$password"
     }
 
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xF2030712))
-            .padding(20.dp)
-    ) {
-        Surface(
-            color = Slate900,
-            shape = RoundedCornerShape(24.dp),
-            border = BorderStroke(1.5.dp, AccentCyan.copy(alpha = 0.6f)),
-            modifier = Modifier
-                .widthIn(max = 640.dp)
-                .fillMaxWidth()
+    // 2. استخراج رابط EPG تلقائياً من ترويسة ملف M3U (#EXTM3U url-tvg="...")
+    fun extractM3uEpgUrl(firstLineHeader: String): String? {
+        val regex = Regex("""(?:url-tvg|x-tvg-url)\s*=\s*"([^"]+)"""", RegexOption.IGNORE_CASE)
+        return regex.find(firstLineHeader)?.groupValues?.getOrNull(1)?.takeIf { it.isNotBlank() }
+    }
+
+    // 3. تحميل وتحليل ملف XMLTV في الخلفية (يدعم .xml و .xml.gz)
+    suspend fun loadEpgFromUrl(epgUrl: String, forceRefresh: Boolean = false): Boolean = withContext(Dispatchers.IO) {
+        if (epgUrl.isBlank()) return@withContext false
+
+        val threeHoursMs = 3 * 60 * 60 * 1000L
+        if (!forceRefresh && epgUrl == lastLoadedUrl &&
+            (System.currentTimeMillis() - lastLoadedTimeMs) < threeHoursMs &&
+            programsByChannel.isNotEmpty()
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(24.dp)
-            ) {
-                // Top Row: Step Indicator + Skip Button
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        val totalSteps = tutorial.cards.size + 1
-                        for (i in 0 until totalSteps) {
-                            Box(
-                                modifier = Modifier
-                                    .width(if (i == stepIndex) 24.dp else 8.dp)
-                                    .height(8.dp)
-                                    .clip(CircleShape)
-                                    .background(if (i == stepIndex) AccentCyan else Slate700)
-                            )
-                        }
-                    }
+            return@withContext true
+        }
 
-                    TextButton(onClick = onComplete) {
-                        Text(
-                            text = tutorial.skipLabel,
-                            color = Slate400,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+        var connection: HttpURLConnection? = null
+        try {
+            connection = (URL(epgUrl).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 15_000
+                readTimeout = 30_000
+                setRequestProperty("User-Agent", "HypnoStream/1.0")
+                setRequestProperty("Accept-Encoding", "gzip")
+            }
+
+            if (connection.responseCode !in 200..299) return@withContext false
+
+            val rawStream = connection.inputStream
+            val isGzip = epgUrl.endsWith(".gz", ignoreCase = true) ||
+                connection.contentEncoding?.contains("gzip", ignoreCase = true) == true
+
+            val inputStream: InputStream = if (isGzip) GZIPInputStream(rawStream) else rawStream
+            inputStream.use { stream ->
+                val parsedMap = parseXmltvStream(stream)
+                if (parsedMap.isNotEmpty()) {
+                    programsByChannel.clear()
+                    programsByChannel.putAll(parsedMap)
+                    lastLoadedUrl = epgUrl
+                    lastLoadedTimeMs = System.currentTimeMillis()
+                    return@withContext true
+                }
+            }
+            false
+        } catch (_: Exception) {
+            false
+        } finally {
+            connection?.disconnect()
+        }
+    }
+
+    // 4. جلب البرنامج الحالي والقادم لأي قناة
+    fun getNowAndNext(epgChannelId: String?): ChannelEpgNowNext {
+        if (epgChannelId.isNullOrBlank()) return ChannelEpgNowNext(null, null)
+
+        val key = epgChannelId.trim().lowercase(Locale.US)
+        val list = programsByChannel[key] ?: return ChannelEpgNowNext(null, null)
+        val nowMs = System.currentTimeMillis()
+
+        val currentIndex = list.indexOfFirst { nowMs in it.startTimeMs until it.endTimeMs }
+        return if (currentIndex != -1) {
+            val nowProg = list[currentIndex]
+            val nextProg = list.getOrNull(currentIndex + 1)
+            ChannelEpgNowNext(nowProg, nextProg)
+        } else {
+            val upcoming = list.firstOrNull { it.startTimeMs > nowMs }
+            ChannelEpgNowNext(null, upcoming)
+        }
+    }
+
+    // 5. جلب جدول البرامج الكامل لليوم لقناة معينة
+    fun getChannelSchedule(epgChannelId: String?): List<EpgProgram> {
+        if (epgChannelId.isNullOrBlank()) return emptyList()
+        return programsByChannel[epgChannelId.trim().lowercase(Locale.US)].orEmpty()
+    }
+
+    private fun parseXmltvStream(inputStream: InputStream): Map<String, List<EpgProgram>> {
+        val tempMap = HashMap<String, MutableList<EpgProgram>>()
+        val parser = Xml.newPullParser().apply {
+            setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
+            setInput(inputStream, "UTF-8")
+        }
+
+        val nowMs = System.currentTimeMillis()
+        val minKeepMs = nowMs - (6 * 60 * 60 * 1000L)
+        val maxKeepMs = nowMs + (24 * 60 * 60 * 1000L)
+
+        var eventType = parser.eventType
+        var currentChannelId = ""
+        var currentStartMs = 0L
+        var currentEndMs = 0L
+        var currentTitle = ""
+        var currentDesc = ""
+        var insideProgramme = false
+
+        while (eventType != XmlPullParser.END_DOCUMENT) {
+            when (eventType) {
+                XmlPullParser.START_TAG -> {
+                    when (parser.name) {
+                        "programme" -> {
+                            insideProgramme = true
+                            currentChannelId = parser.getAttributeValue(null, "channel")
+                                ?.trim()?.lowercase(Locale.US).orEmpty()
+                            currentStartMs = parseXmltvDate(parser.getAttributeValue(null, "start"))
+                            currentEndMs = parseXmltvDate(parser.getAttributeValue(null, "stop"))
+                            currentTitle = ""
+                            currentDesc = ""
+                        }
+                        "title" -> if (insideProgramme) {
+                            currentTitle = parser.nextText().trim()
+                        }
+                        "desc" -> if (insideProgramme) {
+                            currentDesc = parser.nextText().trim()
+                        }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                if (stepIndex == 0) {
-                    // STEP 0: Language Selection
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .size(56.dp)
-                            .clip(CircleShape)
-                            .background(AccentCyan.copy(alpha = 0.15f))
-                            .border(1.dp, AccentCyan.copy(alpha = 0.5f), CircleShape)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Language,
-                            contentDescription = null,
-                            tint = AccentCyan,
-                            modifier = Modifier.size(30.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Text(
-                        text = tutorial.chooseLangTitle,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Black,
-                        color = PureWhite,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Text(
-                        text = tutorial.chooseLangSubtitle,
-                        fontSize = 13.sp,
-                        color = Slate300,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(18.dp))
-
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        supportedCodes.chunked(2).forEach { rowCodes ->
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                rowCodes.forEach { code ->
-                                    val isSelected = selectedLanguage.equals(code, ignoreCase = true)
-                                    val langInteraction = remember { MutableInteractionSource() }
-                                    val isFocused by langInteraction.collectIsFocusedAsState()
-
-                                    Surface(
-                                        color = when {
-                                            isSelected -> AccentCyan.copy(alpha = 0.2f)
-                                            isFocused -> Slate800
-                                            else -> Slate850
-                                        },
-                                        shape = RoundedCornerShape(14.dp),
-                                        border = BorderStroke(
-                                            width = if (isFocused || isSelected) 2.dp else 1.dp,
-                                            color = when {
-                                                isFocused -> PureWhite
-                                                isSelected -> AccentCyan
-                                                else -> Slate700
-                                            }
-                                        ),
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .focusable(interactionSource = langInteraction)
-                                            .onPreviewKeyEvent { event ->
-                                                if (event.type == KeyEventType.KeyUp &&
-                                                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                                                ) {
-                                                    onSelectLanguage(code)
-                                                    true
-                                                } else false
-                                            }
-                                            .clickable(interactionSource = langInteraction, indication = null) {
-                                                onSelectLanguage(code)
-                                            }
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
-                                        ) {
-                                            Text(
-                                                text = getNativeLanguageDisplayName(code),
-                                                fontSize = 14.sp,
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                                                color = if (isSelected) AccentCyan else PureWhite
-                                            )
-                                            if (isSelected) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Check,
-                                                    contentDescription = null,
-                                                    tint = AccentCyan,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                                if (rowCodes.size == 1) {
-                                    Spacer(modifier = Modifier.weight(1f))
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(22.dp))
-
-                    val nextBtnInteraction = remember { MutableInteractionSource() }
-                    val isNextFocused by nextBtnInteraction.collectIsFocusedAsState()
-
-                    Button(
-                        onClick = { stepIndex = 1 },
-                        interactionSource = nextBtnInteraction,
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isNextFocused) PureWhite else AccentCyan,
-                            contentColor = Slate950
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
-                            .focusRequester(primaryButtonFocusRequester)
-                    ) {
-                        Text(
-                            text = tutorial.nextLabel,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Black
-                        )
-                    }
-                } else {
-                    // STEPS 1..N: Interactive Tutorial Card in Selected Language
-                    val card = tutorial.cards[(stepIndex - 1).coerceIn(0, tutorial.cards.lastIndex)]
-                    val isLastCard = stepIndex >= tutorial.cards.size
-
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(CircleShape)
-                            .background(AccentCyan.copy(alpha = 0.15f))
-                            .border(1.5.dp, AccentCyan, CircleShape)
-                    ) {
-                        Icon(
-                            imageVector = card.icon,
-                            contentDescription = null,
-                            tint = AccentCyan,
-                            modifier = Modifier.size(34.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(
-                        text = card.title,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Black,
-                        color = PureWhite,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Text(
-                        text = card.description,
-                        fontSize = 14.sp,
-                        color = Slate300,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 20.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Surface(
-                        color = Slate850,
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, AccentCyan.copy(alpha = 0.35f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = "✦ ${card.highlightTip}",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = AccentCyan,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(22.dp))
-
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        OutlinedButton(
-                            onClick = { stepIndex = (stepIndex - 1).coerceAtLeast(0) },
-                            shape = RoundedCornerShape(14.dp),
-                            border = BorderStroke(1.dp, Slate700),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = Slate850,
-                                contentColor = PureWhite
-                            ),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(48.dp)
+                XmlPullParser.END_TAG -> {
+                    if (parser.name == "programme" && insideProgramme) {
+                        if (currentChannelId.isNotEmpty() &&
+                            currentTitle.isNotEmpty() &&
+                            currentEndMs > minKeepMs &&
+                            currentStartMs < maxKeepMs
                         ) {
-                            Text(
-                                text = tutorial.backLabel,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
+                            val list = tempMap.getOrPut(currentChannelId) { ArrayList() }
+                            list.add(
+                                EpgProgram(
+                                    channelId = currentChannelId,
+                                    title = currentTitle,
+                                    description = currentDesc,
+                                    startTimeMs = currentStartMs,
+                                    endTimeMs = currentEndMs
+                                )
                             )
                         }
-
-                        val actionInteraction = remember { MutableInteractionSource() }
-                        val isActionFocused by actionInteraction.collectIsFocusedAsState()
-
-                        Button(
-                            onClick = {
-                                if (isLastCard) onComplete() else stepIndex++
-                            },
-                            interactionSource = actionInteraction,
-                            shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isActionFocused) PureWhite else AccentCyan,
-                                contentColor = Slate950
-                            ),
-                            modifier = Modifier
-                                .weight(1.4f)
-                                .height(48.dp)
-                                .focusRequester(primaryButtonFocusRequester)
-                        ) {
-                            Text(
-                                text = if (isLastCard) tutorial.startLabel else tutorial.nextLabel,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Black
-                            )
-                        }
+                        insideProgramme = false
                     }
                 }
             }
+            eventType = parser.next()
+        }
+
+        tempMap.values.forEach { list -> list.sortBy { it.startTimeMs } }
+        return tempMap
+    }
+
+    private fun parseXmltvDate(raw: String?): Long {
+        if (raw.isNullOrBlank()) return 0L
+        return try {
+            val cleaned = raw.trim()
+            val pattern = if (cleaned.contains(" ")) "yyyyMMddHHmmss Z" else "yyyyMMddHHmmss"
+            val sdf = SimpleDateFormat(pattern, Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
+            sdf.parse(cleaned)?.time ?: 0L
+        } catch (_: Exception) {
+            0L
         }
     }
 }
 
+// =========================================================================
+// Full EPG TV Guide Grid Screen (Embedded here for single-file editing)
+// =========================================================================
+
+private val DP_PER_MINUTE = 3.2.dp
+private val CHANNEL_COLUMN_WIDTH = 168.dp
+private val ROW_HEIGHT = 64.dp
+
 @Composable
-fun WatchHistoryScreen(
-    items: List<IptvItem>,
-    onPlayItem: (IptvItem) -> Unit,
-    onRemoveItem: (String) -> Unit,
-    onClearAll: () -> Unit,
+fun EpgGuideScreen(
+    channels: List<IptvItem>,
+    categories: List<CategoryInfo>,
+    onPlayChannel: (IptvItem) -> Unit,
     onBack: () -> Unit
 ) {
     val strings = LocalAppStrings.current
-    val isAr = LocalAppLanguage.current == "ar"
-    var selectedFilter by remember { mutableStateOf("ALL") }
+    val currentLanguage = LocalAppLanguage.current
+    val isAr = currentLanguage == "ar"
+    val density = LocalDensity.current
+    val coroutineScope = rememberCoroutineScope()
 
-    val vodItems = remember(items) {
-        items.filter { it.type != IptvType.LIVE_TV }
-    }
+    var selectedCategory by remember { mutableStateOf("All") }
+    var searchQuery by remember { mutableStateOf("") }
+    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
-    val filteredItems = remember(vodItems, selectedFilter) {
-        when (selectedFilter) {
-            "MOVIES" -> vodItems.filter { it.type == IptvType.MOVIE }
-            "SERIES" -> vodItems.filter { it.type == IptvType.SERIES }
-            else -> vodItems
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000L)
+            nowMs = System.currentTimeMillis()
         }
     }
 
-    val filterTabs = listOf(
-        "ALL" to "${strings.all} (${vodItems.size})",
-        "SERIES" to strings.series,
-        "MOVIES" to strings.movies
-    )
+    val timelineStartMs = remember {
+        Calendar.getInstance().apply {
+            add(Calendar.HOUR_OF_DAY, -2)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+    val totalTimelineMinutes = 16 * 60
+    val timelineEndMs = timelineStartMs + (totalTimelineMinutes * 60_000L)
+    val totalTimelineWidth: Dp = DP_PER_MINUTE * totalTimelineMinutes
+
+    val timelineScrollState = rememberScrollState()
+
+    val jumpToNow: suspend () -> Unit = {
+        val minutesFromStart = ((System.currentTimeMillis() - timelineStartMs) / 60_000f)
+            .coerceIn(0f, totalTimelineMinutes.toFloat())
+        val targetDp = (DP_PER_MINUTE * minutesFromStart) - 80.dp
+        val targetPx = with(density) { targetDp.coerceAtLeast(0.dp).toPx().toInt() }
+        timelineScrollState.animateScrollTo(targetPx)
+    }
+
+    LaunchedEffect(Unit) {
+        delay(120L)
+        jumpToNow()
+    }
+
+    val filteredChannels = remember(channels, selectedCategory, searchQuery) {
+        channels.filter { item ->
+            val matchesCat = when {
+                selectedCategory.equals("All", true) -> true
+                selectedCategory.equals("Favorites", true) -> item.isFavorite
+                else -> item.group == selectedCategory
+            }
+            val matchesQuery = searchQuery.isBlank() ||
+                item.name.contains(searchQuery, ignoreCase = true)
+            matchesCat && matchesQuery
+        }.take(250)
+    }
+
+    var focusedChannel by remember { mutableStateOf<IptvItem?>(null) }
+    var focusedProgram by remember { mutableStateOf<EpgProgram?>(null) }
+
+    LaunchedEffect(filteredChannels) {
+        if (focusedChannel == null && filteredChannels.isNotEmpty()) {
+            val first = filteredChannels.first()
+            focusedChannel = first
+            focusedProgram = EpgManager.getNowAndNext(first.epgChannelId).now
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -1726,111 +394,220 @@ fun WatchHistoryScreen(
             .background(Slate950)
     ) {
         Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Slate850)
-                        .border(1.dp, Slate700, CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = strings.back,
-                        tint = PureWhite
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Slate850)
+                    .border(1.dp, Slate700, CircleShape)
+            ) {
                 Icon(
-                    imageVector = Icons.Default.History,
-                    contentDescription = null,
-                    tint = AccentCyan,
-                    modifier = Modifier.size(22.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = strings.historyTitle,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Black,
-                    color = PureWhite
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = strings.back,
+                    tint = PureWhite
                 )
             }
 
-            if (vodItems.isNotEmpty()) {
-                OutlinedButton(
-                    onClick = onClearAll,
-                    border = BorderStroke(1.dp, AccentRed),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentRed),
-                    shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
+            Icon(
+                imageVector = Icons.Default.DateRange,
+                contentDescription = null,
+                tint = AccentCyan,
+                modifier = Modifier.size(22.dp)
+            )
+
+            Text(
+                text = if (isAr) "دليل البرامج (EPG)" else "TV Guide (EPG)",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Black,
+                color = PureWhite
+            )
+
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                singleLine = true,
+                placeholder = {
                     Text(
-                        text = if (isAr) "مسح الكل" else "Clear All",
+                        text = if (isAr) "ابحث عن قناة..." else "Filter channels...",
                         fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
+                        color = Slate400,
+                        maxLines = 1
                     )
-                }
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        tint = Slate400,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(
+                            onClick = { searchQuery = "" },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Clear,
+                                contentDescription = "Clear",
+                                tint = Slate400,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                },
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = AccentCyan,
+                    unfocusedBorderColor = Slate700,
+                    focusedContainerColor = Slate900,
+                    unfocusedContainerColor = Slate900,
+                    focusedTextColor = PureWhite,
+                    unfocusedTextColor = PureWhite
+                ),
+                modifier = Modifier.weight(1f)
+            )
+
+            Button(
+                onClick = { coroutineScope.launch { jumpToNow() } },
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AccentCyan,
+                    contentColor = Slate950
+                ),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Schedule,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (isAr) "الآن" else "Now",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Black
+                )
             }
         }
+
+        SelectedProgramBanner(
+            channel = focusedChannel,
+            program = focusedProgram,
+            nowMs = nowMs,
+            isAr = isAr,
+            onWatchChannel = { ch -> onPlayChannel(ch) }
+        )
 
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(filterTabs) { (key, label) ->
-                val isSelected = selectedFilter == key
-                Surface(
-                    onClick = { selectedFilter = key },
-                    color = if (isSelected) AccentCyan else Slate850,
-                    shape = RoundedCornerShape(10.dp),
-                    border = BorderStroke(1.dp, if (isSelected) PureWhite else Slate700)
-                ) {
-                    Text(
-                        text = label,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isSelected) Slate950 else Slate300,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
-                    )
+            item(key = "epg_cat_all") {
+                EpgCategoryChip(
+                    label = "${strings.all} (${channels.size})",
+                    isSelected = selectedCategory == "All",
+                    onClick = { selectedCategory = "All" }
+                )
+            }
+            item(key = "epg_cat_fav") {
+                EpgCategoryChip(
+                    label = strings.favorites,
+                    isSelected = selectedCategory == "Favorites",
+                    onClick = { selectedCategory = "Favorites" }
+                )
+            }
+            items(categories, key = { it.id }) { cat ->
+                val translated = remember(cat.name, currentLanguage) {
+                    CategoryTranslator.translateForLanguage(cat.name, currentLanguage)
                 }
+                EpgCategoryChip(
+                    label = translated,
+                    isSelected = selectedCategory == cat.name,
+                    onClick = { selectedCategory = cat.name }
+                )
             }
         }
 
-        if (filteredItems.isEmpty()) {
+        if (filteredChannels.isEmpty()) {
             Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.fillMaxSize()
             ) {
                 Text(
-                    text = if (isAr) "لا يوجد سجل مشاهدة للأفلام أو المسلسلات بعد" else "No movie or series watch history yet",
+                    text = if (isAr) "لا توجد قنوات مطابقة" else "No matching channels found",
                     color = Slate400,
                     fontSize = 15.sp
                 )
             }
         } else {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 145.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                items(filteredItems, key = { "${it.id}_${it.streamUrl}" }) { item ->
-                    HistoryPosterCard(
-                        item = item,
-                        isAr = isAr,
-                        onClick = { onPlayItem(item) },
-                        onRemove = { onRemoveItem(item.id) }
-                    )
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(38.dp)
+                            .background(Slate900)
+                            .border(BorderStroke(1.dp, Slate800))
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.CenterStart,
+                            modifier = Modifier
+                                .width(CHANNEL_COLUMN_WIDTH)
+                                .fillMaxHeight()
+                                .padding(horizontal = 12.dp)
+                                .border(BorderStroke(1.dp, Slate800))
+                        ) {
+                            Text(
+                                text = if (isAr) "القنوات (${filteredChannels.size})" else "Channels (${filteredChannels.size})",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = AccentCyan
+                            )
+                        }
+
+                        TimeRulerHeader(
+                            timelineStartMs = timelineStartMs,
+                            totalMinutes = totalTimelineMinutes,
+                            totalWidth = totalTimelineWidth,
+                            nowMs = nowMs,
+                            scrollState = timelineScrollState
+                        )
+                    }
+
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 80.dp)
+                    ) {
+                        itemsIndexed(
+                            items = filteredChannels,
+                            key = { idx, item -> "epg_${item.id}_$idx" }
+                        ) { index, channel ->
+                            EpgChannelRow(
+                                index = index + 1,
+                                channel = channel,
+                                timelineStartMs = timelineStartMs,
+                                timelineEndMs = timelineEndMs,
+                                totalTimelineWidth = totalTimelineWidth,
+                                nowMs = nowMs,
+                                isAr = isAr,
+                                scrollState = timelineScrollState,
+                                onProgramFocused = { prog ->
+                                    focusedChannel = channel
+                                    focusedProgram = prog
+                                },
+                                onSelectChannel = { onPlayChannel(channel) }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1838,747 +615,427 @@ fun WatchHistoryScreen(
 }
 
 @Composable
-fun HistoryPosterCard(
-    item: IptvItem,
+private fun SelectedProgramBanner(
+    channel: IptvItem?,
+    program: EpgProgram?,
+    nowMs: Long,
     isAr: Boolean,
-    onClick: () -> Unit,
-    onRemove: () -> Unit
+    onWatchChannel: (IptvItem) -> Unit
 ) {
-    val cardInteraction = remember { MutableInteractionSource() }
-    val isCardFocused by cardInteraction.collectIsFocusedAsState()
-
-    val scale by animateFloatAsState(
-        targetValue = if (isCardFocused) 1.05f else 1f,
-        animationSpec = spring(dampingRatio = 0.75f, stiffness = 400f),
-        label = "historyPosterScale"
-    )
-
-    val isSeries = item.type == IptvType.SERIES
-    val badgeText = if (isSeries) {
-        if (isAr) "مسلسل" else "SERIES"
-    } else {
-        if (isAr) "فيلم" else "MOVIE"
-    }
-    val badgeColor = if (isSeries) Color(0xFF0284C7) else Color(0xFF7C3AED)
-
-    Card(
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Slate900),
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(2f / 3f)
-            .scale(scale)
-            .shadow(
-                elevation = if (isCardFocused) 14.dp else 4.dp,
-                shape = RoundedCornerShape(14.dp),
-                spotColor = if (isCardFocused) AccentCyan else Color.Transparent
-            )
-            .clip(RoundedCornerShape(14.dp))
-            .border(
-                width = if (isCardFocused) 3.dp else 1.dp,
-                color = if (isCardFocused) AccentCyan else Slate800,
-                shape = RoundedCornerShape(14.dp)
-            )
-            .focusable(interactionSource = cardInteraction)
-            .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyUp &&
-                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                ) {
-                    onClick()
-                    true
-                } else false
-            }
-            .clickable(interactionSource = cardInteraction, indication = null, onClick = onClick)
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            if (!item.logoUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = item.logoUrl,
-                    contentDescription = item.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(Slate800, Slate900, Slate950)
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (isSeries) Icons.Default.VideoLibrary else Icons.Default.Movie,
-                        contentDescription = null,
-                        tint = Slate400,
-                        modifier = Modifier.size(42.dp)
-                    )
-                }
-            }
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0x44000000),
-                                Color.Transparent,
-                                Color(0xCC060A12),
-                                Color(0xF5060A12)
-                            )
-                        )
-                    )
-            )
-
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(8.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(badgeColor.copy(alpha = 0.92f))
-                    .padding(horizontal = 7.dp, vertical = 3.dp)
-            ) {
-                Text(
-                    text = badgeText,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Black,
-                    color = PureWhite,
-                    letterSpacing = 0.5.sp
-                )
-            }
-
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(6.dp)
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xAA000000))
-                    .clickable(onClick = onRemove)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Remove",
-                    tint = PureWhite,
-                    modifier = Modifier.size(15.dp)
-                )
-            }
-
-            if (isCardFocused) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(AccentCyan)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        tint = Slate950,
-                        modifier = Modifier.size(26.dp)
-                    )
-                }
-            }
-
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .padding(10.dp)
-            ) {
-                Text(
-                    text = item.name,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = PureWhite,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    lineHeight = 16.sp
-                )
-                Spacer(modifier = Modifier.height(3.dp))
-                Text(
-                    text = item.group,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = AccentCyan,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun HypnoOrbitalSplashOverlay(
-    isAr: Boolean,
-    statusMessage: String?,
-    totalLoadedItems: Int
-) {
-    val infiniteTransition = rememberInfiniteTransition(label = "hypnoSplash")
-
-    val orbitAngle by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = 1850,
-                easing = CubicBezierEasing(0.35f, 0.0f, 0.25f, 1.0f)
-            ),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "orbitRotation"
-    )
-
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.94f,
-        targetValue = 1.06f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseScale"
-    )
-
-    val barPhase by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 3f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1500, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "barPhase"
-    )
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(
-                        Color(0xFF071A3E),
-                        Color(0xFF030917),
-                        Color(0xFF000000)
-                    ),
-                    radius = 950f
-                )
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(horizontal = 32.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(210.dp)
-                    .clip(RoundedCornerShape(46.dp))
-                    .background(
-                        Brush.linearGradient(
-                            colors = listOf(
-                                Color(0xFF071C44),
-                                Color(0xFF030B1B),
-                                Color(0xFF051533)
-                            )
-                        )
-                    )
-                    .border(
-                        width = 2.dp,
-                        brush = Brush.linearGradient(
-                            colors = listOf(
-                                Color(0xFF00E5FF),
-                                Color(0xFF1D4ED8),
-                                Color(0xFF00E5FF)
-                            )
-                        ),
-                        shape = RoundedCornerShape(46.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Canvas(modifier = Modifier.size(170.dp)) {
-                    val w = size.width
-                    val h = size.height
-                    val cx = w / 2f
-                    val cy = h / 2f
-                    val normalizedDeg = ((orbitAngle % 360f) + 360f) % 360f
-
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0x4400E5FF),
-                                Color.Transparent
-                            ),
-                            center = Offset(cx, cy),
-                            radius = w * 0.55f
-                        ),
-                        radius = w * 0.55f,
-                        center = Offset(cx, cy)
-                    )
-
-                    rotate(degrees = -18f, pivot = Offset(cx, cy)) {
-                        val ovalTopLeft = Offset(w * 0.04f, h * 0.30f)
-                        val ovalSize = Size(w * 0.92f, h * 0.40f)
-                        val rx = ovalSize.width / 2f
-                        val ry = ovalSize.height / 2f
-
-                        drawArc(
-                            color = Color(0xFF0284C7).copy(alpha = 0.55f),
-                            startAngle = 180f,
-                            sweepAngle = 180f,
-                            useCenter = false,
-                            topLeft = ovalTopLeft,
-                            size = ovalSize,
-                            style = Stroke(width = 7.dp.toPx(), cap = StrokeCap.Round)
-                        )
-
-                        for (i in 0..14) {
-                            val trailDeg = ((normalizedDeg - i * 3.5f) + 360f) % 360f
-                            if (trailDeg > 180f && trailDeg < 360f) {
-                                val rad = Math.toRadians(trailDeg.toDouble())
-                                val dotX = cx + rx * cos(rad).toFloat()
-                                val dotY = cy + ry * sin(rad).toFloat()
-                                val fraction = 1f - (i / 15f)
-                                drawCircle(
-                                    color = Color.White.copy(alpha = 0.70f * fraction),
-                                    radius = 3.2.dp.toPx() * fraction,
-                                    center = Offset(dotX, dotY)
-                                )
-                            }
-                        }
-                    }
-
-                    val tvWidth = w * 0.62f
-                    val tvHeight = h * 0.48f
-                    val tvLeft = cx - (tvWidth / 2f)
-                    val tvTop = cy - (tvHeight / 2f) - 6.dp.toPx()
-
-                    drawRoundRect(
-                        color = Color(0xFF020712),
-                        topLeft = Offset(tvLeft, tvTop),
-                        size = Size(tvWidth, tvHeight),
-                        cornerRadius = CornerRadius(14.dp.toPx(), 14.dp.toPx())
-                    )
-
-                    drawRoundRect(
-                        brush = Brush.linearGradient(
-                            colors = listOf(Color(0xFF00E5FF), Color(0xFF2979FF), Color(0xFF00E5FF))
-                        ),
-                        topLeft = Offset(tvLeft, tvTop),
-                        size = Size(tvWidth, tvHeight),
-                        cornerRadius = CornerRadius(14.dp.toPx(), 14.dp.toPx()),
-                        style = Stroke(width = 5.5.dp.toPx())
-                    )
-
-                    val barY = tvTop + 13.dp.toPx()
-                    val barWidth = tvWidth * 0.22f
-                    val barSpacing = tvWidth * 0.06f
-                    val startX = cx - ((barWidth * 3 + barSpacing * 2) / 2f)
-
-                    val redAlpha = if (barPhase.toInt() == 0) 1f else 0.72f
-                    val purpleAlpha = if (barPhase.toInt() == 1) 1f else 0.72f
-                    val cyanAlpha = if (barPhase.toInt() == 2) 1f else 0.72f
-
-                    drawLine(
-                        color = Color(0xFFFF2A54).copy(alpha = redAlpha),
-                        start = Offset(startX, barY),
-                        end = Offset(startX + barWidth, barY),
-                        strokeWidth = 6.dp.toPx(),
-                        cap = StrokeCap.Round
-                    )
-                    drawLine(
-                        color = Color(0xFF8B5CF6).copy(alpha = purpleAlpha),
-                        start = Offset(startX + barWidth + barSpacing, barY),
-                        end = Offset(startX + barWidth * 2 + barSpacing, barY),
-                        strokeWidth = 6.dp.toPx(),
-                        cap = StrokeCap.Round
-                    )
-                    drawLine(
-                        color = Color(0xFF00E5FF).copy(alpha = cyanAlpha),
-                        start = Offset(startX + (barWidth + barSpacing) * 2, barY),
-                        end = Offset(startX + barWidth * 3 + barSpacing * 2, barY),
-                        strokeWidth = 6.dp.toPx(),
-                        cap = StrokeCap.Round
-                    )
-
-                    val playCenterY = tvTop + (tvHeight * 0.58f)
-                    scale(scale = pulseScale, pivot = Offset(cx, playCenterY)) {
-                        val triSize = 24.dp.toPx()
-                        val playPath = Path().apply {
-                            moveTo(cx - triSize * 0.42f, playCenterY - triSize * 0.52f)
-                            lineTo(cx - triSize * 0.42f, playCenterY + triSize * 0.52f)
-                            lineTo(cx + triSize * 0.58f, playCenterY)
-                            close()
-                        }
-                        drawPath(
-                            path = playPath,
-                            brush = Brush.linearGradient(
-                                colors = listOf(Color.White, Color(0xFF80D8FF))
-                            )
-                        )
-                        drawPath(
-                            path = playPath,
-                            color = Color(0xFF00E5FF),
-                            style = Stroke(width = 1.5.dp.toPx(), join = StrokeJoin.Round)
-                        )
-                    }
-
-                    val standTop = tvTop + tvHeight
-                    val standBottom = standTop + 11.dp.toPx()
-                    drawLine(
-                        color = Color(0xFF00B0FF),
-                        start = Offset(cx, standTop),
-                        end = Offset(cx, standBottom),
-                        strokeWidth = 6.dp.toPx(),
-                        cap = StrokeCap.Round
-                    )
-                    drawLine(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(Color(0xFF2979FF), Color(0xFF00E5FF), Color(0xFF2979FF))
-                        ),
-                        start = Offset(cx - 22.dp.toPx(), standBottom),
-                        end = Offset(cx + 22.dp.toPx(), standBottom),
-                        strokeWidth = 5.5.dp.toPx(),
-                        cap = StrokeCap.Round
-                    )
-
-                    rotate(degrees = -18f, pivot = Offset(cx, cy)) {
-                        val ovalTopLeft = Offset(w * 0.04f, h * 0.30f)
-                        val ovalSize = Size(w * 0.92f, h * 0.40f)
-                        val rx = ovalSize.width / 2f
-                        val ry = ovalSize.height / 2f
-
-                        drawArc(
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(
-                                    Color(0xFF00E5FF),
-                                    Color(0xFF7CE8FF),
-                                    Color(0xFF00B0FF)
-                                )
-                            ),
-                            startAngle = 0f,
-                            sweepAngle = 180f,
-                            useCenter = false,
-                            topLeft = ovalTopLeft,
-                            size = ovalSize,
-                            style = Stroke(width = 8.5.dp.toPx(), cap = StrokeCap.Round)
-                        )
-
-                        for (i in 0..16) {
-                            val trailDeg = ((normalizedDeg - i * 3.5f) + 360f) % 360f
-                            if (trailDeg in 0f..180f) {
-                                val rad = Math.toRadians(trailDeg.toDouble())
-                                val dotX = cx + rx * cos(rad).toFloat()
-                                val dotY = cy + ry * sin(rad).toFloat()
-                                val fraction = 1f - (i / 17f)
-
-                                drawCircle(
-                                    color = Color(0xFF00E5FF).copy(alpha = 0.45f * fraction),
-                                    radius = 6.5.dp.toPx() * fraction,
-                                    center = Offset(dotX, dotY)
-                                )
-                                drawCircle(
-                                    color = Color.White.copy(alpha = fraction),
-                                    radius = 3.8.dp.toPx() * fraction,
-                                    center = Offset(dotX, dotY)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            Text(
-                text = buildAnnotatedString {
-                    withStyle(SpanStyle(color = PureWhite, fontWeight = FontWeight.Black)) {
-                        append("Hypno")
-                    }
-                    withStyle(SpanStyle(color = Color(0xFF00E5FF), fontWeight = FontWeight.Black)) {
-                        append("Stream")
-                    }
-                },
-                fontSize = 34.sp,
-                letterSpacing = 0.5.sp
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            val displayStatus = when {
-                totalLoadedItems > 0 -> if (isAr) {
-                    "تم تجهيز %,d قناة وفيلم ومسلسل...".format(totalLoadedItems)
-                } else {
-                    "Ready! Loaded %,d channels, movies & series...".format(totalLoadedItems)
-                }
-                !statusMessage.isNullOrBlank() -> statusMessage
-                else -> if (isAr) {
-                    "جاري الاتصال وتجهيز قنواتك..."
-                } else {
-                    "Connecting & preparing your entertainment..."
-                }
-            }
-
-            Text(
-                text = displayStatus,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                color = Slate300,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            LinearProgressIndicator(
-                color = Color(0xFF00E5FF),
-                trackColor = Slate800,
-                modifier = Modifier
-                    .width(190.dp)
-                    .height(5.dp)
-                    .clip(RoundedCornerShape(3.dp))
-            )
-        }
-    }
-}
-
-@OptIn(UnstableApi::class)
-@Composable
-fun MiniPlayerBar(
-    playerManager: ExoPlayerManager,
-    item: IptvItem,
-    isPlaying: Boolean,
-    isCompact: Boolean = false,
-    onExpand: () -> Unit,
-    onTogglePlayPause: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    val barInteraction = remember { MutableInteractionSource() }
-    val isBarFocused by barInteraction.collectIsFocusedAsState()
-    val playBtnInteraction = remember { MutableInteractionSource() }
-    val isPlayBtnFocused by playBtnInteraction.collectIsFocusedAsState()
-    val closeBtnInteraction = remember { MutableInteractionSource() }
-    val isCloseBtnFocused by closeBtnInteraction.collectIsFocusedAsState()
-
-    val strings = LocalAppStrings.current
-    val isAr = LocalAppLanguage.current == "ar"
-
-    val previewWidth = if (isCompact) 112.dp else 124.dp
-    val previewHeight = if (isCompact) 62.dp else 70.dp
+    if (channel == null) return
 
     Surface(
-        color = if (isBarFocused) Slate800 else Slate900,
-        shape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp),
-        border = BorderStroke(
-            width = if (isBarFocused) 2.dp else 1.dp,
-            color = if (isBarFocused) AccentCyan else Slate700
-        ),
+        color = Slate900,
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, AccentCyan.copy(alpha = 0.35f)),
         modifier = Modifier
             .fillMaxWidth()
-            .testTag("mini_player_bar")
+            .padding(horizontal = 14.dp, vertical = 2.dp)
     ) {
         Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = if (isCompact) 6.dp else 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .weight(1f)
-                    .focusable(interactionSource = barInteraction)
-                    .onPreviewKeyEvent { event ->
-                        if (event.type == KeyEventType.KeyUp &&
-                            (event.key == Key.DirectionCenter ||
-                             event.key == Key.Enter ||
-                             event.key == Key.NumPadEnter)
-                        ) {
-                            onExpand()
-                            true
-                        } else false
-                    }
-                    .clickable(interactionSource = barInteraction, indication = null, onClick = onExpand)
+            Column(
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+                modifier = Modifier.weight(1f)
             ) {
-                Box(
-                    modifier = Modifier
-                        .width(previewWidth)
-                        .height(previewHeight)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color.Black)
-                        .border(1.5.dp, AccentCyan.copy(alpha = 0.7f), RoundedCornerShape(10.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    AndroidView(
-                        modifier = Modifier.fillMaxSize(),
-                        factory = { ctx ->
-                            PlayerView(ctx).apply {
-                                player = playerManager.player
-                                useController = false
-                                isFocusable = false
-                                isFocusableInTouchMode = false
-                                keepScreenOn = true
-                                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                                layoutParams = FrameLayout.LayoutParams(
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                    ViewGroup.LayoutParams.MATCH_PARENT
-                                )
-                            }
-                        },
-                        update = { playerView ->
-                            playerView.keepScreenOn = true
-                            if (playerView.player !== playerManager.player) {
-                                playerView.player = playerManager.player
-                            }
-                        }
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(4.dp)
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(if (isPlaying) AccentRed else Slate400)
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(3.dp)
-                            .size(18.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xAA000000)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Fullscreen,
-                            contentDescription = "Expand",
-                            tint = PureWhite,
-                            modifier = Modifier.size(13.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = item.name,
-                        fontSize = if (isCompact) 13.sp else 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = PureWhite,
+                        text = channel.name,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Black,
+                        color = AccentCyan,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    if (program != null) {
+                        Text(
+                            text = "• ${program.formattedTimeRange()}",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Slate300
+                        )
+                        if (program.isLiveAt(nowMs)) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(AccentRed)
+                                    .padding(horizontal = 6.dp, vertical = 1.dp)
+                            ) {
+                                Text(
+                                    text = if (isAr) "مباشر" else "LIVE",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = PureWhite
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Text(
+                    text = program?.title ?: (if (isAr) "لا يوجد وصف متاح للبرنامج الحالي" else "No program information available"),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PureWhite,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                if (!program?.description.isNullOrBlank()) {
                     Text(
-                        text = "${strings.nowPlaying} • ${item.group}",
+                        text = program!!.description,
                         fontSize = 11.sp,
-                        color = AccentCyan,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 2.dp)
-                    )
-                    Text(
-                        text = if (isAr) "اضغط للتكبير ملء الشاشة" else "Tap video to expand fullscreen",
-                        fontSize = 9.sp,
                         color = Slate400,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                if (program != null && program.isLiveAt(nowMs)) {
+                    LinearProgressIndicator(
+                        progress = { program.progressFraction(nowMs) },
+                        color = AccentCyan,
+                        trackColor = Slate800,
+                        modifier = Modifier
+                            .fillMaxWidth(0.65f)
+                            .height(3.dp)
+                            .clip(CircleShape)
                     )
                 }
             }
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            Button(
+                onClick = { onWatchChannel(channel) },
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Slate850,
+                    contentColor = AccentCyan
+                ),
+                border = BorderStroke(1.dp, AccentCyan.copy(alpha = 0.6f)),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
             ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(if (isPlayBtnFocused) PureWhite else AccentCyan)
-                        .border(
-                            width = if (isPlayBtnFocused) 2.5.dp else 0.dp,
-                            color = PureWhite,
-                            shape = CircleShape
-                        )
-                        .focusable(interactionSource = playBtnInteraction)
-                        .onPreviewKeyEvent { event ->
-                            if (event.type == KeyEventType.KeyUp &&
-                                (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                            ) {
-                                onTogglePlayPause()
-                                true
-                            } else false
-                        }
-                        .clickable(interactionSource = playBtnInteraction, indication = null, onClick = onTogglePlayPause)
-                        .testTag("btn_mini_player_play_pause")
-                ) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "Pause" else "Play",
-                        tint = Slate950,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(if (isCloseBtnFocused) AccentCyan else Slate800)
-                        .border(
-                            width = if (isCloseBtnFocused) 2.dp else 1.dp,
-                            color = if (isCloseBtnFocused) PureWhite else Slate700,
-                            shape = CircleShape
-                        )
-                        .focusable(interactionSource = closeBtnInteraction)
-                        .onPreviewKeyEvent { event ->
-                            if (event.type == KeyEventType.KeyUp &&
-                                (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                            ) {
-                                onDismiss()
-                                true
-                            } else false
-                        }
-                        .clickable(interactionSource = closeBtnInteraction, indication = null, onClick = onDismiss)
-                        .testTag("btn_mini_player_dismiss")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close Mini Player",
-                        tint = if (isCloseBtnFocused) Slate950 else PureWhite,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = if (isAr) "مشاهدة" else "Watch",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }
 }
 
 @Composable
-private fun navigationBarItemColors() = NavigationBarItemDefaults.colors(
-    selectedIconColor = AccentCyan,
-    selectedTextColor = AccentCyan,
-    unselectedIconColor = Slate400,
-    unselectedTextColor = Slate400,
-    indicatorColor = Slate800
-)
+private fun TimeRulerHeader(
+    timelineStartMs: Long,
+    totalMinutes: Int,
+    totalWidth: Dp,
+    nowMs: Long,
+    scrollState: ScrollState
+) {
+    val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.US) }
+    val slotCount = totalMinutes / 30
+    val slotWidth = DP_PER_MINUTE * 30
+
+    val nowOffsetMinutes = ((nowMs - timelineStartMs) / 60_000f).coerceIn(0f, totalMinutes.toFloat())
+    val nowOffsetDp = DP_PER_MINUTE * nowOffsetMinutes
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .horizontalScroll(scrollState)
+    ) {
+        Row(modifier = Modifier.width(totalWidth).fillMaxHeight()) {
+            for (slot in 0 until slotCount) {
+                val slotTimeMs = timelineStartMs + (slot * 30 * 60_000L)
+                Box(
+                    contentAlignment = Alignment.CenterStart,
+                    modifier = Modifier
+                        .width(slotWidth)
+                        .fillMaxHeight()
+                        .border(BorderStroke(0.5.dp, Slate800))
+                        .padding(start = 8.dp)
+                ) {
+                    Text(
+                        text = timeFormat.format(slotTimeMs),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Slate300
+                    )
+                }
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .offset(x = nowOffsetDp)
+                .width(2.dp)
+                .fillMaxHeight()
+                .background(AccentRed)
+        )
+    }
+}
 
 @Composable
-private fun navigationRailItemColors() = NavigationRailItemDefaults.colors(
-    selectedIconColor = AccentCyan,
-    selectedTextColor = AccentCyan,
-    unselectedIconColor = Slate400,
-    unselectedTextColor = Slate400,
-    indicatorColor = Slate800
-)
+private fun EpgChannelRow(
+    index: Int,
+    channel: IptvItem,
+    timelineStartMs: Long,
+    timelineEndMs: Long,
+    totalTimelineWidth: Dp,
+    nowMs: Long,
+    isAr: Boolean,
+    scrollState: ScrollState,
+    onProgramFocused: (EpgProgram?) -> Unit,
+    onSelectChannel: () -> Unit
+) {
+    val programs = remember(channel.epgChannelId, timelineStartMs, timelineEndMs) {
+        EpgManager.getChannelSchedule(channel.epgChannelId).filter { prog ->
+            prog.endTimeMs > timelineStartMs && prog.startTimeMs < timelineEndMs
+        }
+    }
+
+    val channelInteraction = remember { MutableInteractionSource() }
+    val isChannelFocused by channelInteraction.collectIsFocusedAsState()
+
+    val nowOffsetMinutes = ((nowMs - timelineStartMs) / 60_000f)
+        .coerceIn(0f, ((timelineEndMs - timelineStartMs) / 60_000f))
+    val nowOffsetDp = DP_PER_MINUTE * nowOffsetMinutes
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(ROW_HEIGHT)
+            .border(BorderStroke(0.5.dp, Slate800))
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .width(CHANNEL_COLUMN_WIDTH)
+                .fillMaxHeight()
+                .background(if (isChannelFocused) AccentCyan.copy(alpha = 0.22f) else Slate900)
+                .border(
+                    width = if (isChannelFocused) 2.dp else 0.5.dp,
+                    color = if (isChannelFocused) AccentCyan else Slate800
+                )
+                .onFocusChanged { if (it.isFocused) onProgramFocused(programs.firstOrNull { p -> p.isLiveAt(nowMs) }) }
+                .focusable(interactionSource = channelInteraction)
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyUp &&
+                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                    ) {
+                        onSelectChannel()
+                        true
+                    } else false
+                }
+                .clickable(interactionSource = channelInteraction, indication = null, onClick = onSelectChannel)
+                .padding(horizontal = 8.dp)
+        ) {
+            Text(
+                text = "$index",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = Slate400
+            )
+
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Slate850)
+            ) {
+                if (!channel.logoUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = channel.logoUrl,
+                        contentDescription = channel.name,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(3.dp)
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.LiveTv,
+                        contentDescription = null,
+                        tint = Slate400,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            Text(
+                text = channel.name,
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isChannelFocused) AccentCyan else PureWhite,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                lineHeight = 14.sp,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .horizontalScroll(scrollState)
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(totalTimelineWidth)
+                    .fillMaxHeight()
+                    .background(Slate950)
+            ) {
+                if (programs.isEmpty()) {
+                    val emptyInteraction = remember { MutableInteractionSource() }
+                    val isEmptyFocused by emptyInteraction.collectIsFocusedAsState()
+
+                    Box(
+                        contentAlignment = Alignment.CenterStart,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(if (isEmptyFocused) Slate850 else Slate950)
+                            .border(
+                                width = if (isEmptyFocused) 2.dp else 0.5.dp,
+                                color = if (isEmptyFocused) AccentCyan else Slate800
+                            )
+                            .onFocusChanged { if (it.isFocused) onProgramFocused(null) }
+                            .focusable(interactionSource = emptyInteraction)
+                            .onPreviewKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyUp &&
+                                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                ) {
+                                    onSelectChannel()
+                                    true
+                                } else false
+                            }
+                            .clickable(interactionSource = emptyInteraction, indication = null, onClick = onSelectChannel)
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        Text(
+                            text = if (isAr) "لا تتوفر بيانات جدول البرامج • اضغط للتشغيل المباشر" else "No EPG data available • Select to watch live",
+                            fontSize = 11.5.sp,
+                            color = if (isEmptyFocused) AccentCyan else Slate400
+                        )
+                    }
+                } else {
+                    programs.forEach { prog ->
+                        val clampedStart = prog.startTimeMs.coerceAtLeast(timelineStartMs)
+                        val clampedEnd = prog.endTimeMs.coerceAtMost(timelineEndMs)
+                        val offsetMinutes = ((clampedStart - timelineStartMs) / 60_000f).coerceAtLeast(0f)
+                        val durationMinutes = ((clampedEnd - clampedStart) / 60_000f).coerceAtLeast(5f)
+
+                        val startOffsetDp = DP_PER_MINUTE * offsetMinutes
+                        val blockWidthDp = DP_PER_MINUTE * durationMinutes
+                        val isLiveNow = prog.isLiveAt(nowMs)
+
+                        val progInteraction = remember { MutableInteractionSource() }
+                        val isProgFocused by progInteraction.collectIsFocusedAsState()
+
+                        Box(
+                            modifier = Modifier
+                                .offset(x = startOffsetDp)
+                                .width(blockWidthDp)
+                                .fillMaxHeight()
+                                .padding(1.5.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    when {
+                                        isProgFocused -> AccentCyan.copy(alpha = 0.28f)
+                                        isLiveNow -> Color(0xFF0E2942)
+                                        else -> Slate900
+                                    }
+                                )
+                                .border(
+                                    width = if (isProgFocused) 2.dp else 1.dp,
+                                    color = when {
+                                        isProgFocused -> PureWhite
+                                        isLiveNow -> AccentCyan.copy(alpha = 0.55f)
+                                        else -> Slate800
+                                    },
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                .onFocusChanged { if (it.isFocused) onProgramFocused(prog) }
+                                .focusable(interactionSource = progInteraction)
+                                .onPreviewKeyEvent { event ->
+                                    if (event.type == KeyEventType.KeyUp &&
+                                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                    ) {
+                                        onSelectChannel()
+                                        true
+                                    } else false
+                                }
+                                .clickable(interactionSource = progInteraction, indication = null, onClick = onSelectChannel)
+                                .padding(horizontal = 8.dp, vertical = 6.dp)
+                        ) {
+                            Column(
+                                verticalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                Text(
+                                    text = prog.title,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = if (isLiveNow || isProgFocused) FontWeight.Bold else FontWeight.SemiBold,
+                                    color = if (isLiveNow || isProgFocused) PureWhite else Slate300,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = prog.formattedTimeRange(),
+                                    fontSize = 10.sp,
+                                    color = if (isLiveNow) AccentCyan else Slate400,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .offset(x = nowOffsetDp)
+                        .width(2.dp)
+                        .fillMaxHeight()
+                        .background(AccentRed.copy(alpha = 0.85f))
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun EpgCategoryChip(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        color = if (isSelected) AccentCyan else Slate850,
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, if (isSelected) PureWhite else Slate700)
+    ) {
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = if (isSelected) Slate950 else Slate300,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+        )
+    }
+}
