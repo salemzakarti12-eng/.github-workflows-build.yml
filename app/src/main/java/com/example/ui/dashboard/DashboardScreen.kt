@@ -73,6 +73,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -89,6 +90,7 @@ import com.example.ui.locale.LocalMiniPlayerActive
 import com.example.ui.locale.isRtlLanguage
 import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.AccentEmerald
+import com.example.ui.theme.AccentRed
 import com.example.ui.theme.MoviesGradient
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.SeriesGradient
@@ -104,7 +106,7 @@ import com.example.ui.theme.TvChannelsGradient
 import java.util.Locale
 
 private val HistoryGradient = Brush.linearGradient(
-    colors = listOf(Color(0xFF059669), Color(0xFF0D9488), Color(0xFF0284C7))
+    colors = listOf(Color(0xFF0F172A), Color(0xFF064E3B), Color(0xFF0E7490))
 )
 
 @Composable
@@ -191,15 +193,18 @@ fun DashboardScreen(
                 }
 
                 if (isWideScreen) {
+                    // Asymmetric Bento Layout: Featured Hero Live TV Card + Stacked Movies/Series + Sleek History Bar
                     item {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 6.dp),
+                                .padding(horizontal = 20.dp, vertical = 6.dp),
                             verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(236.dp),
                                 horizontalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
                                 HypnotixGradientCard(
@@ -211,55 +216,66 @@ fun DashboardScreen(
                                     testTag = "card_tv_channels",
                                     badgeText = strings.liveStreamingBadge,
                                     isLandscapeCard = true,
+                                    isHeroCard = true,
+                                    customHeight = 236.dp,
                                     onClick = { onNavigate(Screen.LIVE_CHANNELS) },
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier.weight(1.15f)
                                 )
-                                HypnotixGradientCard(
-                                    title = strings.movies,
-                                    subtitle = strings.moviesSubtitle,
-                                    countText = "%,d %s".format(Locale.US, moviesCount, strings.vodTitles),
-                                    icon = Icons.Default.Movie,
-                                    gradient = MoviesGradient,
-                                    testTag = "card_movies",
-                                    badgeText = strings.cinemaVodBadge,
-                                    isLandscapeCard = true,
-                                    onClick = { onNavigate(Screen.MOVIES) },
-                                    modifier = Modifier.weight(1f)
-                                )
+
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight(),
+                                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
+                                    HypnotixGradientCard(
+                                        title = strings.movies,
+                                        subtitle = strings.moviesSubtitle,
+                                        countText = "%,d %s".format(Locale.US, moviesCount, strings.vodTitles),
+                                        icon = Icons.Default.Movie,
+                                        gradient = MoviesGradient,
+                                        testTag = "card_movies",
+                                        badgeText = strings.cinemaVodBadge,
+                                        isLandscapeCard = true,
+                                        customHeight = 111.dp,
+                                        onClick = { onNavigate(Screen.MOVIES) },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    HypnotixGradientCard(
+                                        title = strings.series,
+                                        subtitle = strings.seriesSubtitle,
+                                        countText = "%,d %s".format(Locale.US, seriesCount, strings.showsCatalog),
+                                        icon = Icons.Default.VideoLibrary,
+                                        gradient = SeriesGradient,
+                                        testTag = "card_series",
+                                        badgeText = strings.episodicTvBadge,
+                                        isLandscapeCard = true,
+                                        customHeight = 111.dp,
+                                        onClick = { onNavigate(Screen.SERIES) },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
                             }
 
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(14.dp)
-                            ) {
-                                HypnotixGradientCard(
-                                    title = strings.series,
-                                    subtitle = strings.seriesSubtitle,
-                                    countText = "%,d %s".format(Locale.US, seriesCount, strings.showsCatalog),
-                                    icon = Icons.Default.VideoLibrary,
-                                    gradient = SeriesGradient,
-                                    testTag = "card_series",
-                                    badgeText = strings.episodicTvBadge,
-                                    isLandscapeCard = true,
-                                    onClick = { onNavigate(Screen.SERIES) },
-                                    modifier = Modifier.weight(1f)
-                                )
-                                HypnotixGradientCard(
-                                    title = historyTitle,
-                                    subtitle = historySubtitle,
-                                    countText = historyCountText,
-                                    icon = Icons.Default.History,
-                                    gradient = HistoryGradient,
-                                    testTag = "card_history",
-                                    badgeText = historyBadge,
-                                    isLandscapeCard = true,
-                                    onClick = { onNavigate(Screen.HISTORY) },
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
+                            HypnotixGradientCard(
+                                title = historyTitle,
+                                subtitle = historySubtitle,
+                                countText = historyCountText,
+                                icon = Icons.Default.History,
+                                gradient = HistoryGradient,
+                                testTag = "card_history",
+                                badgeText = historyBadge,
+                                isLandscapeCard = true,
+                                customHeight = 84.dp,
+                                isCompactStrip = true,
+                                onClick = { onNavigate(Screen.HISTORY) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                     }
                 } else {
+                    // Mobile Portrait Asymmetric Layout: Full Hero Live TV + 2-Column Movies/Series + Sleek History Strip
                     item {
                         HypnotixGradientCard(
                             title = strings.liveTv,
@@ -270,36 +286,47 @@ fun DashboardScreen(
                             testTag = "card_tv_channels",
                             badgeText = strings.liveStreamingBadge,
                             isLandscapeCard = false,
+                            isHeroCard = true,
+                            customHeight = 152.dp,
                             onClick = { onNavigate(Screen.LIVE_CHANNELS) }
                         )
                     }
 
                     item {
-                        HypnotixGradientCard(
-                            title = strings.movies,
-                            subtitle = strings.moviesSubtitle,
-                            countText = "%,d %s".format(Locale.US, moviesCount, strings.vodTitles),
-                            icon = Icons.Default.Movie,
-                            gradient = MoviesGradient,
-                            testTag = "card_movies",
-                            badgeText = strings.cinemaVodBadge,
-                            isLandscapeCard = false,
-                            onClick = { onNavigate(Screen.MOVIES) }
-                        )
-                    }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            HypnotixGradientCard(
+                                title = strings.movies,
+                                subtitle = strings.moviesSubtitle,
+                                countText = "%,d %s".format(Locale.US, moviesCount, strings.vodTitles),
+                                icon = Icons.Default.Movie,
+                                gradient = MoviesGradient,
+                                testTag = "card_movies",
+                                badgeText = strings.cinemaVodBadge,
+                                isLandscapeCard = true,
+                                customHeight = 132.dp,
+                                onClick = { onNavigate(Screen.MOVIES) },
+                                modifier = Modifier.weight(1f)
+                            )
 
-                    item {
-                        HypnotixGradientCard(
-                            title = strings.series,
-                            subtitle = strings.seriesSubtitle,
-                            countText = "%,d %s".format(Locale.US, seriesCount, strings.showsCatalog),
-                            icon = Icons.Default.VideoLibrary,
-                            gradient = SeriesGradient,
-                            testTag = "card_series",
-                            badgeText = strings.episodicTvBadge,
-                            isLandscapeCard = false,
-                            onClick = { onNavigate(Screen.SERIES) }
-                        )
+                            HypnotixGradientCard(
+                                title = strings.series,
+                                subtitle = strings.seriesSubtitle,
+                                countText = "%,d %s".format(Locale.US, seriesCount, strings.showsCatalog),
+                                icon = Icons.Default.VideoLibrary,
+                                gradient = SeriesGradient,
+                                testTag = "card_series",
+                                badgeText = strings.episodicTvBadge,
+                                isLandscapeCard = true,
+                                customHeight = 132.dp,
+                                onClick = { onNavigate(Screen.SERIES) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                     }
 
                     item {
@@ -312,6 +339,8 @@ fun DashboardScreen(
                             testTag = "card_history",
                             badgeText = historyBadge,
                             isLandscapeCard = false,
+                            customHeight = 84.dp,
+                            isCompactStrip = true,
                             onClick = { onNavigate(Screen.HISTORY) }
                         )
                     }
@@ -648,6 +677,9 @@ fun HypnotixGradientCard(
     testTag: String,
     badgeText: String,
     isLandscapeCard: Boolean,
+    isHeroCard: Boolean = false,
+    isCompactStrip: Boolean = false,
+    customHeight: Dp? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -656,30 +688,30 @@ fun HypnotixGradientCard(
     val isRtl = isRtlLanguage(LocalAppLanguage.current)
 
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.05f else 1f,
-        animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
+        targetValue = if (isFocused) 1.035f else 1f,
+        animationSpec = spring(dampingRatio = 0.72f, stiffness = 420f),
         label = "cardScale"
     )
 
-    val cardHeight = if (isLandscapeCard) 150.dp else 134.dp
-    val paddingModifier = if (isLandscapeCard) modifier else modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 7.dp)
+    val cardHeight = customHeight ?: if (isLandscapeCard) 150.dp else 134.dp
+    val paddingModifier = if (isLandscapeCard) modifier else modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp)
 
     Card(
         modifier = paddingModifier
             .height(cardHeight)
             .scale(scale)
             .shadow(
-                elevation = if (isFocused) 16.dp else 4.dp,
-                shape = RoundedCornerShape(20.dp),
+                elevation = if (isFocused) 18.dp else 5.dp,
+                shape = RoundedCornerShape(22.dp),
                 spotColor = if (isFocused) AccentCyan else Color.Transparent,
                 ambientColor = if (isFocused) PureWhite else Color.Transparent
             )
             .border(
-                width = if (isFocused) 3.5.dp else 1.dp,
-                color = if (isFocused) PureWhite else Color(0x33FFFFFF),
-                shape = RoundedCornerShape(20.dp)
+                width = if (isFocused) 3.dp else 1.dp,
+                color = if (isFocused) PureWhite else Color(0x38FFFFFF),
+                shape = RoundedCornerShape(22.dp)
             )
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(22.dp))
             .focusable(interactionSource = interactionSource)
             .onPreviewKeyEvent { event ->
                 if (event.type == KeyEventType.KeyUp &&
@@ -691,104 +723,197 @@ fun HypnotixGradientCard(
             }
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .testTag(testTag),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(gradient)
-                .padding(if (isLandscapeCard) 16.dp else 20.dp)
+                .padding(if (isCompactStrip) 14.dp else if (isHeroCard) 22.dp else 16.dp)
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = Color(0x1EFFFFFF),
+                tint = Color(0x18FFFFFF),
                 modifier = Modifier
-                    .size(if (isLandscapeCard) 90.dp else 115.dp)
+                    .size(if (isCompactStrip) 68.dp else if (isHeroCard) 140.dp else 88.dp)
                     .align(Alignment.CenterEnd)
             )
 
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
+            if (isCompactStrip) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
+                    modifier = Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f, fill = false)
+                        modifier = Modifier.weight(1f)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(if (isLandscapeCard) 36.dp else 40.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(Color(0x33FFFFFF)),
+                                .size(42.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0x28FFFFFF)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = icon,
                                 contentDescription = null,
                                 tint = PureWhite,
-                                modifier = Modifier.size(if (isLandscapeCard) 20.dp else 24.dp)
+                                modifier = Modifier.size(22.dp)
                             )
                         }
-                        Spacer(modifier = Modifier.width(10.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
                                 text = title,
-                                fontSize = if (isLandscapeCard) 18.sp else 21.sp,
+                                fontSize = 16.sp,
                                 fontWeight = FontWeight.Black,
                                 color = PureWhite,
-                                letterSpacing = 0.3.sp
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = countText,
+                                text = "$countText • $subtitle",
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xDDFFFFFF)
+                                color = Color(0xDDFFFFFF),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
 
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0x33000000))
-                            .padding(horizontal = 7.dp, vertical = 3.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            text = badgeText,
-                            fontSize = 8.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = PureWhite,
-                            letterSpacing = 0.5.sp
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0x40000000))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = badgeText,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = AccentCyan
+                            )
+                        }
+                        Icon(
+                            imageVector = if (isRtl) Icons.Default.ChevronLeft else Icons.Default.ChevronRight,
+                            contentDescription = "Open",
+                            tint = PureWhite,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Bottom
+            } else {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = subtitle,
-                        fontSize = 11.sp,
-                        color = Color(0xEEFFFFFF),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Icon(
-                        imageVector = if (isRtl) Icons.Default.ChevronLeft else Icons.Default.ChevronRight,
-                        contentDescription = "Open",
-                        tint = PureWhite,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f, fill = false)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(if (isHeroCard) 46.dp else 36.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color(0x33FFFFFF)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = null,
+                                    tint = PureWhite,
+                                    modifier = Modifier.size(if (isHeroCard) 26.dp else 20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = title,
+                                    fontSize = if (isHeroCard) 23.sp else 17.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = PureWhite,
+                                    letterSpacing = 0.3.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = countText,
+                                    fontSize = if (isHeroCard) 12.sp else 10.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xE6FFFFFF),
+                                    maxLines = 1
+                                )
+                            }
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0x44000000))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            if (isHeroCard) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(7.dp)
+                                        .clip(CircleShape)
+                                        .background(AccentRed)
+                                )
+                            }
+                            Text(
+                                text = badgeText,
+                                fontSize = 8.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = PureWhite,
+                                letterSpacing = 0.5.sp
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        Text(
+                            text = subtitle,
+                            fontSize = if (isHeroCard) 12.sp else 10.5.sp,
+                            color = Color(0xEEFFFFFF),
+                            maxLines = if (isHeroCard) 2 else 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(if (isHeroCard) 32.dp else 24.dp)
+                                .clip(CircleShape)
+                                .background(Color(0x33FFFFFF))
+                        ) {
+                            Icon(
+                                imageVector = if (isRtl) Icons.Default.ChevronLeft else Icons.Default.ChevronRight,
+                                contentDescription = "Open",
+                                tint = PureWhite,
+                                modifier = Modifier.size(if (isHeroCard) 20.dp else 16.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
