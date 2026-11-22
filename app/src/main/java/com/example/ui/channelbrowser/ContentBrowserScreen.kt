@@ -76,6 +76,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
@@ -102,7 +103,6 @@ import com.example.ui.Screen
 import com.example.ui.locale.LocalAppLanguage
 import com.example.ui.locale.LocalAppStrings
 import com.example.ui.player.EpgManager
-import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.AccentRed
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.Slate300
@@ -116,6 +116,42 @@ import com.example.util.CategoryTranslator
 import com.example.util.LocalIsTelevision
 import kotlinx.coroutines.delay
 import org.json.JSONArray
+
+private data class SectionThemeColors(
+    val accent: Color,
+    val accentSoft: Color,
+    val glowBorder: Color,
+    val ambientBgTop: Color
+)
+
+private fun getSectionThemeColors(screen: Screen): SectionThemeColors {
+    return when (screen) {
+        Screen.LIVE_CHANNELS -> SectionThemeColors(
+            accent = Color(0xFFFF6B35),
+            accentSoft = Color(0x2EFF6B35),
+            glowBorder = Color(0x66FF6B35),
+            ambientBgTop = Color(0x1FFF6B35)
+        )
+        Screen.MOVIES -> SectionThemeColors(
+            accent = Color(0xFF9D4EDD),
+            accentSoft = Color(0x2E9D4EDD),
+            glowBorder = Color(0x669D4EDD),
+            ambientBgTop = Color(0x1F9D4EDD)
+        )
+        Screen.SERIES -> SectionThemeColors(
+            accent = Color(0xFF00E5FF),
+            accentSoft = Color(0x2E00E5FF),
+            glowBorder = Color(0x6600E5FF),
+            ambientBgTop = Color(0x1F00E5FF)
+        )
+        else -> SectionThemeColors(
+            accent = Color(0xFF00E5FF),
+            accentSoft = Color(0x2E00E5FF),
+            glowBorder = Color(0x6600E5FF),
+            ambientBgTop = Color(0x1F00E5FF)
+        )
+    }
+}
 
 @Composable
 fun ContentBrowserScreen(
@@ -145,20 +181,8 @@ fun ContentBrowserScreen(
     val isTv = LocalIsTelevision.current
     val useSideCategoryPanel = isLandscape || isTablet || isTv
 
-    val typePrefix = when (screen) {
-        Screen.LIVE_CHANNELS -> "${IptvType.LIVE_TV.name}::"
-        Screen.MOVIES -> "${IptvType.MOVIE.name}::"
-        Screen.SERIES -> "${IptvType.SERIES.name}::"
-        else -> null
-    }
-    val typeFavCount = remember(items, selectedCategory, favoriteCount, typePrefix) {
-        val isFavTab = selectedCategory.equals("Favorites", true) || selectedCategory == "المفضلة"
-        if (isFavTab) {
-            items.size
-        } else {
-            items.count { it.isFavorite }.coerceAtLeast(if (typePrefix == null) favoriteCount else 0)
-        }
-    }
+    val sectionColors = remember(screen) { getSectionThemeColors(screen) }
+    val typeFavCount = favoriteCount
 
     val searchPrefs = remember {
         context.getSharedPreferences("hypnostream_search_history", Context.MODE_PRIVATE)
@@ -205,7 +229,6 @@ fun ContentBrowserScreen(
     }
 
     val searchPlaceholder = strings.searchByStreamName
-
     val isVodPoster = screen == Screen.MOVIES || screen == Screen.SERIES
     val gridState = rememberLazyGridState()
 
@@ -222,19 +245,42 @@ fun ContentBrowserScreen(
         }
     }
 
+    val screenBackgroundBrush = Brush.verticalGradient(
+        colors = listOf(
+            Color(0xFF060B16),
+            Color(0xFF04070F),
+            Slate950
+        )
+    )
+
     if (useSideCategoryPanel) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Slate950)
+                .background(screenBackgroundBrush)
         ) {
+            // Left Glassmorphic Category Sidebar
             Column(
                 modifier = Modifier
-                    .width(265.dp)
+                    .width(268.dp)
                     .fillMaxHeight()
-                    .background(Slate900)
-                    .border(BorderStroke(1.dp, Slate800))
-                    .padding(10.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xEE0B1221),
+                                Color(0xF5070C17)
+                            )
+                        )
+                    )
+                    .border(
+                        BorderStroke(
+                            width = 1.dp,
+                            brush = Brush.verticalGradient(
+                                colors = listOf(sectionColors.glowBorder, Color(0x22FFFFFF))
+                            )
+                        )
+                    )
+                    .padding(11.dp)
             ) {
                 OutlinedTextField(
                     value = categorySearchQuery,
@@ -252,7 +298,7 @@ fun ContentBrowserScreen(
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = null,
-                            tint = Slate400,
+                            tint = sectionColors.accent,
                             modifier = Modifier.size(18.dp)
                         )
                     },
@@ -271,22 +317,22 @@ fun ContentBrowserScreen(
                             }
                         }
                     },
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(14.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AccentCyan,
-                        unfocusedBorderColor = Slate700,
-                        focusedContainerColor = Slate850,
-                        unfocusedContainerColor = Slate850,
+                        focusedBorderColor = sectionColors.accent,
+                        unfocusedBorderColor = Color(0x26FFFFFF),
+                        focusedContainerColor = Color(0x99111827),
+                        unfocusedContainerColor = Color(0x66111827),
                         focusedTextColor = PureWhite,
                         unfocusedTextColor = PureWhite
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(5.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
                     item(key = "cat_all") {
@@ -294,6 +340,7 @@ fun ContentBrowserScreen(
                             displayName = strings.all,
                             count = totalCount,
                             isSelected = selectedCategory.equals("All", true) || selectedCategory == "الكل",
+                            sectionColors = sectionColors,
                             onClick = { onCategoryChange("All") }
                         )
                     }
@@ -303,6 +350,8 @@ fun ContentBrowserScreen(
                             displayName = strings.favorites,
                             count = typeFavCount,
                             isSelected = selectedCategory.equals("Favorites", true) || selectedCategory == "المفضلة",
+                            sectionColors = sectionColors,
+                            isFavoriteRow = true,
                             onClick = { onCategoryChange("Favorites") }
                         )
                     }
@@ -315,158 +364,195 @@ fun ContentBrowserScreen(
                             displayName = translatedTitle,
                             count = category.itemCount,
                             isSelected = selectedCategory == category.name,
+                            sectionColors = sectionColors,
                             onClick = { onCategoryChange(category.name) }
                         )
                     }
                 }
             }
 
-            Column(
+            // Right Content Area with Subtle Ambient Top Glow
+            Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(sectionColors.ambientBgTop, Color.Transparent),
+                            endY = 320f
+                        )
+                    )
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    IconButton(
-                        onClick = onBack,
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Glassmorphic Header Bar
+                    Row(
                         modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(Slate850)
-                            .border(1.dp, Slate700, CircleShape)
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = strings.back,
-                            tint = PureWhite
+                        IconButton(
+                            onClick = onBack,
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(Color(0x99111827))
+                                .border(1.dp, sectionColors.glowBorder, CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = strings.back,
+                                tint = PureWhite
+                            )
+                        }
+
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(sectionColors.accentSoft)
+                                .border(1.dp, sectionColors.glowBorder, RoundedCornerShape(12.dp))
+                        ) {
+                            Icon(
+                                imageVector = when (screen) {
+                                    Screen.LIVE_CHANNELS -> Icons.Default.LiveTv
+                                    Screen.MOVIES -> Icons.Default.Movie
+                                    else -> Icons.Default.VideoLibrary
+                                },
+                                contentDescription = null,
+                                tint = sectionColors.accent,
+                                modifier = Modifier.size(21.dp)
+                            )
+                        }
+
+                        Column {
+                            Text(
+                                text = screenTitle,
+                                fontSize = 19.sp,
+                                fontWeight = FontWeight.Black,
+                                color = PureWhite
+                            )
+                            Text(
+                                text = if (isAr) "%,d عنصر متاح".format(totalCount) else "%,d titles available".format(totalCount),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = sectionColors.accent
+                            )
+                        }
+
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = onSearchChange,
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(
+                                onSearch = {
+                                    recordSearchTerm(searchQuery)
+                                    focusManager.clearFocus()
+                                }
+                            ),
+                            placeholder = {
+                                Text(
+                                    text = searchPlaceholder,
+                                    fontSize = 13.sp,
+                                    color = Slate400,
+                                    maxLines = 1
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = null,
+                                    tint = sectionColors.accent,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                            trailingIcon = {
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(
+                                        onClick = { onSearchChange("") },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Clear,
+                                            contentDescription = "Clear",
+                                            tint = Slate400,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            },
+                            shape = RoundedCornerShape(14.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = sectionColors.accent,
+                                unfocusedBorderColor = Color(0x26FFFFFF),
+                                focusedContainerColor = Color(0xB30F172A),
+                                unfocusedContainerColor = Color(0x800F172A),
+                                focusedTextColor = PureWhite,
+                                unfocusedTextColor = PureWhite
+                            ),
+                            modifier = Modifier.weight(1f)
                         )
                     }
 
-                    Icon(
-                        imageVector = when (screen) {
-                            Screen.LIVE_CHANNELS -> Icons.Default.LiveTv
-                            Screen.MOVIES -> Icons.Default.Movie
-                            else -> Icons.Default.VideoLibrary
-                        },
-                        contentDescription = null,
-                        tint = AccentCyan,
-                        modifier = Modifier.size(22.dp)
-                    )
-
-                    Text(
-                        text = screenTitle,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Black,
-                        color = PureWhite
-                    )
-
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = onSearchChange,
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(
-                            onSearch = {
-                                recordSearchTerm(searchQuery)
-                                focusManager.clearFocus()
-                            }
-                        ),
-                        placeholder = {
-                            Text(
-                                text = searchPlaceholder,
-                                fontSize = 13.sp,
-                                color = Slate400,
-                                maxLines = 1
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = null,
-                                tint = Slate400,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(
-                                    onClick = { onSearchChange("") },
-                                    modifier = Modifier.size(24.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Clear,
-                                        contentDescription = "Clear",
-                                        tint = Slate400,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-                        },
-                        shape = RoundedCornerShape(14.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AccentCyan,
-                            unfocusedBorderColor = Slate700,
-                            focusedContainerColor = Slate900,
-                            unfocusedContainerColor = Slate900,
-                            focusedTextColor = PureWhite,
-                            unfocusedTextColor = PureWhite
-                        ),
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                if (searchQuery.isEmpty() && recentSearches.isNotEmpty()) {
-                    RecentSearchesRow(
-                        recentSearches = recentSearches,
-                        isAr = isAr,
-                        onSelectSearch = { term ->
-                            onSearchChange(term)
-                            recordSearchTerm(term)
-                        },
-                        onClearAll = clearRecentSearches
-                    )
-                }
-
-                LazyVerticalGrid(
-                    state = gridState,
-                    columns = GridCells.Adaptive(minSize = if (isVodPoster) 135.dp else 175.dp),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    itemsIndexed(items, key = { idx, item -> "${item.id}_$idx" }) { _, item ->
-                        ContentGridCard(
-                            item = item,
-                            isVodPoster = isVodPoster,
+                    if (searchQuery.isEmpty() && recentSearches.isNotEmpty()) {
+                        RecentSearchesRow(
+                            recentSearches = recentSearches,
                             isAr = isAr,
-                            onClick = {
-                                if (searchQuery.isNotBlank()) {
-                                    recordSearchTerm(searchQuery)
-                                }
-                                if (item.type == IptvType.SERIES) {
-                                    onOpenSeries(item)
-                                } else {
-                                    onPlayItem(item)
-                                }
+                            sectionColors = sectionColors,
+                            onSelectSearch = { term ->
+                                onSearchChange(term)
+                                recordSearchTerm(term)
                             },
-                            onToggleFavorite = { onToggleFavorite(item) }
+                            onClearAll = clearRecentSearches
                         )
+                    }
+
+                    LazyVerticalGrid(
+                        state = gridState,
+                        columns = GridCells.Adaptive(minSize = if (isVodPoster) 138.dp else 178.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        itemsIndexed(items, key = { idx, item -> "${item.id}_$idx" }) { _, item ->
+                            ContentGridCard(
+                                item = item,
+                                isVodPoster = isVodPoster,
+                                isAr = isAr,
+                                sectionColors = sectionColors,
+                                onClick = {
+                                    if (searchQuery.isNotBlank()) {
+                                        recordSearchTerm(searchQuery)
+                                    }
+                                    if (item.type == IptvType.SERIES) {
+                                        onOpenSeries(item)
+                                    } else {
+                                        onPlayItem(item)
+                                    }
+                                },
+                                onToggleFavorite = { onToggleFavorite(item) }
+                            )
+                        }
                     }
                 }
             }
         }
     } else {
+        // Mobile Portrait Glassmorphic Layout
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Slate950)
+                .background(screenBackgroundBrush)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(sectionColors.ambientBgTop, Color.Transparent),
+                        endY = 260f
+                    )
+                )
         ) {
             Row(
                 modifier = Modifier
@@ -480,8 +566,8 @@ fun ContentBrowserScreen(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .background(Slate850)
-                        .border(1.dp, Slate700, CircleShape)
+                        .background(Color(0x99111827))
+                        .border(1.dp, sectionColors.glowBorder, CircleShape)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -520,7 +606,7 @@ fun ContentBrowserScreen(
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = null,
-                            tint = Slate400,
+                            tint = sectionColors.accent,
                             modifier = Modifier.size(18.dp)
                         )
                     },
@@ -539,12 +625,12 @@ fun ContentBrowserScreen(
                             }
                         }
                     },
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(14.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AccentCyan,
-                        unfocusedBorderColor = Slate700,
-                        focusedContainerColor = Slate900,
-                        unfocusedContainerColor = Slate900,
+                        focusedBorderColor = sectionColors.accent,
+                        unfocusedBorderColor = Color(0x26FFFFFF),
+                        focusedContainerColor = Color(0xB30F172A),
+                        unfocusedContainerColor = Color(0x800F172A),
                         focusedTextColor = PureWhite,
                         unfocusedTextColor = PureWhite
                     ),
@@ -556,6 +642,7 @@ fun ContentBrowserScreen(
                 RecentSearchesRow(
                     recentSearches = recentSearches,
                     isAr = isAr,
+                    sectionColors = sectionColors,
                     onSelectSearch = { term ->
                         onSearchChange(term)
                         recordSearchTerm(term)
@@ -565,13 +652,14 @@ fun ContentBrowserScreen(
             }
 
             LazyRow(
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 item(key = "chip_all") {
                     CategoryChipItem(
                         displayName = "${strings.all} ($totalCount)",
                         isSelected = selectedCategory.equals("All", true) || selectedCategory == "الكل",
+                        sectionColors = sectionColors,
                         onClick = { onCategoryChange("All") }
                     )
                 }
@@ -579,6 +667,7 @@ fun ContentBrowserScreen(
                     CategoryChipItem(
                         displayName = "${strings.favorites} ($typeFavCount)",
                         isSelected = selectedCategory.equals("Favorites", true) || selectedCategory == "المفضلة",
+                        sectionColors = sectionColors,
                         onClick = { onCategoryChange("Favorites") }
                     )
                 }
@@ -589,6 +678,7 @@ fun ContentBrowserScreen(
                     CategoryChipItem(
                         displayName = "$translatedTitle (${category.itemCount})",
                         isSelected = selectedCategory == category.name,
+                        sectionColors = sectionColors,
                         onClick = { onCategoryChange(category.name) }
                     )
                 }
@@ -596,7 +686,7 @@ fun ContentBrowserScreen(
 
             LazyVerticalGrid(
                 state = gridState,
-                columns = GridCells.Adaptive(minSize = if (isVodPoster) 120.dp else 160.dp),
+                columns = GridCells.Adaptive(minSize = if (isVodPoster) 124.dp else 162.dp),
                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -607,6 +697,7 @@ fun ContentBrowserScreen(
                         item = item,
                         isVodPoster = isVodPoster,
                         isAr = isAr,
+                        sectionColors = sectionColors,
                         onClick = {
                             if (searchQuery.isNotBlank()) {
                                 recordSearchTerm(searchQuery)
@@ -629,11 +720,12 @@ fun ContentBrowserScreen(
 private fun RecentSearchesRow(
     recentSearches: List<String>,
     isAr: Boolean,
+    sectionColors: SectionThemeColors,
     onSelectSearch: (String) -> Unit,
     onClearAll: () -> Unit
 ) {
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth()
@@ -643,11 +735,11 @@ private fun RecentSearchesRow(
             val isFocused by interaction.collectIsFocusedAsState()
 
             Surface(
-                color = if (isFocused) AccentCyan.copy(alpha = 0.25f) else Slate900,
+                color = if (isFocused) sectionColors.accentSoft else Color(0x88111827),
                 shape = CircleShape,
                 border = BorderStroke(
                     width = if (isFocused) 1.5.dp else 1.dp,
-                    color = if (isFocused) PureWhite else AccentCyan.copy(alpha = 0.45f)
+                    color = if (isFocused) PureWhite else sectionColors.glowBorder
                 ),
                 modifier = Modifier
                     .focusable(interactionSource = interaction)
@@ -666,12 +758,12 @@ private fun RecentSearchesRow(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(5.dp),
-                    modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp)
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.History,
                         contentDescription = null,
-                        tint = AccentCyan,
+                        tint = sectionColors.accent,
                         modifier = Modifier.size(13.dp)
                     )
                     Text(
@@ -690,9 +782,9 @@ private fun RecentSearchesRow(
             val isClearFocused by clearInteraction.collectIsFocusedAsState()
 
             Surface(
-                color = if (isClearFocused) AccentRed else Slate850,
+                color = if (isClearFocused) AccentRed else Color(0x88111827),
                 shape = CircleShape,
-                border = BorderStroke(1.dp, if (isClearFocused) PureWhite else Slate700),
+                border = BorderStroke(1.dp, if (isClearFocused) PureWhite else Color(0x26FFFFFF)),
                 modifier = Modifier
                     .focusable(interactionSource = clearInteraction)
                     .onPreviewKeyEvent { event ->
@@ -743,24 +835,29 @@ private fun CategoryRowItem(
     displayName: String,
     count: Int,
     isSelected: Boolean,
+    sectionColors: SectionThemeColors,
+    isFavoriteRow: Boolean = false,
     onClick: () -> Unit
 ) {
     val interaction = remember { MutableInteractionSource() }
     val isFocused by interaction.collectIsFocusedAsState()
 
+    val activeAccent = if (isFavoriteRow) AccentRed else sectionColors.accent
+    val activeSoft = if (isFavoriteRow) AccentRed.copy(alpha = 0.18f) else sectionColors.accentSoft
+
     Surface(
         color = when {
-            isSelected -> AccentCyan.copy(alpha = 0.2f)
-            isFocused -> Slate850
-            else -> Color.Transparent
+            isSelected -> activeSoft
+            isFocused -> Color(0x991E293B)
+            else -> Color(0x330F172A)
         },
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(12.dp),
         border = BorderStroke(
-            width = if (isFocused || isSelected) 1.5.dp else 0.dp,
+            width = if (isFocused || isSelected) 1.5.dp else 1.dp,
             color = when {
                 isFocused -> PureWhite
-                isSelected -> AccentCyan
-                else -> Color.Transparent
+                isSelected -> activeAccent
+                else -> Color(0x14FFFFFF)
             }
         ),
         modifier = Modifier
@@ -783,11 +880,32 @@ private fun CategoryRowItem(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
+            if (isSelected) {
+                Box(
+                    modifier = Modifier
+                        .width(3.dp)
+                        .height(16.dp)
+                        .clip(CircleShape)
+                        .background(activeAccent)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+
+            if (isFavoriteRow) {
+                Icon(
+                    imageVector = Icons.Default.Favorite,
+                    contentDescription = null,
+                    tint = AccentRed,
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+            }
+
             Text(
                 text = displayName,
                 fontSize = 13.sp,
                 fontWeight = if (isSelected || isFocused) FontWeight.Bold else FontWeight.SemiBold,
-                color = if (isSelected) AccentCyan else PureWhite,
+                color = if (isSelected) activeAccent else PureWhite,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
@@ -796,14 +914,14 @@ private fun CategoryRowItem(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
-                    .background(if (isSelected) AccentCyan else Slate800)
+                    .background(if (isSelected) activeAccent else Color(0x881E293B))
                     .padding(horizontal = 7.dp, vertical = 2.dp)
             ) {
                 Text(
                     text = "$count",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isSelected) Slate950 else Slate300
+                    color = if (isSelected) Color(0xFF030712) else Slate300
                 )
             }
         }
@@ -814,21 +932,22 @@ private fun CategoryRowItem(
 private fun CategoryChipItem(
     displayName: String,
     isSelected: Boolean,
+    sectionColors: SectionThemeColors,
     onClick: () -> Unit
 ) {
     Surface(
         onClick = onClick,
-        color = if (isSelected) AccentCyan else Slate850,
-        shape = RoundedCornerShape(10.dp),
-        border = BorderStroke(1.dp, if (isSelected) PureWhite else Slate700)
+        color = if (isSelected) sectionColors.accent else Color(0x99111827),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, if (isSelected) PureWhite else Color(0x26FFFFFF))
     ) {
         Text(
             text = displayName,
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
-            color = if (isSelected) Slate950 else Slate300,
+            color = if (isSelected) Color(0xFF030712) else Slate300,
             maxLines = 1,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+            modifier = Modifier.padding(horizontal = 13.dp, vertical = 7.dp)
         )
     }
 }
@@ -839,6 +958,7 @@ private fun ContentGridCard(
     item: IptvItem,
     isVodPoster: Boolean,
     isAr: Boolean,
+    sectionColors: SectionThemeColors,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit
 ) {
@@ -857,23 +977,32 @@ private fun ContentGridCard(
     }
 
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.04f else 1f,
+        targetValue = if (isFocused) 1.045f else 1f,
         animationSpec = spring(dampingRatio = 0.75f, stiffness = 400f),
         label = "gridCardScale"
     )
 
     Card(
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Slate900),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0B111E)),
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(if (isVodPoster) 2f / 3f else 16f / 10f)
             .scale(scale)
-            .clip(RoundedCornerShape(14.dp))
+            .shadow(
+                elevation = if (isFocused) 16.dp else 4.dp,
+                shape = RoundedCornerShape(16.dp),
+                spotColor = if (isFocused) sectionColors.accent else Color.Transparent
+            )
+            .clip(RoundedCornerShape(16.dp))
             .border(
                 width = if (isFocused) 2.5.dp else 1.dp,
-                color = if (isFocused) AccentCyan else Slate800,
-                shape = RoundedCornerShape(14.dp)
+                brush = if (isFocused) {
+                    Brush.linearGradient(listOf(sectionColors.accent, PureWhite, sectionColors.accent))
+                } else {
+                    Brush.verticalGradient(listOf(Color(0x29FFFFFF), Color(0x0DFFFFFF)))
+                },
+                shape = RoundedCornerShape(16.dp)
             )
             .focusable(interactionSource = interaction)
             .onPreviewKeyEvent { event ->
@@ -916,7 +1045,16 @@ private fun ContentGridCard(
                 onLongClick = { showContextDialog = true }
             )
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(sectionColors.accentSoft, Color(0xFF090E1A)),
+                        radius = 450f
+                    )
+                )
+        ) {
             if (!item.logoUrl.isNullOrBlank()) {
                 AsyncImage(
                     model = item.logoUrl,
@@ -924,7 +1062,7 @@ private fun ContentGridCard(
                     contentScale = if (isVodPoster) ContentScale.Crop else ContentScale.Fit,
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(if (isVodPoster) 0.dp else 14.dp)
+                        .padding(if (isVodPoster) 0.dp else 16.dp)
                 )
             } else {
                 Box(
@@ -938,8 +1076,8 @@ private fun ContentGridCard(
                             IptvType.SERIES -> Icons.Default.VideoLibrary
                         },
                         contentDescription = null,
-                        tint = Slate400,
-                        modifier = Modifier.size(34.dp)
+                        tint = sectionColors.accent.copy(alpha = 0.7f),
+                        modifier = Modifier.size(36.dp)
                     )
                 }
             }
@@ -950,9 +1088,10 @@ private fun ContentGridCard(
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
+                                Color(0x22000000),
                                 Color.Transparent,
-                                Color(0xBB060A12),
-                                Color(0xEE060A12)
+                                Color(0xCC050912),
+                                Color(0xF5050912)
                             )
                         )
                     )
@@ -962,17 +1101,18 @@ private fun ContentGridCard(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(6.dp)
+                    .padding(7.dp)
                     .size(28.dp)
                     .clip(CircleShape)
-                    .background(Color(0x99000000))
+                    .background(Color(0xAA060A12))
+                    .border(1.dp, Color(0x26FFFFFF), CircleShape)
                     .clickable(onClick = onToggleFavorite)
             ) {
                 Icon(
                     imageVector = if (item.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                     contentDescription = "Favorite",
                     tint = if (item.isFavorite) AccentRed else PureWhite,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(15.dp)
                 )
             }
 
@@ -981,10 +1121,11 @@ private fun ContentGridCard(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .align(Alignment.TopStart)
-                        .padding(6.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xBB000000))
-                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                        .padding(7.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xCC060A12))
+                        .border(1.dp, Color(0x33F59E0B), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Star,
@@ -1007,15 +1148,16 @@ private fun ContentGridCard(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .align(Alignment.Center)
-                        .size(38.dp)
+                        .size(42.dp)
                         .clip(CircleShape)
-                        .background(AccentCyan)
+                        .background(sectionColors.accent)
+                        .border(2.dp, PureWhite, CircleShape)
                 ) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = null,
-                        tint = Slate950,
-                        modifier = Modifier.size(22.dp)
+                        tint = Color(0xFF030712),
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }
@@ -1025,7 +1167,7 @@ private fun ContentGridCard(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .fillMaxWidth()
-                    .padding(8.dp)
+                    .padding(9.dp)
             ) {
                 Text(
                     text = item.name,
@@ -1042,13 +1184,13 @@ private fun ContentGridCard(
                         text = "${nowProgram.formattedTimeRange()} • ${nowProgram.title}",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Medium,
-                        color = AccentCyan,
+                        color = sectionColors.accent,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     LinearProgressIndicator(
                         progress = { nowProgram.progressFraction() },
-                        color = AccentCyan,
+                        color = sectionColors.accent,
                         trackColor = Slate800,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1091,7 +1233,7 @@ private fun ContentGridCard(
                         text = typeLabel,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = AccentCyan
+                        color = sectionColors.accent
                     )
                     Text(
                         text = item.name,
@@ -1116,7 +1258,7 @@ private fun ContentGridCard(
                             containerColor = when {
                                 isFavBtnFocused -> PureWhite
                                 item.isFavorite -> AccentRed
-                                else -> AccentCyan
+                                else -> sectionColors.accent
                             },
                             contentColor = if (!isFavBtnFocused && item.isFavorite) PureWhite else Slate950
                         ),
@@ -1166,7 +1308,7 @@ private fun ContentGridCard(
                         shape = RoundedCornerShape(12.dp),
                         border = BorderStroke(
                             width = if (isPlayBtnFocused) 2.5.dp else 1.dp,
-                            color = if (isPlayBtnFocused) AccentCyan else Slate700
+                            color = if (isPlayBtnFocused) sectionColors.accent else Slate700
                         ),
                         colors = ButtonDefaults.outlinedButtonColors(
                             containerColor = if (isPlayBtnFocused) Slate800 else Slate850,
@@ -1189,7 +1331,7 @@ private fun ContentGridCard(
                         Icon(
                             imageVector = Icons.Default.PlayArrow,
                             contentDescription = null,
-                            tint = AccentCyan,
+                            tint = sectionColors.accent,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
