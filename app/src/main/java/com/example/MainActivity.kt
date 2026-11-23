@@ -72,6 +72,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
@@ -417,6 +419,8 @@ fun HypnoStreamApp(
 
     val currentScreen by viewModel.currentScreen.collectAsState()
     var lastBrowseScreen by remember { mutableStateOf(Screen.DASHBOARD) }
+    var lastPlayingSourceScreen by remember { mutableStateOf<Screen?>(null) }
+    var lastPlayingSourceCategory by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(currentScreen) {
         if (currentScreen != Screen.PLAYER) {
@@ -489,14 +493,71 @@ fun HypnoStreamApp(
         }
     }
 
+    val startPlaybackAndTrackOrigin = { item: IptvItem ->
+        val originScreen = when (currentScreen) {
+            Screen.SERIES_DETAIL -> Screen.SERIES_DETAIL
+            Screen.LIVE_CHANNELS, Screen.MOVIES, Screen.SERIES, Screen.EPG_GUIDE -> currentScreen
+            else -> when (item.type) {
+                IptvType.SERIES -> Screen.SERIES_DETAIL
+                IptvType.MOVIE -> Screen.MOVIES
+                IptvType.LIVE_TV -> Screen.LIVE_CHANNELS
+            }
+        }
+        lastPlayingSourceScreen = originScreen
+        lastPlayingSourceCategory = if (currentScreen in listOf(Screen.LIVE_CHANNELS, Screen.MOVIES, Screen.SERIES)) {
+            selectedCategory
+        } else if (item.type != IptvType.SERIES && item.group.isNotBlank()) {
+            item.group
+        } else {
+            null
+        }
+        viewModel.playStream(item)
+    }
+
     val handlePlayWithResumePrompt = { item: IptvItem ->
         val savedPos = viewModel.playerManager.getSavedPosition(item)
         if (savedPos > 5_000L && item.type != IptvType.LIVE_TV) {
             pendingResumeItem = item
             pendingResumePosMs = savedPos
         } else {
-            viewModel.playStream(item)
+            startPlaybackAndTrackOrigin(item)
         }
+    }
+
+    val handleExpandMiniPlayer = {
+        val activeItem = playerUiState.currentItem
+        if (activeItem != null) {
+            val targetReturnScreen = when {
+                activeItem.type == IptvType.SERIES -> {
+                    if (seriesDetails == null) {
+                        val matchedSeries = viewModel.repository.getAllSeries().firstOrNull {
+                            it.name.equals(activeItem.seriesTitle ?: activeItem.name, ignoreCase = true) ||
+                            (!activeItem.seriesTitle.isNullOrBlank() && it.seriesTitle?.equals(activeItem.seriesTitle, ignoreCase = true) == true)
+                        }
+                        if (matchedSeries != null) {
+                            viewModel.openSeriesDetail(matchedSeries)
+                        }
+                    }
+                    Screen.SERIES_DETAIL
+                }
+                lastPlayingSourceScreen != null && lastPlayingSourceScreen != Screen.PLAYER -> {
+                    lastPlayingSourceScreen!!
+                }
+                activeItem.type == IptvType.MOVIE -> Screen.MOVIES
+                else -> Screen.LIVE_CHANNELS
+            }
+
+            if (targetReturnScreen in listOf(Screen.LIVE_CHANNELS, Screen.MOVIES, Screen.SERIES)) {
+                val targetCat = lastPlayingSourceCategory ?: activeItem.group.takeIf { it.isNotBlank() }
+                if (targetCat != null) {
+                    viewModel.setSelectedCategory(targetCat)
+                }
+            }
+
+            lastBrowseScreen = targetReturnScreen
+            onLastBrowseScreenChange(targetReturnScreen)
+        }
+        viewModel.navigateTo(Screen.PLAYER)
     }
 
     val handleOpenHistoryOrDashboardItem = { item: IptvItem ->
@@ -581,7 +642,9 @@ fun HypnoStreamApp(
                 Screen.HISTORY -> {
                     WatchHistoryScreen(
                         items = recentlyWatched,
+                        favorites = favorites,
                         onPlayItem = handleOpenHistoryOrDashboardItem,
+                        onToggleFavorite = { viewModel.toggleFavorite(it) },
                         onRemoveItem = { viewModel.removeFromHistory(it) },
                         onClearAll = { viewModel.clearHistory() },
                         onBack = { performBack() }
@@ -741,7 +804,7 @@ fun HypnoStreamApp(
                             item = playerUiState.currentItem!!,
                             isPlaying = playerUiState.isPlaying,
                             isCompact = !isTablet,
-                            onExpand = { viewModel.navigateTo(Screen.PLAYER) },
+                            onExpand = handleExpandMiniPlayer,
                             onTogglePlayPause = { viewModel.playerManager.togglePlayPause() },
                             onDismiss = { viewModel.dismissMiniPlayer() }
                         )
@@ -761,7 +824,7 @@ fun HypnoStreamApp(
                                 item = playerUiState.currentItem!!,
                                 isPlaying = playerUiState.isPlaying,
                                 isCompact = false,
-                                onExpand = { viewModel.navigateTo(Screen.PLAYER) },
+                                onExpand = handleExpandMiniPlayer,
                                 onTogglePlayPause = { viewModel.playerManager.togglePlayPause() },
                                 onDismiss = { viewModel.dismissMiniPlayer() }
                             )
@@ -915,7 +978,7 @@ fun HypnoStreamApp(
                             onClick = {
                                 val itemToPlay = targetItem
                                 pendingResumeItem = null
-                                viewModel.playStream(itemToPlay)
+                                startPlaybackAndTrackOrigin(itemToPlay)
                             },
                             interactionSource = resumeInteraction,
                             shape = RoundedCornerShape(12.dp),
@@ -939,7 +1002,7 @@ fun HypnoStreamApp(
                                     ) {
                                         val itemToPlay = targetItem
                                         pendingResumeItem = null
-                                        viewModel.playStream(itemToPlay)
+                                        startPlaybackAndTrackOrigin(itemToPlay)
                                         true
                                     } else false
                                 }
@@ -958,7 +1021,7 @@ fun HypnoStreamApp(
                                 val itemToPlay = targetItem
                                 pendingResumeItem = null
                                 viewModel.playerManager.clearSavedPosition(itemToPlay)
-                                viewModel.playStream(itemToPlay)
+                                startPlaybackAndTrackOrigin(itemToPlay)
                             },
                             interactionSource = restartInteraction,
                             shape = RoundedCornerShape(12.dp),
@@ -981,7 +1044,7 @@ fun HypnoStreamApp(
                                         val itemToPlay = targetItem
                                         pendingResumeItem = null
                                         viewModel.playerManager.clearSavedPosition(itemToPlay)
-                                        viewModel.playStream(itemToPlay)
+                                        startPlaybackAndTrackOrigin(itemToPlay)
                                         true
                                     } else false
                                 }
@@ -1732,7 +1795,9 @@ private fun FirstRunLanguageAndTutorialOverlay(
 @Composable
 fun WatchHistoryScreen(
     items: List<IptvItem>,
+    favorites: Set<String> = emptySet(),
     onPlayItem: (IptvItem) -> Unit,
+    onToggleFavorite: (IptvItem) -> Unit = {},
     onRemoveItem: (String) -> Unit,
     onClearAll: () -> Unit,
     onBack: () -> Unit
@@ -1864,10 +1929,16 @@ fun WatchHistoryScreen(
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(filteredItems, key = { "${it.id}_${it.streamUrl}" }) { item ->
+                    val isFav = favorites.contains("${item.type.name}::${item.id}") ||
+                        favorites.contains(item.id) ||
+                        item.isFavorite
+
                     HistoryPosterCard(
                         item = item,
+                        isFavorite = isFav,
                         isAr = isAr,
                         onClick = { onPlayItem(item) },
+                        onToggleFavorite = { onToggleFavorite(item) },
                         onRemove = { onRemoveItem(item.id) }
                     )
                 }
@@ -1879,8 +1950,10 @@ fun WatchHistoryScreen(
 @Composable
 fun HistoryPosterCard(
     item: IptvItem,
+    isFavorite: Boolean = item.isFavorite,
     isAr: Boolean,
     onClick: () -> Unit,
+    onToggleFavorite: () -> Unit = {},
     onRemove: () -> Unit
 ) {
     val cardInteraction = remember { MutableInteractionSource() }
@@ -1989,22 +2062,45 @@ fun HistoryPosterCard(
                 )
             }
 
-            Box(
-                contentAlignment = Alignment.Center,
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(6.dp)
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xAA000000))
-                    .clickable(onClick = onRemove)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Remove",
-                    tint = PureWhite,
-                    modifier = Modifier.size(15.dp)
-                )
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xAA060A12))
+                        .border(1.dp, Color(0x26FFFFFF), CircleShape)
+                        .clickable(onClick = onToggleFavorite)
+                ) {
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = "Favorite",
+                        tint = if (isFavorite) AccentRed else PureWhite,
+                        modifier = Modifier.size(15.dp)
+                    )
+                }
+
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xAA000000))
+                        .border(1.dp, Color(0x26FFFFFF), CircleShape)
+                        .clickable(onClick = onRemove)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Remove",
+                        tint = PureWhite,
+                        modifier = Modifier.size(15.dp)
+                    )
+                }
             }
 
             if (isCardFocused) {
