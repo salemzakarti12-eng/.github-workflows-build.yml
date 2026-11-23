@@ -542,7 +542,7 @@ fun HypnoStreamApp(
         val navItems = listOf(
             Triple(Screen.DASHBOARD, Icons.Default.Home, strings.home),
             Triple(Screen.LIVE_CHANNELS, Icons.Default.LiveTv, strings.liveTv),
-            Triple(Screen.EPG_GUIDE, Icons.Default.DateRange, if (isAr) "الدليل" else "TV Guide"),
+            Triple(Screen.EPG_GUIDE, Icons.Default.DateRange, if (isAr) "الدليل" else if (useSideRailLayout) "TV Guide" else "Guide"),
             Triple(Screen.MOVIES, Icons.Default.Movie, strings.movies),
             Triple(Screen.SERIES, Icons.Default.VideoLibrary, strings.series),
             Triple(Screen.HISTORY, Icons.Default.History, strings.history),
@@ -705,7 +705,9 @@ fun HypnoStreamApp(
                                     fontSize = 10.sp,
                                     fontWeight = if (isSelected || isNavFocused) FontWeight.Bold else FontWeight.SemiBold,
                                     color = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
-                                    maxLines = 1
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             },
                             colors = navigationRailItemColors(),
@@ -795,10 +797,12 @@ fun HypnoStreamApp(
                                     label = {
                                         Text(
                                             text = label,
-                                            fontSize = 10.sp,
+                                            fontSize = 9.sp,
                                             fontWeight = if (isSelected || isNavFocused) FontWeight.Bold else FontWeight.SemiBold,
                                             color = if (isNavFocused) PureWhite else if (isSelected) AccentCyan else Slate400,
-                                            maxLines = 1
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = TextOverflow.Clip
                                         )
                                     },
                                     colors = navigationBarItemColors(),
