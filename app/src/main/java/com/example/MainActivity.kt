@@ -1959,8 +1959,18 @@ fun HistoryPosterCard(
     val cardInteraction = remember { MutableInteractionSource() }
     val isCardFocused by cardInteraction.collectIsFocusedAsState()
 
+    val favInteraction = remember { MutableInteractionSource() }
+    val isFavFocused by favInteraction.collectIsFocusedAsState()
+
+    val removeInteraction = remember { MutableInteractionSource() }
+    val isRemoveFocused by removeInteraction.collectIsFocusedAsState()
+
+    val anyFocused = isCardFocused || isFavFocused || isRemoveFocused
+    var okPressStartTime by remember { mutableLongStateOf(0L) }
+    var longPressHandled by remember { mutableStateOf(false) }
+
     val scale by animateFloatAsState(
-        targetValue = if (isCardFocused) 1.05f else 1f,
+        targetValue = if (anyFocused) 1.05f else 1f,
         animationSpec = spring(dampingRatio = 0.75f, stiffness = 400f),
         label = "historyPosterScale"
     )
@@ -1981,9 +1991,9 @@ fun HistoryPosterCard(
             .aspectRatio(2f / 3f)
             .scale(scale)
             .shadow(
-                elevation = if (isCardFocused) 14.dp else 4.dp,
+                elevation = if (anyFocused) 14.dp else 4.dp,
                 shape = RoundedCornerShape(14.dp),
-                spotColor = if (isCardFocused) AccentCyan else Color.Transparent
+                spotColor = if (anyFocused) AccentCyan else Color.Transparent
             )
             .clip(RoundedCornerShape(14.dp))
             .border(
@@ -1993,11 +2003,34 @@ fun HistoryPosterCard(
             )
             .focusable(interactionSource = cardInteraction)
             .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyUp &&
-                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                ) {
-                    onClick()
-                    true
+                val isCenterKey = event.key == Key.DirectionCenter ||
+                    event.key == Key.Enter ||
+                    event.key == Key.NumPadEnter
+
+                if (isCenterKey) {
+                    when (event.type) {
+                        KeyEventType.KeyDown -> {
+                            if (okPressStartTime == 0L) {
+                                okPressStartTime = System.currentTimeMillis()
+                                longPressHandled = false
+                            } else if (!longPressHandled && System.currentTimeMillis() - okPressStartTime >= 450L) {
+                                longPressHandled = true
+                                onToggleFavorite()
+                            }
+                            true
+                        }
+                        KeyEventType.KeyUp -> {
+                            val wasLong = longPressHandled ||
+                                (okPressStartTime > 0L && System.currentTimeMillis() - okPressStartTime >= 450L)
+                            okPressStartTime = 0L
+                            longPressHandled = false
+                            if (!wasLong) {
+                                onClick()
+                            }
+                            true
+                        }
+                        else -> false
+                    }
                 } else false
             }
             .clickable(interactionSource = cardInteraction, indication = null, onClick = onClick)
@@ -2071,34 +2104,64 @@ fun HistoryPosterCard(
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .size(28.dp)
+                        .size(30.dp)
                         .clip(CircleShape)
-                        .background(Color(0xAA060A12))
-                        .border(1.dp, Color(0x26FFFFFF), CircleShape)
-                        .clickable(onClick = onToggleFavorite)
+                        .background(if (isFavFocused) PureWhite else Color(0xCC060A12))
+                        .border(
+                            width = if (isFavFocused) 2.dp else 1.dp,
+                            color = if (isFavFocused) AccentCyan else Color(0x33FFFFFF),
+                            shape = CircleShape
+                        )
+                        .focusable(interactionSource = favInteraction)
+                        .onPreviewKeyEvent { event ->
+                            if (event.type == KeyEventType.KeyUp &&
+                                (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                            ) {
+                                onToggleFavorite()
+                                true
+                            } else false
+                        }
+                        .clickable(interactionSource = favInteraction, indication = null, onClick = onToggleFavorite)
                 ) {
                     Icon(
                         imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                         contentDescription = "Favorite",
-                        tint = if (isFavorite) AccentRed else PureWhite,
-                        modifier = Modifier.size(15.dp)
+                        tint = when {
+                            isFavFocused -> if (isFavorite) AccentRed else Slate950
+                            isFavorite -> AccentRed
+                            else -> PureWhite
+                        },
+                        modifier = Modifier.size(16.dp)
                     )
                 }
 
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .size(28.dp)
+                        .size(30.dp)
                         .clip(CircleShape)
-                        .background(Color(0xAA000000))
-                        .border(1.dp, Color(0x26FFFFFF), CircleShape)
-                        .clickable(onClick = onRemove)
+                        .background(if (isRemoveFocused) AccentRed else Color(0xCC000000))
+                        .border(
+                            width = if (isRemoveFocused) 2.dp else 1.dp,
+                            color = if (isRemoveFocused) PureWhite else Color(0x33FFFFFF),
+                            shape = CircleShape
+                        )
+                        .focusable(interactionSource = removeInteraction)
+                        .onPreviewKeyEvent { event ->
+                            if (event.type == KeyEventType.KeyUp &&
+                                (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                            ) {
+                                onRemove()
+                                true
+                            } else false
+                        }
+                        .clickable(interactionSource = removeInteraction, indication = null, onClick = onRemove)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Remove",
                         tint = PureWhite,
-                        modifier = Modifier.size(15.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
