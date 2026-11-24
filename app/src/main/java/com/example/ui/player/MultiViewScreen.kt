@@ -20,6 +20,7 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -31,6 +32,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,6 +42,7 @@ import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Refresh
@@ -100,8 +103,6 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.example.model.IptvItem
 import com.example.model.StreamFormat
@@ -113,9 +114,11 @@ import com.example.ui.theme.PureWhite
 import com.example.ui.theme.Slate300
 import com.example.ui.theme.Slate400
 import com.example.ui.theme.Slate700
+import com.example.ui.theme.Slate800
 import com.example.ui.theme.Slate850
 import com.example.ui.theme.Slate900
 import com.example.ui.theme.Slate950
+import com.example.util.CategoryTranslator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -131,7 +134,8 @@ fun MultiViewScreen(
     val context = LocalContext.current
     val localView = LocalView.current
     val strings = LocalAppStrings.current
-    val isAr = LocalAppLanguage.current == "ar"
+    val currentLanguage = LocalAppLanguage.current
+    val isAr = currentLanguage == "ar"
     val scope = rememberCoroutineScope()
 
     var screenCount by remember { mutableIntStateOf(2) }
@@ -140,6 +144,9 @@ fun MultiViewScreen(
     var showOverlayHud by remember { mutableStateOf(true) }
     var hudTriggerKey by remember { mutableIntStateOf(0) }
     var pickerSlotIndex by remember { mutableStateOf<Int?>(null) }
+
+    val hudFocusRequester = remember { FocusRequester() }
+    val slotFocusRequesters = remember { List(4) { FocusRequester() } }
 
     val firstChannel = remember(initialChannel, allChannels) {
         initialChannel ?: allChannels.firstOrNull()
@@ -287,7 +294,6 @@ fun MultiViewScreen(
         }
     }
 
-    // مراقب إعادة التحميل التلقائي عند طلب إعادة المحاولة
     for (idx in 0..3) {
         val trigger = slotLoadTriggers[idx]
         LaunchedEffect(trigger) {
@@ -367,7 +373,7 @@ fun MultiViewScreen(
 
     LaunchedEffect(hudTriggerKey, showOverlayHud, pickerSlotIndex) {
         if (showOverlayHud && pickerSlotIndex == null) {
-            delay(4000L)
+            delay(4500L)
             showOverlayHud = false
         }
     }
@@ -376,6 +382,18 @@ fun MultiViewScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown &&
+                    (event.key == Key.Menu || event.key == Key.Info || event.key == Key.Guide)
+                ) {
+                    showOverlayHud = true
+                    hudTriggerKey++
+                    try {
+                        hudFocusRequester.requestFocus()
+                    } catch (_: Exception) {}
+                    true
+                } else false
+            }
     ) {
         if (screenCount == 2) {
             Row(modifier = Modifier.fillMaxSize()) {
@@ -387,9 +405,20 @@ fun MultiViewScreen(
                         isAudioActive = activeAudioSlot == slotIdx,
                         isBuffering = slotBuffering[slotIdx],
                         errorMessage = slotErrors[slotIdx],
-                        fillScreenMode = fillScreenMode,
                         showControls = showOverlayHud,
                         isAr = isAr,
+                        focusRequester = slotFocusRequesters[slotIdx],
+                        onFocusMoved = {
+                            showOverlayHud = true
+                            hudTriggerKey++
+                        },
+                        onMoveUpToHud = {
+                            showOverlayHud = true
+                            hudTriggerKey++
+                            try {
+                                hudFocusRequester.requestFocus()
+                            } catch (_: Exception) {}
+                        },
                         onSelectAudioFocus = {
                             activeAudioSlot = slotIdx
                             showOverlayHud = true
@@ -426,9 +455,20 @@ fun MultiViewScreen(
                             isAudioActive = activeAudioSlot == slotIdx,
                             isBuffering = slotBuffering[slotIdx],
                             errorMessage = slotErrors[slotIdx],
-                            fillScreenMode = fillScreenMode,
                             showControls = showOverlayHud,
                             isAr = isAr,
+                            focusRequester = slotFocusRequesters[slotIdx],
+                            onFocusMoved = {
+                                showOverlayHud = true
+                                hudTriggerKey++
+                            },
+                            onMoveUpToHud = {
+                                showOverlayHud = true
+                                hudTriggerKey++
+                                try {
+                                    hudFocusRequester.requestFocus()
+                                } catch (_: Exception) {}
+                            },
                             onSelectAudioFocus = {
                                 activeAudioSlot = slotIdx
                                 showOverlayHud = true
@@ -463,9 +503,14 @@ fun MultiViewScreen(
                             isAudioActive = activeAudioSlot == slotIdx,
                             isBuffering = slotBuffering[slotIdx],
                             errorMessage = slotErrors[slotIdx],
-                            fillScreenMode = fillScreenMode,
                             showControls = showOverlayHud,
                             isAr = isAr,
+                            focusRequester = slotFocusRequesters[slotIdx],
+                            onFocusMoved = {
+                                showOverlayHud = true
+                                hudTriggerKey++
+                            },
+                            onMoveUpToHud = null,
                             onSelectAudioFocus = {
                                 activeAudioSlot = slotIdx
                                 showOverlayHud = true
@@ -520,13 +565,25 @@ fun MultiViewScreen(
                         )
                     }
 
+                    val twoBtnInteraction = remember { MutableInteractionSource() }
+                    val isTwoFocused by twoBtnInteraction.collectIsFocusedAsState()
                     Surface(
                         onClick = {
                             screenCount = 2
                             hudTriggerKey++
                         },
-                        color = if (screenCount == 2) AccentCyan else Slate850,
-                        shape = CircleShape
+                        interactionSource = twoBtnInteraction,
+                        color = when {
+                            isTwoFocused -> PureWhite
+                            screenCount == 2 -> AccentCyan
+                            else -> Slate850
+                        },
+                        shape = CircleShape,
+                        border = BorderStroke(
+                            width = if (isTwoFocused) 2.dp else 0.dp,
+                            color = AccentCyan
+                        ),
+                        modifier = Modifier.focusRequester(hudFocusRequester)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -536,25 +593,36 @@ fun MultiViewScreen(
                             Icon(
                                 imageVector = Icons.Default.ViewColumn,
                                 contentDescription = null,
-                                tint = if (screenCount == 2) Slate950 else PureWhite,
+                                tint = if (isTwoFocused || screenCount == 2) Slate950 else PureWhite,
                                 modifier = Modifier.size(16.dp)
                             )
                             Text(
                                 text = "2",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Black,
-                                color = if (screenCount == 2) Slate950 else PureWhite
+                                color = if (isTwoFocused || screenCount == 2) Slate950 else PureWhite
                             )
                         }
                     }
 
+                    val fourBtnInteraction = remember { MutableInteractionSource() }
+                    val isFourFocused by fourBtnInteraction.collectIsFocusedAsState()
                     Surface(
                         onClick = {
                             screenCount = 4
                             hudTriggerKey++
                         },
-                        color = if (screenCount == 4) AccentCyan else Slate850,
-                        shape = CircleShape
+                        interactionSource = fourBtnInteraction,
+                        color = when {
+                            isFourFocused -> PureWhite
+                            screenCount == 4 -> AccentCyan
+                            else -> Slate850
+                        },
+                        shape = CircleShape,
+                        border = BorderStroke(
+                            width = if (isFourFocused) 2.dp else 0.dp,
+                            color = AccentCyan
+                        )
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -564,14 +632,14 @@ fun MultiViewScreen(
                             Icon(
                                 imageVector = Icons.Default.GridView,
                                 contentDescription = null,
-                                tint = if (screenCount == 4) Slate950 else PureWhite,
+                                tint = if (isFourFocused || screenCount == 4) Slate950 else PureWhite,
                                 modifier = Modifier.size(16.dp)
                             )
                             Text(
                                 text = "4",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Black,
-                                color = if (screenCount == 4) Slate950 else PureWhite
+                                color = if (isFourFocused || screenCount == 4) Slate950 else PureWhite
                             )
                         }
                     }
@@ -599,6 +667,7 @@ fun MultiViewScreen(
             MultiViewChannelPickerDialog(
                 slotNumber = targetSlot + 1,
                 allChannels = allChannels,
+                currentLanguage = currentLanguage,
                 isAr = isAr,
                 onSelect = { chosen ->
                     slotChannels[targetSlot] = chosen
@@ -624,9 +693,11 @@ private fun MultiViewSlotPane(
     isAudioActive: Boolean,
     isBuffering: Boolean,
     errorMessage: String?,
-    fillScreenMode: Boolean,
     showControls: Boolean,
     isAr: Boolean,
+    focusRequester: FocusRequester,
+    onFocusMoved: () -> Unit,
+    onMoveUpToHud: (() -> Unit)?,
     onSelectAudioFocus: () -> Unit,
     onRetrySlot: () -> Unit,
     onChangeChannel: () -> Unit,
@@ -635,6 +706,13 @@ private fun MultiViewSlotPane(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val isFocused by interaction.collectIsFocusedAsState()
+    var remoteLongPressHandled by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isFocused) {
+        if (isFocused) {
+            onFocusMoved()
+        }
+    }
 
     val borderWidth = when {
         isFocused -> 2.dp
@@ -651,20 +729,46 @@ private fun MultiViewSlotPane(
         modifier = modifier
             .background(Color.Black)
             .border(borderWidth, borderColor)
+            .focusRequester(focusRequester)
             .focusable(interactionSource = interaction)
             .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyUp &&
-                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                ) {
-                    if (item == null) {
-                        onChangeChannel()
-                    } else if (!isAudioActive) {
-                        onSelectAudioFocus()
-                    } else {
-                        onChangeChannel()
+                val isSelectKey = event.key == Key.DirectionCenter ||
+                        event.key == Key.Enter ||
+                        event.key == Key.NumPadEnter
+
+                when {
+                    event.key == Key.DirectionUp && event.type == KeyEventType.KeyDown && onMoveUpToHud != null -> {
+                        onMoveUpToHud()
+                        true
                     }
-                    true
-                } else false
+                    isSelectKey && event.type == KeyEventType.KeyDown -> {
+                        if (event.nativeKeyEvent.isLongPress || event.nativeKeyEvent.repeatCount > 0) {
+                            if (!remoteLongPressHandled) {
+                                remoteLongPressHandled = true
+                                onChangeChannel()
+                            }
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    isSelectKey && event.type == KeyEventType.KeyUp -> {
+                        if (remoteLongPressHandled) {
+                            remoteLongPressHandled = false
+                            true
+                        } else {
+                            if (item == null) {
+                                onChangeChannel()
+                            } else if (!isAudioActive) {
+                                onSelectAudioFocus()
+                            } else {
+                                onChangeChannel()
+                            }
+                            true
+                        }
+                    }
+                    else -> false
+                }
             }
             .pointerInput(item?.id, isAudioActive) {
                 detectTapGestures(
@@ -679,12 +783,14 @@ private fun MultiViewSlotPane(
                         if (item != null) {
                             onExpandFullscreen()
                         }
+                    },
+                    onLongPress = {
+                        onChangeChannel()
                     }
                 )
             }
     ) {
         if (item != null) {
-            // استخدام TextureView مباشرة لمنع تعارض SurfaceView عند تعدد الشاشات في Compose
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { ctx ->
@@ -863,28 +969,39 @@ private fun MultiViewSlotPane(
 private fun MultiViewChannelPickerDialog(
     slotNumber: Int,
     allChannels: List<IptvItem>,
+    currentLanguage: String,
     isAr: Boolean,
     onSelect: (IptvItem) -> Unit,
     onDismiss: () -> Unit
 ) {
     var query by remember { mutableStateOf("") }
-    val searchFocus = remember { FocusRequester() }
+    var selectedGroup by remember { mutableStateOf("ALL") }
+    val firstChannelFocus = remember { FocusRequester() }
 
-    val filtered = remember(allChannels, query) {
-        if (query.isBlank()) {
-            allChannels.take(80)
-        } else {
-            allChannels.filter {
-                it.name.contains(query, ignoreCase = true) ||
-                it.group.contains(query, ignoreCase = true)
-            }.take(80)
-        }
+    val availableGroups = remember(allChannels) {
+        allChannels.map { it.group.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+    }
+
+    val filtered = remember(allChannels, query, selectedGroup) {
+        allChannels.asSequence()
+            .filter { ch ->
+                selectedGroup == "ALL" || ch.group.equals(selectedGroup, ignoreCase = true)
+            }
+            .filter { ch ->
+                query.isBlank() ||
+                ch.name.contains(query, ignoreCase = true) ||
+                ch.group.contains(query, ignoreCase = true)
+            }
+            .take(150)
+            .toList()
     }
 
     LaunchedEffect(Unit) {
         try {
-            delay(80L)
-            searchFocus.requestFocus()
+            delay(100L)
+            firstChannelFocus.requestFocus()
         } catch (_: Exception) {}
     }
 
@@ -911,7 +1028,7 @@ private fun MultiViewChannelPickerDialog(
                     singleLine = true,
                     placeholder = {
                         Text(
-                            text = if (isAr) "ابحث باسم القناة..." else "Search channel name...",
+                            text = if (isAr) "ابحث باسم القناة أو الباقة..." else "Search channel or category...",
                             color = Slate400,
                             fontSize = 12.sp
                         )
@@ -919,29 +1036,82 @@ private fun MultiViewChannelPickerDialog(
                     leadingIcon = {
                         Icon(Icons.Default.Search, contentDescription = null, tint = AccentCyan)
                     },
+                    trailingIcon = {
+                        if (query.isNotEmpty()) {
+                            IconButton(onClick = { query = "" }) {
+                                Icon(Icons.Default.Clear, contentDescription = "Clear", tint = Slate400)
+                            }
+                        }
+                    },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = PureWhite,
                         unfocusedTextColor = PureWhite,
                         focusedBorderColor = AccentCyan,
                         unfocusedBorderColor = Slate700
                     ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(searchFocus)
+                    modifier = Modifier.fillMaxWidth()
                 )
+
+                // شريط الباقات / الفئات للتنقل السريع بالريموت واللمس
+                if (availableGroups.isNotEmpty()) {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        contentPadding = PaddingValues(vertical = 2.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        item(key = "grp_all") {
+                            PickerCategoryChip(
+                                label = if (isAr) "الكل (${allChannels.size})" else "All (${allChannels.size})",
+                                isSelected = selectedGroup == "ALL",
+                                onClick = { selectedGroup = "ALL" }
+                            )
+                        }
+                        items(availableGroups, key = { "grp_$it" }) { grp ->
+                            val translated = remember(grp, currentLanguage) {
+                                CategoryTranslator.translateForLanguage(grp, currentLanguage)
+                            }
+                            PickerCategoryChip(
+                                label = translated,
+                                isSelected = selectedGroup == grp,
+                                onClick = { selectedGroup = grp }
+                            )
+                        }
+                    }
+                }
 
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 280.dp)
+                        .heightIn(max = 270.dp)
                 ) {
-                    items(filtered, key = { it.id }) { ch ->
+                    items(filtered, key = { "${it.id}_${it.streamUrl}" }) { ch ->
+                        val isFirst = filtered.firstOrNull()?.id == ch.id
+                        val itemInteraction = remember { MutableInteractionSource() }
+                        val isItemFocused by itemInteraction.collectIsFocusedAsState()
+
                         Surface(
-                            onClick = { onSelect(ch) },
-                            color = Slate850,
+                            color = if (isItemFocused) Slate800 else Slate850,
                             shape = RoundedCornerShape(10.dp),
-                            border = BorderStroke(1.dp, Slate700)
+                            border = BorderStroke(
+                                width = if (isItemFocused) 2.dp else 1.dp,
+                                color = if (isItemFocused) PureWhite else Slate700
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(if (isFirst) Modifier.focusRequester(firstChannelFocus) else Modifier)
+                                .focusable(interactionSource = itemInteraction)
+                                .onPreviewKeyEvent { event ->
+                                    if (event.type == KeyEventType.KeyUp &&
+                                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                    ) {
+                                        onSelect(ch)
+                                        true
+                                    } else false
+                                }
+                                .clickable(interactionSource = itemInteraction, indication = null) {
+                                    onSelect(ch)
+                                }
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -962,7 +1132,7 @@ private fun MultiViewChannelPickerDialog(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = ch.name,
-                                        color = PureWhite,
+                                        color = if (isItemFocused) AccentCyan else PureWhite,
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
                                         maxLines = 1,
@@ -991,4 +1161,51 @@ private fun MultiViewChannelPickerDialog(
             }
         }
     )
+}
+
+@Composable
+private fun PickerCategoryChip(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val isFocused by interaction.collectIsFocusedAsState()
+
+    Surface(
+        color = when {
+            isFocused -> PureWhite
+            isSelected -> AccentCyan
+            else -> Slate850
+        },
+        shape = CircleShape,
+        border = BorderStroke(
+            width = if (isFocused) 2.dp else 1.dp,
+            color = when {
+                isFocused -> AccentCyan
+                isSelected -> PureWhite
+                else -> Slate700
+            }
+        ),
+        modifier = Modifier
+            .focusable(interactionSource = interaction)
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyUp &&
+                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                ) {
+                    onClick()
+                    true
+                } else false
+            }
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+    ) {
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = if (isFocused || isSelected) Slate950 else Slate300,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp)
+        )
+    }
 }
