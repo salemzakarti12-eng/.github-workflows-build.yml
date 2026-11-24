@@ -64,6 +64,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FontDownload
 import androidx.compose.material.icons.filled.FormatColorFill
 import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Height
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -209,24 +210,24 @@ private enum class VerticalSwipeHUD {
 }
 
 private val SubtitleColorPalette = listOf(
-    Color(0xFFFFFFFF), // White
-    Color(0xFFF44336), // Red
-    Color(0xFFE91E63), // Pink
-    Color(0xFF9C27B0), // Purple
-    Color(0xFF673AB7), // Deep Purple
-    Color(0xFF3F51B5), // Indigo
-    Color(0xFF2196F3), // Blue
-    Color(0xFF00BCD4), // Cyan
-    Color(0xFF009688), // Teal
-    Color(0xFF4CAF50), // Green
-    Color(0xFF8BC34A), // Light Green
-    Color(0xFFCDDC39), // Lime
-    Color(0xFFFFEB3B), // Yellow
-    Color(0xFFFFC107), // Amber
-    Color(0xFFFF9800), // Orange
-    Color(0xFF795548), // Brown
-    Color(0xFF607D8B), // Blue Grey
-    Color(0xFF000000)  // Black
+    Color(0xFFFFFFFF),
+    Color(0xFFF44336),
+    Color(0xFFE91E63),
+    Color(0xFF9C27B0),
+    Color(0xFF673AB7),
+    Color(0xFF3F51B5),
+    Color(0xFF2196F3),
+    Color(0xFF00BCD4),
+    Color(0xFF009688),
+    Color(0xFF4CAF50),
+    Color(0xFF8BC34A),
+    Color(0xFFCDDC39),
+    Color(0xFFFFEB3B),
+    Color(0xFFFFC107),
+    Color(0xFFFF9800),
+    Color(0xFF795548),
+    Color(0xFF607D8B),
+    Color(0xFF000000)
 )
 
 private val TransparencySteps = listOf(0.0f, 0.15f, 0.30f, 0.50f, 0.70f, 0.85f, 1.0f)
@@ -373,6 +374,7 @@ fun VideoPlayerScreen(
     onPlayNext: () -> Unit,
     onPlayPrevious: () -> Unit,
     onSelectChannel: (IptvItem) -> Unit,
+    onOpenMultiView: (IptvItem?) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val strings = LocalAppStrings.current
@@ -389,7 +391,6 @@ fun VideoPlayerScreen(
     val hasDrawerItems = allChannels.isNotEmpty() && currentItem?.type != IptvType.MOVIE
     val playerColors = remember(currentItem?.type) { getPlayerThemeColors(currentItem?.type) }
 
-    // --- True Fullscreen Immersive Mode ---
     DisposableEffect(localView) {
         val prevKeepScreenOn = localView.keepScreenOn
         localView.keepScreenOn = true
@@ -407,7 +408,6 @@ fun VideoPlayerScreen(
         }
     }
 
-    // --- Binge-Mode Auto-Play Next Episode Countdown ---
     val nextEpisodeItem = remember(currentItem?.id, allChannels) {
         if (currentItem?.type == IptvType.SERIES && allChannels.size > 1) {
             val idx = allChannels.indexOfFirst { it.id == currentItem.id || it.streamUrl == currentItem.streamUrl }
@@ -438,7 +438,6 @@ fun VideoPlayerScreen(
         }
     }
 
-    // --- Vertical Brightness & Volume Swipe Gestures ---
     val audioManager = remember {
         context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
@@ -460,7 +459,6 @@ fun VideoPlayerScreen(
         }
     }
 
-    // --- Double-Tap Kinetic Ripple State ---
     var gestureFeedback by remember { mutableStateOf(PlayerGestureFeedback.NONE) }
     var accumulatedSkipSeconds by remember { mutableIntStateOf(10) }
     var feedbackTriggerKey by remember { mutableIntStateOf(0) }
@@ -496,7 +494,6 @@ fun VideoPlayerScreen(
     var showSubtitleUrlInput by remember { mutableStateOf(false) }
     var subtitleUrlText by remember { mutableStateOf("") }
 
-    // Advanced Subtitle Customization Dialogs & Overlay States
     var subtitleStyleConfig by remember { mutableStateOf(SubtitleAppearancePrefs.load(context)) }
     var showTextColorPicker by remember { mutableStateOf(false) }
     var showBgColorPicker by remember { mutableStateOf(false) }
@@ -733,7 +730,6 @@ fun VideoPlayerScreen(
             }
             .testTag("video_player_screen")
     ) {
-        // ExoPlayer Video Surface
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
@@ -768,7 +764,6 @@ fun VideoPlayerScreen(
             }
         )
 
-        // Interactive Vertical Subtitle Position Overlay
         if (isAdjustingSubtitlePosition) {
             Box(
                 modifier = Modifier
@@ -853,7 +848,6 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Vertical Brightness / Volume Swipe Glassmorphic HUD Pill
         AnimatedVisibility(
             visible = activeSwipeHud != VerticalSwipeHUD.NONE && !isAdjustingSubtitlePosition,
             enter = fadeIn(tween(120)),
@@ -917,7 +911,6 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Kinetic Double-Tap Glassmorphic Ripple Pill Overlay
         AnimatedVisibility(
             visible = gestureFeedback != PlayerGestureFeedback.NONE && !isAdjustingSubtitlePosition,
             enter = fadeIn(tween(140)) + scaleIn(initialScale = 0.85f, animationSpec = tween(180, easing = FastOutSlowInEasing)),
@@ -982,7 +975,6 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Binge-Mode Auto-Play Next Episode Glass Card
         AnimatedVisibility(
             visible = isNearEpisodeEnd && nextEpisodeItem != null && !isAdjustingSubtitlePosition,
             enter = fadeIn(tween(220)) + slideInHorizontally(initialOffsetX = { it }),
@@ -1079,7 +1071,6 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Glassmorphic Buffering Spinner
         if (uiState.isBuffering) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -1111,7 +1102,6 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Glassmorphic Error Overlay
         if (uiState.errorMessage != null) {
             Box(
                 modifier = Modifier
@@ -1163,14 +1153,12 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Top & Bottom Dark Glassmorphic Player Controls Overlay
         AnimatedVisibility(
             visible = uiState.isControlsVisible && !isAdjustingSubtitlePosition,
             enter = fadeIn(),
             exit = fadeOut()
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                // Top Glassmorphic Header Pill
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1272,6 +1260,16 @@ fun VideoPlayerScreen(
                                 onClick = { playerManager.cycleAspectRatio() }
                             )
 
+                            if (isLive) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                PlayerCircleButton(
+                                    icon = Icons.Default.GridView,
+                                    contentDescription = if (isAr) "تقسيم الشاشة" else "Split Screen",
+                                    playerColors = playerColors,
+                                    onClick = { onOpenMultiView(currentItem) }
+                                )
+                            }
+
                             if (hasDrawerItems) {
                                 Spacer(modifier = Modifier.width(8.dp))
                                 PlayerCircleButton(
@@ -1285,7 +1283,6 @@ fun VideoPlayerScreen(
                     }
                 }
 
-                // Bottom Glassmorphic Transport Dock
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1432,7 +1429,6 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Glassmorphic Quick Side Drawer
         AnimatedVisibility(
             visible = uiState.isQuickChannelListOpen && hasDrawerItems && !isAdjustingSubtitlePosition,
             enter = slideInHorizontally(initialOffsetX = { it }),
@@ -1565,7 +1561,6 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Audio Tracks Dialog
         if (showAudioDialog) {
             AlertDialog(
                 onDismissRequest = { showAudioDialog = false },
@@ -1627,7 +1622,6 @@ fun VideoPlayerScreen(
             )
         }
 
-        // Main Subtitles, Appearance, Font, Position & Sync Dialog
         if (showSubtitleDialog) {
             AlertDialog(
                 onDismissRequest = { showSubtitleDialog = false },
@@ -1648,7 +1642,6 @@ fun VideoPlayerScreen(
                             .heightIn(max = 390.dp)
                             .verticalScroll(rememberScrollState())
                     ) {
-                        // 1. Color & Background Pickers Row
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxWidth()
@@ -1694,7 +1687,6 @@ fun VideoPlayerScreen(
                             }
                         }
 
-                        // 2. Font Picker & Vertical Position Buttons Row
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxWidth()
@@ -1741,7 +1733,6 @@ fun VideoPlayerScreen(
                             }
                         }
 
-                        // 3. Smooth Font Size Slider
                         Column {
                             Row(
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1776,7 +1767,6 @@ fun VideoPlayerScreen(
                             )
                         }
 
-                        // 4. Subtitle Delay Sync
                         Text(
                             text = if (isAr) {
                                 "مزامنة الترجمة: ${String.format(Locale.US, "%+.1f", subtitleOffsetMs / 1000f)} ثانية"
@@ -1811,7 +1801,6 @@ fun VideoPlayerScreen(
                             }
                         }
 
-                        // 5. External File / URL Loaders
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxWidth()
@@ -1863,7 +1852,6 @@ fun VideoPlayerScreen(
                             }
                         }
 
-                        // 6. Subtitle Track Selection
                         Surface(
                             color = if (uiState.isSubtitleOff) playerColors.accentSoft else Slate850,
                             shape = RoundedCornerShape(10.dp),
@@ -1921,7 +1909,6 @@ fun VideoPlayerScreen(
             )
         }
 
-        // Circular Grid Color & Transparency Picker Dialog (Text Color)
         if (showTextColorPicker) {
             SubtitleColorGridDialog(
                 title = if (isAr) "اختر لون الترجمة" else "Select subtitle color",
@@ -1939,7 +1926,6 @@ fun VideoPlayerScreen(
             )
         }
 
-        // Circular Grid Color & Transparency Picker Dialog (Background Color)
         if (showBgColorPicker) {
             SubtitleColorGridDialog(
                 title = if (isAr) "اختر لون خلفية الترجمة" else "Select subtitle background color",
@@ -1956,7 +1942,6 @@ fun VideoPlayerScreen(
             )
         }
 
-        // System & Local Font Picker Dialog (Full TV D-Pad Focus Support)
         if (showFontPickerDialog) {
             val fonts = remember(subtitleStyleConfig.customFontPath) {
                 SubtitleAppearancePrefs.getAvailableFonts(context, subtitleStyleConfig.customFontPath)
