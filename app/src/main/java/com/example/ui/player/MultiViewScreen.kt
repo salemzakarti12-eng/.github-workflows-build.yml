@@ -190,19 +190,20 @@ fun MultiViewScreen(
     }
 
     val players = remember {
-        val renderersFactory = DefaultRenderersFactory(context)
-            .setEnableDecoderFallback(true)
-            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
-
-        val lightweightLoadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(8_000, 20_000, 600, 1_200)
-            .setPrioritizeTimeOverSizeThresholds(true)
-            .build()
-
         List(4) { index ->
+            // إنشاء RenderersFactory و LoadControl مستقل لكل مشغل لمنع تعارض Shared LoadControl في Media3
+            val renderersFactory = DefaultRenderersFactory(context)
+                .setEnableDecoderFallback(true)
+                .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+
+            val individualLoadControl = DefaultLoadControl.Builder()
+                .setBufferDurationsMs(8_000, 20_000, 600, 1_200)
+                .setPrioritizeTimeOverSizeThresholds(true)
+                .build()
+
             ExoPlayer.Builder(context, renderersFactory)
                 .setMediaSourceFactory(DefaultMediaSourceFactory(slotHttpFactories[index]))
-                .setLoadControl(lightweightLoadControl)
+                .setLoadControl(individualLoadControl)
                 .build()
                 .apply {
                     setWakeMode(C.WAKE_MODE_NETWORK)
@@ -1052,7 +1053,6 @@ private fun MultiViewChannelPickerDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // شريط الباقات / الفئات للتنقل السريع بالريموت واللمس
                 if (availableGroups.isNotEmpty()) {
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
