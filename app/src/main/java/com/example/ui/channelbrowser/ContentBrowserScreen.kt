@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
@@ -168,6 +169,7 @@ fun ContentBrowserScreen(
     onPlayItem: (IptvItem) -> Unit,
     onOpenSeries: (IptvItem) -> Unit,
     onToggleFavorite: (IptvItem) -> Unit,
+    onOpenMultiView: () -> Unit = {},
     onBack: () -> Unit
 ) {
     val strings = LocalAppStrings.current
@@ -259,7 +261,6 @@ fun ContentBrowserScreen(
                 .fillMaxSize()
                 .background(screenBackgroundBrush)
         ) {
-            // Left Glassmorphic Category Sidebar
             Column(
                 modifier = Modifier
                     .width(268.dp)
@@ -371,7 +372,6 @@ fun ContentBrowserScreen(
                 }
             }
 
-            // Right Content Area with Subtle Ambient Top Glow
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -384,7 +384,6 @@ fun ContentBrowserScreen(
                     )
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    // Glassmorphic Header Bar
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -495,6 +494,14 @@ fun ContentBrowserScreen(
                             ),
                             modifier = Modifier.weight(1f)
                         )
+
+                        if (screen == Screen.LIVE_CHANNELS) {
+                            MultiViewLaunchButton(
+                                isAr = isAr,
+                                sectionColors = sectionColors,
+                                onClick = onOpenMultiView
+                            )
+                        }
                     }
 
                     if (searchQuery.isEmpty() && recentSearches.isNotEmpty()) {
@@ -542,7 +549,6 @@ fun ContentBrowserScreen(
             }
         }
     } else {
-        // Mobile Portrait Glassmorphic Layout
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -636,6 +642,15 @@ fun ContentBrowserScreen(
                     ),
                     modifier = Modifier.weight(1f)
                 )
+
+                if (screen == Screen.LIVE_CHANNELS) {
+                    MultiViewLaunchButton(
+                        isAr = isAr,
+                        sectionColors = sectionColors,
+                        compact = true,
+                        onClick = onOpenMultiView
+                    )
+                }
             }
 
             if (searchQuery.isEmpty() && recentSearches.isNotEmpty()) {
@@ -711,6 +726,58 @@ fun ContentBrowserScreen(
                         onToggleFavorite = { onToggleFavorite(item) }
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MultiViewLaunchButton(
+    isAr: Boolean,
+    sectionColors: SectionThemeColors,
+    compact: Boolean = false,
+    onClick: () -> Unit
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val isFocused by interaction.collectIsFocusedAsState()
+
+    Surface(
+        color = if (isFocused) PureWhite else sectionColors.accentSoft,
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(
+            width = if (isFocused) 2.dp else 1.dp,
+            color = if (isFocused) sectionColors.accent else sectionColors.glowBorder
+        ),
+        modifier = Modifier
+            .focusable(interactionSource = interaction)
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyUp &&
+                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                ) {
+                    onClick()
+                    true
+                } else false
+            }
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(horizontal = if (compact) 10.dp else 12.dp, vertical = 10.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.GridView,
+                contentDescription = "Multi-View",
+                tint = if (isFocused) Slate950 else sectionColors.accent,
+                modifier = Modifier.size(18.dp)
+            )
+            if (!compact) {
+                Text(
+                    text = if (isAr) "تقسيم الشاشة" else "Multi-View",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isFocused) Slate950 else PureWhite
+                )
             }
         }
     }
