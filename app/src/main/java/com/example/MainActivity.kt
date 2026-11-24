@@ -176,6 +176,7 @@ import com.example.ui.locale.LocalAppLanguage
 import com.example.ui.locale.LocalAppStrings
 import com.example.ui.locale.getAppStrings
 import com.example.ui.locale.isRtlLanguage
+import com.example.ui.player.MultiViewScreen
 import com.example.ui.player.VideoPlayerScreen
 import com.example.ui.series.SeriesDetailScreen
 import com.example.ui.sources.SourcesScreen
@@ -307,9 +308,21 @@ class MainActivity : ComponentActivity() {
             showExitDialogState -> {
                 showExitDialogState = false
             }
+            screen == Screen.MULTI_VIEW -> {
+                val target = if (lastBrowseScreenState == Screen.PLAYER || lastBrowseScreenState == Screen.MULTI_VIEW) {
+                    Screen.LIVE_CHANNELS
+                } else {
+                    lastBrowseScreenState
+                }
+                mainViewModel.navigateTo(target)
+            }
             screen == Screen.PLAYER -> {
                 mainViewModel.playerManager.closeQuickChannelList()
-                val target = if (lastBrowseScreenState == Screen.PLAYER) Screen.DASHBOARD else lastBrowseScreenState
+                val target = if (lastBrowseScreenState == Screen.PLAYER || lastBrowseScreenState == Screen.MULTI_VIEW) {
+                    Screen.DASHBOARD
+                } else {
+                    lastBrowseScreenState
+                }
                 mainViewModel.navigateTo(target)
             }
             screen == Screen.SERIES_DETAIL -> {
@@ -435,7 +448,7 @@ fun HypnoStreamApp(
     var lastPlayingSourceCategory by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(currentScreen) {
-        if (currentScreen != Screen.PLAYER) {
+        if (currentScreen != Screen.PLAYER && currentScreen != Screen.MULTI_VIEW) {
             lastBrowseScreen = currentScreen
             onLastBrowseScreenChange(currentScreen)
         }
@@ -605,7 +618,12 @@ fun HypnoStreamApp(
 
     val showSplash = !initialLoadCompleted
     val isPlayerOpen = (currentScreen == Screen.PLAYER && playerUiState.currentItem != null) || isInPipMode
-    val displayedBrowseScreen = if (currentScreen == Screen.PLAYER) lastBrowseScreen else currentScreen
+    val isMultiViewOpen = currentScreen == Screen.MULTI_VIEW
+    val displayedBrowseScreen = if (currentScreen == Screen.PLAYER || currentScreen == Screen.MULTI_VIEW) {
+        lastBrowseScreen
+    } else {
+        currentScreen
+    }
 
     Box(
         modifier = Modifier
@@ -691,6 +709,7 @@ fun HypnoStreamApp(
                             viewModel.openSeriesDetail(seriesItem)
                         },
                         onToggleFavorite = { viewModel.toggleFavorite(it) },
+                        onOpenMultiView = { viewModel.openMultiView() },
                         onBack = { performBack() }
                     )
                 }
@@ -735,7 +754,7 @@ fun HypnoStreamApp(
                     )
                 }
 
-                Screen.PLAYER -> {}
+                Screen.PLAYER, Screen.MULTI_VIEW -> {}
             }
         }
 
@@ -810,7 +829,7 @@ fun HypnoStreamApp(
                         screenContent()
                     }
 
-                    if (!isPlayerOpen && playerUiState.currentItem != null) {
+                    if (!isPlayerOpen && !isMultiViewOpen && playerUiState.currentItem != null) {
                         MiniPlayerBar(
                             playerManager = viewModel.playerManager,
                             item = playerUiState.currentItem!!,
@@ -830,7 +849,7 @@ fun HypnoStreamApp(
                     .background(Slate950),
                 bottomBar = {
                     Column(modifier = Modifier.navigationBarsPadding()) {
-                        if (!isPlayerOpen && playerUiState.currentItem != null) {
+                        if (!isPlayerOpen && !isMultiViewOpen && playerUiState.currentItem != null) {
                             MiniPlayerBar(
                                 playerManager = viewModel.playerManager,
                                 item = playerUiState.currentItem!!,
@@ -920,7 +939,20 @@ fun HypnoStreamApp(
                 onPlayNext = { viewModel.playNextChannel() },
                 onPlayPrevious = { viewModel.playPreviousChannel() },
                 onSelectChannel = { handlePlayWithResumePrompt(it) },
+                onOpenMultiView = { currentChannel -> viewModel.openMultiView(currentChannel) },
                 modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        if (isMultiViewOpen) {
+            val initialMultiChannel by viewModel.multiViewInitialChannel.collectAsState()
+            MultiViewScreen(
+                allChannels = viewModel.repository.getAllLiveChannels(),
+                initialChannel = initialMultiChannel,
+                onPlaySingleFullscreen = { singleItem ->
+                    viewModel.playStream(singleItem)
+                },
+                onBack = { performBack() }
             )
         }
 
