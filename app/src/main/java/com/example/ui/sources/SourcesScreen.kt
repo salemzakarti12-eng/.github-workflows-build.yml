@@ -63,7 +63,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -82,6 +81,8 @@ import androidx.compose.ui.unit.sp
 import com.example.model.IptvSource
 import com.example.model.SourceType
 import com.example.parser.XtreamUrlDetector
+import com.example.ui.DonationDialog
+import com.example.ui.SupportDeveloperButton
 import com.example.ui.components.LanguageToggleButton
 import com.example.ui.locale.LocalAppLanguage
 import com.example.ui.locale.LocalAppStrings
@@ -121,6 +122,8 @@ fun SourcesScreen(
     val isAr = currentLanguage == "ar"
     val isRtl = isRtlLanguage(currentLanguage)
 
+    var showDonationDialog by remember { mutableStateOf(false) }
+
     // Dual Login Tabs: 0 = M3U URL, 1 = Xtream Codes API, 2 = Saved Providers
     var selectedTab by remember { mutableIntStateOf(0) }
 
@@ -149,671 +152,706 @@ fun SourcesScreen(
     val layoutDirection = if (isRtl) LayoutDirection.Rtl else LayoutDirection.Ltr
 
     CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
-        Column(
+        Box(
             modifier = modifier
                 .fillMaxSize()
                 .background(Slate950)
-                .testTag("sources_screen")
         ) {
-            // Top App Bar
-            Row(
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .fillMaxSize()
+                    .testTag("sources_screen")
             ) {
-                val backInteraction = remember { MutableInteractionSource() }
-                val isBackFocused by backInteraction.collectIsFocusedAsState()
-
-                IconButton(
-                    onClick = onBack,
-                    interactionSource = backInteraction,
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(if (isBackFocused) AccentCyan else Slate850)
-                        .border(
-                            width = if (isBackFocused) 3.dp else 1.dp,
-                            color = if (isBackFocused) PureWhite else Slate700,
-                            shape = CircleShape
-                        )
-                        .focusable(interactionSource = backInteraction)
-                        .onPreviewKeyEvent { event ->
-                            if (event.type == KeyEventType.KeyUp &&
-                                (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                            ) {
-                                onBack()
-                                true
-                            } else false
-                        }
-                        .testTag("btn_sources_back")
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = strings.back,
-                        tint = if (isBackFocused) Slate950 else PureWhite
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = strings.sourcesAndProviders,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = PureWhite,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = strings.managePlaylists,
-                        fontSize = 11.sp,
-                        color = Slate400,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-                LanguageToggleButton(
-                    onToggleLanguage = onToggleLanguage,
-                    onSelectLanguage = onSelectLanguage
-                )
-            }
-
-            // Dual Login Tabs (M3U URL | Xtream Codes API | Saved Sources)
-            TabRow(
-                selectedTabIndex = selectedTab,
-                containerColor = Slate900,
-                contentColor = AccentCyan,
-                indicator = { tabPositions ->
-                    TabRowDefaults.SecondaryIndicator(
-                        modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                        color = AccentCyan,
-                        height = 3.dp
-                    )
-                }
-            ) {
-                val tab0Interaction = remember { MutableInteractionSource() }
-                val isTab0Focused by tab0Interaction.collectIsFocusedAsState()
-
-                Tab(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    interactionSource = tab0Interaction,
-                    text = {
-                        Text(
-                            text = strings.m3uTab,
-                            fontWeight = if (selectedTab == 0 || isTab0Focused) FontWeight.Bold else FontWeight.Normal,
-                            color = if (selectedTab == 0 || isTab0Focused) AccentCyan else Slate400,
-                            fontSize = 13.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    },
-                    modifier = Modifier
-                        .focusable(interactionSource = tab0Interaction)
-                        .testTag("tab_m3u")
-                )
-
-                val tab1Interaction = remember { MutableInteractionSource() }
-                val isTab1Focused by tab1Interaction.collectIsFocusedAsState()
-
-                Tab(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    interactionSource = tab1Interaction,
-                    text = {
-                        Text(
-                            text = strings.xtreamTab,
-                            fontWeight = if (selectedTab == 1 || isTab1Focused) FontWeight.Bold else FontWeight.Normal,
-                            color = if (selectedTab == 1 || isTab1Focused) AccentCyan else Slate400,
-                            fontSize = 13.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    },
-                    modifier = Modifier
-                        .focusable(interactionSource = tab1Interaction)
-                        .testTag("tab_xtream")
-                )
-
-                val tab2Interaction = remember { MutableInteractionSource() }
-                val isTab2Focused by tab2Interaction.collectIsFocusedAsState()
-
-                Tab(
-                    selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
-                    interactionSource = tab2Interaction,
-                    text = {
-                        Text(
-                            text = "${strings.savedTab} (${sources.size})",
-                            fontWeight = if (selectedTab == 2 || isTab2Focused) FontWeight.Bold else FontWeight.Normal,
-                            color = if (selectedTab == 2 || isTab2Focused) AccentCyan else Slate400,
-                            fontSize = 13.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    },
-                    modifier = Modifier
-                        .focusable(interactionSource = tab2Interaction)
-                        .testTag("tab_saved_sources")
-                )
-            }
-
-            // Live Progress Indicator Card with Live Counter
-            AnimatedVisibility(visible = isLoading || !statusMessage.isNullOrBlank()) {
-                Card(
+                // Top App Bar
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    colors = CardDefaults.cardColors(containerColor = Slate850),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(
-                        1.dp,
-                        if (isLoading) AccentCyan else if (isErrorStatus) AccentRed else Slate700
-                    )
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (isLoading) {
-                            CircularProgressIndicator(
-                                color = AccentCyan,
-                                strokeWidth = 2.5.dp,
-                                modifier = Modifier.size(24.dp)
+                    val backInteraction = remember { MutableInteractionSource() }
+                    val isBackFocused by backInteraction.collectIsFocusedAsState()
+
+                    IconButton(
+                        onClick = onBack,
+                        interactionSource = backInteraction,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(if (isBackFocused) AccentCyan else Slate850)
+                            .border(
+                                width = if (isBackFocused) 3.dp else 1.dp,
+                                color = if (isBackFocused) PureWhite else Slate700,
+                                shape = CircleShape
                             )
-                            Spacer(modifier = Modifier.width(12.dp))
-                        }
-                        Text(
-                            text = statusMessage ?: strings.parsingStreams,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (isErrorStatus) AccentRed else PureWhite,
-                            modifier = Modifier.weight(1f)
+                            .focusable(interactionSource = backInteraction)
+                            .onPreviewKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyUp &&
+                                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                ) {
+                                    onBack()
+                                    true
+                                } else false
+                            }
+                            .testTag("btn_sources_back")
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = strings.back,
+                            tint = if (isBackFocused) Slate950 else PureWhite
                         )
                     }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = strings.sourcesAndProviders,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = PureWhite,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = strings.managePlaylists,
+                            fontSize = 11.sp,
+                            color = Slate400,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+                    LanguageToggleButton(
+                        onToggleLanguage = onToggleLanguage,
+                        onSelectLanguage = onSelectLanguage
+                    )
                 }
-            }
 
-            val isMiniPlayerActive = LocalMiniPlayerActive.current
+                // Dual Login Tabs (M3U URL | Xtream Codes API | Saved Sources)
+                TabRow(
+                    selectedTabIndex = selectedTab,
+                    containerColor = Slate900,
+                    contentColor = AccentCyan,
+                    indicator = { tabPositions ->
+                        TabRowDefaults.SecondaryIndicator(
+                            modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                            color = AccentCyan,
+                            height = 3.dp
+                        )
+                    }
+                ) {
+                    val tab0Interaction = remember { MutableInteractionSource() }
+                    val isTab0Focused by tab0Interaction.collectIsFocusedAsState()
 
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(
-                    start = 16.dp,
-                    end = 16.dp,
-                    top = 16.dp,
-                    bottom = if (isMiniPlayerActive) 140.dp else 48.dp
-                ),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                when (selectedTab) {
-                    0 -> {
-                        // TAB 0: M3U URL LOGIN
-                        item {
+                    Tab(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        interactionSource = tab0Interaction,
+                        text = {
                             Text(
-                                text = strings.addM3uTitle,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = PureWhite
+                                text = strings.m3uTab,
+                                fontWeight = if (selectedTab == 0 || isTab0Focused) FontWeight.Bold else FontWeight.Normal,
+                                color = if (selectedTab == 0 || isTab0Focused) AccentCyan else Slate400,
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
+                        },
+                        modifier = Modifier
+                            .focusable(interactionSource = tab0Interaction)
+                            .testTag("tab_m3u")
+                    )
+
+                    val tab1Interaction = remember { MutableInteractionSource() }
+                    val isTab1Focused by tab1Interaction.collectIsFocusedAsState()
+
+                    Tab(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        interactionSource = tab1Interaction,
+                        text = {
                             Text(
-                                text = strings.addM3uSubtitle,
-                                fontSize = 12.sp,
-                                color = Slate400,
-                                modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)
+                                text = strings.xtreamTab,
+                                fontWeight = if (selectedTab == 1 || isTab1Focused) FontWeight.Bold else FontWeight.Normal,
+                                color = if (selectedTab == 1 || isTab1Focused) AccentCyan else Slate400,
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
-                        }
+                        },
+                        modifier = Modifier
+                            .focusable(interactionSource = tab1Interaction)
+                            .testTag("tab_xtream")
+                    )
 
-                        item {
-                            OutlinedTextField(
-                                value = m3uSourceName,
-                                onValueChange = { m3uSourceName = it },
-                                label = { Text(strings.playlistName) },
-                                placeholder = { Text("My IPTV Playlist") },
-                                singleLine = true,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("input_m3u_name"),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = PureWhite,
-                                    unfocusedTextColor = PureWhite,
-                                    focusedBorderColor = AccentCyan,
-                                    unfocusedBorderColor = Slate700,
-                                    focusedContainerColor = Slate900,
-                                    unfocusedContainerColor = Slate900
+                    val tab2Interaction = remember { MutableInteractionSource() }
+                    val isTab2Focused by tab2Interaction.collectIsFocusedAsState()
+
+                    Tab(
+                        selected = selectedTab == 2,
+                        onClick = { selectedTab = 2 },
+                        interactionSource = tab2Interaction,
+                        text = {
+                            Text(
+                                text = "${strings.savedTab} (${sources.size})",
+                                fontWeight = if (selectedTab == 2 || isTab2Focused) FontWeight.Bold else FontWeight.Normal,
+                                color = if (selectedTab == 2 || isTab2Focused) AccentCyan else Slate400,
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        },
+                        modifier = Modifier
+                            .focusable(interactionSource = tab2Interaction)
+                            .testTag("tab_saved_sources")
+                    )
+                }
+
+                // Live Progress Indicator Card with Live Counter
+                AnimatedVisibility(visible = isLoading || !statusMessage.isNullOrBlank()) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        colors = CardDefaults.cardColors(containerColor = Slate850),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(
+                            1.dp,
+                            if (isLoading) AccentCyan else if (isErrorStatus) AccentRed else Slate700
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (isLoading) {
+                                CircularProgressIndicator(
+                                    color = AccentCyan,
+                                    strokeWidth = 2.5.dp,
+                                    modifier = Modifier.size(24.dp)
                                 )
+                                Spacer(modifier = Modifier.width(12.dp))
+                            }
+                            Text(
+                                text = statusMessage ?: strings.parsingStreams,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isErrorStatus) AccentRed else PureWhite,
+                                modifier = Modifier.weight(1f)
                             )
                         }
+                    }
+                }
 
-                        item {
-                            OutlinedTextField(
-                                value = m3uUrl,
-                                onValueChange = { m3uUrl = it },
-                                label = { Text(strings.m3uUrlLabel) },
-                                leadingIcon = { Icon(Icons.Default.Link, null, tint = AccentCyan) },
-                                placeholder = { Text(strings.m3uUrlPlaceholder) },
-                                singleLine = true,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("input_m3u_url"),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = PureWhite,
-                                    unfocusedTextColor = PureWhite,
-                                    focusedBorderColor = AccentCyan,
-                                    unfocusedBorderColor = Slate700,
-                                    focusedContainerColor = Slate900,
-                                    unfocusedContainerColor = Slate900
-                                )
-                            )
-                        }
+                val isMiniPlayerActive = LocalMiniPlayerActive.current
 
-                        // Smart M3U-to-Xtream Auto-Detection Banner
-                        if (detectedXtream != null) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 16.dp,
+                        bottom = if (isMiniPlayerActive) 140.dp else 48.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    when (selectedTab) {
+                        0 -> {
+                            // TAB 0: M3U URL LOGIN
                             item {
-                                Card(
+                                Text(
+                                    text = strings.addM3uTitle,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PureWhite
+                                )
+                                Text(
+                                    text = strings.addM3uSubtitle,
+                                    fontSize = 12.sp,
+                                    color = Slate400,
+                                    modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)
+                                )
+                            }
+
+                            item {
+                                OutlinedTextField(
+                                    value = m3uSourceName,
+                                    onValueChange = { m3uSourceName = it },
+                                    label = { Text(strings.playlistName) },
+                                    placeholder = { Text("My IPTV Playlist") },
+                                    singleLine = true,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .border(1.5.dp, AccentEmerald, RoundedCornerShape(12.dp)),
-                                    colors = CardDefaults.cardColors(containerColor = Slate900)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                        .testTag("input_m3u_name"),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = PureWhite,
+                                        unfocusedTextColor = PureWhite,
+                                        focusedBorderColor = AccentCyan,
+                                        unfocusedBorderColor = Slate700,
+                                        focusedContainerColor = Slate900,
+                                        unfocusedContainerColor = Slate900
+                                    )
+                                )
+                            }
+
+                            item {
+                                OutlinedTextField(
+                                    value = m3uUrl,
+                                    onValueChange = { m3uUrl = it },
+                                    label = { Text(strings.m3uUrlLabel) },
+                                    leadingIcon = { Icon(Icons.Default.Link, null, tint = AccentCyan) },
+                                    placeholder = { Text(strings.m3uUrlPlaceholder) },
+                                    singleLine = true,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("input_m3u_url"),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = PureWhite,
+                                        unfocusedTextColor = PureWhite,
+                                        focusedBorderColor = AccentCyan,
+                                        unfocusedBorderColor = Slate700,
+                                        focusedContainerColor = Slate900,
+                                        unfocusedContainerColor = Slate900
+                                    )
+                                )
+                            }
+
+                            // Smart M3U-to-Xtream Auto-Detection Banner
+                            if (detectedXtream != null) {
+                                item {
+                                    Card(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .border(1.5.dp, AccentEmerald, RoundedCornerShape(12.dp)),
+                                        colors = CardDefaults.cardColors(containerColor = Slate900)
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.AutoAwesome,
-                                            contentDescription = null,
-                                            tint = AccentEmerald,
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        Column {
-                                            Text(
-                                                text = strings.autoDetectTitle,
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 13.sp,
-                                                color = AccentEmerald
-                                            )
-                                            Text(
-                                                text = "${strings.autoDetectDesc} (${detectedXtream.username})",
-                                                fontSize = 11.sp,
-                                                color = Slate300
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        item {
-                            val m3uBtnInteraction = remember { MutableInteractionSource() }
-                            val isM3uBtnFocused by m3uBtnInteraction.collectIsFocusedAsState()
-
-                            Button(
-                                onClick = {
-                                    onLoadM3u(m3uUrl.trim(), m3uRawContent, m3uSourceName.trim())
-                                },
-                                interactionSource = m3uBtnInteraction,
-                                enabled = !isLoading && (m3uUrl.isNotBlank() || m3uRawContent.isNotBlank()),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(52.dp)
-                                    .border(
-                                        width = if (isM3uBtnFocused) 3.dp else 0.dp,
-                                        color = PureWhite,
-                                        shape = RoundedCornerShape(14.dp)
-                                    )
-                                    .focusable(interactionSource = m3uBtnInteraction)
-                                    .onPreviewKeyEvent { event ->
-                                        if (event.type == KeyEventType.KeyUp &&
-                                            (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                        Row(
+                                            modifier = Modifier.padding(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            onLoadM3u(m3uUrl.trim(), m3uRawContent, m3uSourceName.trim())
-                                            true
-                                        } else false
-                                    }
-                                    .testTag("btn_load_m3u"),
-                                shape = RoundedCornerShape(14.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isM3uBtnFocused) PureWhite else AccentCyan,
-                                    contentColor = Slate950
-                                )
-                            ) {
-                                if (isLoading) {
-                                    CircularProgressIndicator(color = Slate950, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(strings.parsingStreams, fontWeight = FontWeight.Bold)
-                                } else {
-                                    Icon(Icons.Default.Storage, null)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(strings.connectAndLoad, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-
-                        item {
-                            DemoStreamsBanner(onLoadDemo = onLoadDemo)
-                        }
-                    }
-
-                    1 -> {
-                        // TAB 1: XTREAM CODES API LOGIN
-                        item {
-                            Text(
-                                text = strings.xtreamLoginTitle,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = PureWhite
-                            )
-                            Text(
-                                text = strings.xtreamLoginSubtitle,
-                                fontSize = 12.sp,
-                                color = Slate400,
-                                modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)
-                            )
-                        }
-
-                        item {
-                            OutlinedTextField(
-                                value = xtreamSourceName,
-                                onValueChange = { xtreamSourceName = it },
-                                label = { Text(strings.playlistName) },
-                                placeholder = { Text("Premium Xtream Provider") },
-                                singleLine = true,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("input_xtream_name"),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = PureWhite,
-                                    unfocusedTextColor = PureWhite,
-                                    focusedBorderColor = AccentCyan,
-                                    unfocusedBorderColor = Slate700,
-                                    focusedContainerColor = Slate900,
-                                    unfocusedContainerColor = Slate900
-                                )
-                            )
-                        }
-
-                        item {
-                            OutlinedTextField(
-                                value = serverUrl,
-                                onValueChange = { serverUrl = it },
-                                label = { Text(strings.serverUrl) },
-                                leadingIcon = { Icon(Icons.Default.Link, null, tint = AccentCyan) },
-                                placeholder = { Text("http://server.com:8080") },
-                                singleLine = true,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("input_xtream_server"),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = PureWhite,
-                                    unfocusedTextColor = PureWhite,
-                                    focusedBorderColor = AccentCyan,
-                                    unfocusedBorderColor = Slate700,
-                                    focusedContainerColor = Slate900,
-                                    unfocusedContainerColor = Slate900
-                                )
-                            )
-                        }
-
-                        item {
-                            OutlinedTextField(
-                                value = username,
-                                onValueChange = { username = it },
-                                label = { Text(strings.username) },
-                                leadingIcon = { Icon(Icons.Default.Person, null, tint = AccentCyan) },
-                                singleLine = true,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("input_xtream_username"),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = PureWhite,
-                                    unfocusedTextColor = PureWhite,
-                                    focusedBorderColor = AccentCyan,
-                                    unfocusedBorderColor = Slate700,
-                                    focusedContainerColor = Slate900,
-                                    unfocusedContainerColor = Slate900
-                                )
-                            )
-                        }
-
-                        item {
-                            OutlinedTextField(
-                                value = password,
-                                onValueChange = { password = it },
-                                label = { Text(strings.password) },
-                                leadingIcon = { Icon(Icons.Default.Lock, null, tint = AccentCyan) },
-                                trailingIcon = {
-                                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                        Icon(
-                                            imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                            contentDescription = "Toggle password",
-                                            tint = Slate400
-                                        )
-                                    }
-                                },
-                                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                                singleLine = true,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("input_xtream_password"),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = PureWhite,
-                                    unfocusedTextColor = PureWhite,
-                                    focusedBorderColor = AccentCyan,
-                                    unfocusedBorderColor = Slate700,
-                                    focusedContainerColor = Slate900,
-                                    unfocusedContainerColor = Slate900
-                                )
-                            )
-                        }
-
-                        item {
-                            val xtreamBtnInteraction = remember { MutableInteractionSource() }
-                            val isXtreamBtnFocused by xtreamBtnInteraction.collectIsFocusedAsState()
-
-                            Button(
-                                onClick = {
-                                    onConnectXtream(serverUrl.trim(), username.trim(), password.trim(), xtreamSourceName.trim())
-                                },
-                                interactionSource = xtreamBtnInteraction,
-                                enabled = !isLoading && serverUrl.isNotBlank() && username.isNotBlank() && password.isNotBlank(),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(52.dp)
-                                    .border(
-                                        width = if (isXtreamBtnFocused) 3.dp else 0.dp,
-                                        color = PureWhite,
-                                        shape = RoundedCornerShape(14.dp)
-                                    )
-                                    .focusable(interactionSource = xtreamBtnInteraction)
-                                    .onPreviewKeyEvent { event ->
-                                        if (event.type == KeyEventType.KeyUp &&
-                                            (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                                        ) {
-                                            onConnectXtream(serverUrl.trim(), username.trim(), password.trim(), xtreamSourceName.trim())
-                                            true
-                                        } else false
-                                    }
-                                    .testTag("btn_connect_xtream"),
-                                shape = RoundedCornerShape(14.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isXtreamBtnFocused) PureWhite else AccentCyan,
-                                    contentColor = Slate950
-                                )
-                            ) {
-                                if (isLoading) {
-                                    CircularProgressIndicator(color = Slate950, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(strings.parsingStreams, fontWeight = FontWeight.Bold)
-                                } else {
-                                    Icon(Icons.Default.Sensors, null)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(strings.connectXtreamButton, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-
-                        item {
-                            DemoStreamsBanner(onLoadDemo = onLoadDemo)
-                        }
-                    }
-
-                    2 -> {
-                        // TAB 2: SAVED SOURCES
-                        item {
-                            Text(
-                                text = strings.savedTab,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = PureWhite
-                            )
-                            Text(
-                                text = strings.managePlaylists,
-                                fontSize = 12.sp,
-                                color = Slate400,
-                                modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
-                            )
-                        }
-
-                        items(sources, key = { it.id }) { source ->
-                            val isActive = source.id == activeSource?.id
-                            val sourceCardInteraction = remember { MutableInteractionSource() }
-                            val isSourceCardFocused by sourceCardInteraction.collectIsFocusedAsState()
-
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .border(
-                                        width = if (isSourceCardFocused) 3.dp else if (isActive) 2.dp else 1.dp,
-                                        color = if (isSourceCardFocused) PureWhite else if (isActive) AccentEmerald else Slate800,
-                                        shape = RoundedCornerShape(16.dp)
-                                    )
-                                    .focusable(interactionSource = sourceCardInteraction)
-                                    .onPreviewKeyEvent { event ->
-                                        if (event.type == KeyEventType.KeyUp &&
-                                            (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                                        ) {
-                                            onSwitchSource(source)
-                                            true
-                                        } else false
-                                    }
-                                    .clickable(interactionSource = sourceCardInteraction, indication = null) {
-                                        onSwitchSource(source)
-                                    }
-                                    .testTag("source_item_${source.id}"),
-                                colors = CardDefaults.cardColors(containerColor = if (isSourceCardFocused) Slate850 else Slate900),
-                                shape = RoundedCornerShape(16.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(
-                                                text = source.name,
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 15.sp,
-                                                color = PureWhite
-                                            )
-                                            if (isActive) {
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Box(
-                                                    modifier = Modifier
-                                                        .clip(RoundedCornerShape(6.dp))
-                                                        .background(Color(0x3310B981))
-                                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                                ) {
-                                                    Text(
-                                                        text = strings.active.uppercase(Locale.US),
-                                                        fontSize = 9.sp,
-                                                        fontWeight = FontWeight.Black,
-                                                        color = AccentEmerald
-                                                    )
-                                                }
-                                            }
-                                        }
-
-                                        Text(
-                                            text = when (source.type) {
-                                                SourceType.XTREAM_CODES -> "Xtream API: ${source.serverUrl}"
-                                                SourceType.M3U_URL -> "M3U: ${source.m3uUrl.take(30)}..."
-                                                SourceType.M3U_TEXT -> if (isAr) "ملف M3U نصي" else "Raw M3U Playlist"
-                                                SourceType.DEMO -> if (isAr) "قنوات تجريبية مجانية" else "Bundled Verified Public Streams"
-                                            },
-                                            fontSize = 11.sp,
-                                            color = Slate400,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.padding(top = 2.dp)
-                                        )
-
-                                        Text(
-                                            text = "%,d ${strings.liveTv}  •  %,d ${strings.movies}  •  %,d ${strings.series}".format(
-                                                Locale.US, source.channelCount, source.movieCount, source.seriesCount
-                                            ),
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = AccentCyan,
-                                            modifier = Modifier.padding(top = 4.dp)
-                                        )
-                                    }
-
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        if (source.type != SourceType.DEMO) {
-                                            IconButton(
-                                                onClick = { onDeleteSource(source.id) },
-                                                modifier = Modifier.size(36.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Delete,
-                                                    contentDescription = strings.delete,
-                                                    tint = Slate400,
-                                                    modifier = Modifier.size(20.dp)
-                                                )
-                                            }
-                                        }
-
-                                        if (!isActive) {
-                                            Button(
-                                                onClick = { onSwitchSource(source) },
-                                                colors = ButtonDefaults.buttonColors(containerColor = Slate800, contentColor = PureWhite),
-                                                shape = RoundedCornerShape(10.dp),
-                                                modifier = Modifier.padding(start = 4.dp)
-                                            ) {
-                                                Text(strings.activate, fontSize = 12.sp)
-                                            }
-                                        } else {
                                             Icon(
-                                                imageVector = Icons.Default.CheckCircle,
-                                                contentDescription = strings.active,
+                                                imageVector = Icons.Default.AutoAwesome,
+                                                contentDescription = null,
                                                 tint = AccentEmerald,
                                                 modifier = Modifier.size(24.dp)
                                             )
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Column {
+                                                Text(
+                                                    text = strings.autoDetectTitle,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 13.sp,
+                                                    color = AccentEmerald
+                                                )
+                                                Text(
+                                                    text = "${strings.autoDetectDesc} (${detectedXtream.username})",
+                                                    fontSize = 11.sp,
+                                                    color = Slate300
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
+
+                            item {
+                                val m3uBtnInteraction = remember { MutableInteractionSource() }
+                                val isM3uBtnFocused by m3uBtnInteraction.collectIsFocusedAsState()
+
+                                Button(
+                                    onClick = {
+                                        onLoadM3u(m3uUrl.trim(), m3uRawContent, m3uSourceName.trim())
+                                    },
+                                    interactionSource = m3uBtnInteraction,
+                                    enabled = !isLoading && (m3uUrl.isNotBlank() || m3uRawContent.isNotBlank()),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(52.dp)
+                                        .border(
+                                            width = if (isM3uBtnFocused) 3.dp else 0.dp,
+                                            color = PureWhite,
+                                            shape = RoundedCornerShape(14.dp)
+                                        )
+                                        .focusable(interactionSource = m3uBtnInteraction)
+                                        .onPreviewKeyEvent { event ->
+                                            if (event.type == KeyEventType.KeyUp &&
+                                                (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                            ) {
+                                                onLoadM3u(m3uUrl.trim(), m3uRawContent, m3uSourceName.trim())
+                                                true
+                                            } else false
+                                        }
+                                        .testTag("btn_load_m3u"),
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isM3uBtnFocused) PureWhite else AccentCyan,
+                                        contentColor = Slate950
+                                    )
+                                ) {
+                                    if (isLoading) {
+                                        CircularProgressIndicator(color = Slate950, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(strings.parsingStreams, fontWeight = FontWeight.Bold)
+                                    } else {
+                                        Icon(Icons.Default.Storage, null)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(strings.connectAndLoad, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+
+                            item {
+                                DemoStreamsBanner(onLoadDemo = onLoadDemo)
+                            }
+
+                            item {
+                                SupportDeveloperButton(
+                                    isAr = isAr,
+                                    onClick = { showDonationDialog = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
                         }
 
-                        item {
-                            DemoStreamsBanner(onLoadDemo = onLoadDemo)
+                        1 -> {
+                            // TAB 1: XTREAM CODES API LOGIN
+                            item {
+                                Text(
+                                    text = strings.xtreamLoginTitle,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PureWhite
+                                )
+                                Text(
+                                    text = strings.xtreamLoginSubtitle,
+                                    fontSize = 12.sp,
+                                    color = Slate400,
+                                    modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)
+                                )
+                            }
+
+                            item {
+                                OutlinedTextField(
+                                    value = xtreamSourceName,
+                                    onValueChange = { xtreamSourceName = it },
+                                    label = { Text(strings.playlistName) },
+                                    placeholder = { Text("Premium Xtream Provider") },
+                                    singleLine = true,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("input_xtream_name"),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = PureWhite,
+                                        unfocusedTextColor = PureWhite,
+                                        focusedBorderColor = AccentCyan,
+                                        unfocusedBorderColor = Slate700,
+                                        focusedContainerColor = Slate900,
+                                        unfocusedContainerColor = Slate900
+                                    )
+                                )
+                            }
+
+                            item {
+                                OutlinedTextField(
+                                    value = serverUrl,
+                                    onValueChange = { serverUrl = it },
+                                    label = { Text(strings.serverUrl) },
+                                    leadingIcon = { Icon(Icons.Default.Link, null, tint = AccentCyan) },
+                                    placeholder = { Text("http://server.com:8080") },
+                                    singleLine = true,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("input_xtream_server"),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = PureWhite,
+                                        unfocusedTextColor = PureWhite,
+                                        focusedBorderColor = AccentCyan,
+                                        unfocusedBorderColor = Slate700,
+                                        focusedContainerColor = Slate900,
+                                        unfocusedContainerColor = Slate900
+                                    )
+                                )
+                            }
+
+                            item {
+                                OutlinedTextField(
+                                    value = username,
+                                    onValueChange = { username = it },
+                                    label = { Text(strings.username) },
+                                    leadingIcon = { Icon(Icons.Default.Person, null, tint = AccentCyan) },
+                                    singleLine = true,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("input_xtream_username"),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = PureWhite,
+                                        unfocusedTextColor = PureWhite,
+                                        focusedBorderColor = AccentCyan,
+                                        unfocusedBorderColor = Slate700,
+                                        focusedContainerColor = Slate900,
+                                        unfocusedContainerColor = Slate900
+                                    )
+                                )
+                            }
+
+                            item {
+                                OutlinedTextField(
+                                    value = password,
+                                    onValueChange = { password = it },
+                                    label = { Text(strings.password) },
+                                    leadingIcon = { Icon(Icons.Default.Lock, null, tint = AccentCyan) },
+                                    trailingIcon = {
+                                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                            Icon(
+                                                imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                                contentDescription = "Toggle password",
+                                                tint = Slate400
+                                            )
+                                        }
+                                    },
+                                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                    singleLine = true,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("input_xtream_password"),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = PureWhite,
+                                        unfocusedTextColor = PureWhite,
+                                        focusedBorderColor = AccentCyan,
+                                        unfocusedBorderColor = Slate700,
+                                        focusedContainerColor = Slate900,
+                                        unfocusedContainerColor = Slate900
+                                    )
+                                )
+                            }
+
+                            item {
+                                val xtreamBtnInteraction = remember { MutableInteractionSource() }
+                                val isXtreamBtnFocused by xtreamBtnInteraction.collectIsFocusedAsState()
+
+                                Button(
+                                    onClick = {
+                                        onConnectXtream(serverUrl.trim(), username.trim(), password.trim(), xtreamSourceName.trim())
+                                    },
+                                    interactionSource = xtreamBtnInteraction,
+                                    enabled = !isLoading && serverUrl.isNotBlank() && username.isNotBlank() && password.isNotBlank(),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(52.dp)
+                                        .border(
+                                            width = if (isXtreamBtnFocused) 3.dp else 0.dp,
+                                            color = PureWhite,
+                                            shape = RoundedCornerShape(14.dp)
+                                        )
+                                        .focusable(interactionSource = xtreamBtnInteraction)
+                                        .onPreviewKeyEvent { event ->
+                                            if (event.type == KeyEventType.KeyUp &&
+                                                (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                            ) {
+                                                onConnectXtream(serverUrl.trim(), username.trim(), password.trim(), xtreamSourceName.trim())
+                                                true
+                                            } else false
+                                        }
+                                        .testTag("btn_connect_xtream"),
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isXtreamBtnFocused) PureWhite else AccentCyan,
+                                        contentColor = Slate950
+                                    )
+                                ) {
+                                    if (isLoading) {
+                                        CircularProgressIndicator(color = Slate950, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(strings.parsingStreams, fontWeight = FontWeight.Bold)
+                                    } else {
+                                        Icon(Icons.Default.Sensors, null)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(strings.connectXtreamButton, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+
+                            item {
+                                DemoStreamsBanner(onLoadDemo = onLoadDemo)
+                            }
+
+                            item {
+                                SupportDeveloperButton(
+                                    isAr = isAr,
+                                    onClick = { showDonationDialog = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
                         }
 
-                        item {
-                            Spacer(modifier = Modifier.height(70.dp))
+                        2 -> {
+                            // TAB 2: SAVED SOURCES
+                            item {
+                                Text(
+                                    text = strings.savedTab,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PureWhite
+                                )
+                                Text(
+                                    text = strings.managePlaylists,
+                                    fontSize = 12.sp,
+                                    color = Slate400,
+                                    modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
+                                )
+                            }
+
+                            items(sources, key = { it.id }) { source ->
+                                val isActive = source.id == activeSource?.id
+                                val sourceCardInteraction = remember { MutableInteractionSource() }
+                                val isSourceCardFocused by sourceCardInteraction.collectIsFocusedAsState()
+
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .border(
+                                            width = if (isSourceCardFocused) 3.dp else if (isActive) 2.dp else 1.dp,
+                                            color = if (isSourceCardFocused) PureWhite else if (isActive) AccentEmerald else Slate800,
+                                            shape = RoundedCornerShape(16.dp)
+                                        )
+                                        .focusable(interactionSource = sourceCardInteraction)
+                                        .onPreviewKeyEvent { event ->
+                                            if (event.type == KeyEventType.KeyUp &&
+                                                (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                            ) {
+                                                onSwitchSource(source)
+                                                true
+                                            } else false
+                                        }
+                                        .clickable(interactionSource = sourceCardInteraction, indication = null) {
+                                            onSwitchSource(source)
+                                        }
+                                        .testTag("source_item_${source.id}"),
+                                    colors = CardDefaults.cardColors(containerColor = if (isSourceCardFocused) Slate850 else Slate900),
+                                    shape = RoundedCornerShape(16.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    text = source.name,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 15.sp,
+                                                    color = PureWhite
+                                                )
+                                                if (isActive) {
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .clip(RoundedCornerShape(6.dp))
+                                                            .background(Color(0x3310B981))
+                                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = strings.active.uppercase(Locale.US),
+                                                            fontSize = 9.sp,
+                                                            fontWeight = FontWeight.Black,
+                                                            color = AccentEmerald
+                                                        )
+                                                    }
+                                                }
+                                            }
+
+                                            Text(
+                                                text = when (source.type) {
+                                                    SourceType.XTREAM_CODES -> "Xtream API: ${source.serverUrl}"
+                                                    SourceType.M3U_URL -> "M3U: ${source.m3uUrl.take(30)}..."
+                                                    SourceType.M3U_TEXT -> if (isAr) "ملف M3U نصي" else "Raw M3U Playlist"
+                                                    SourceType.DEMO -> if (isAr) "قنوات تجريبية مجانية" else "Bundled Verified Public Streams"
+                                                },
+                                                fontSize = 11.sp,
+                                                color = Slate400,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.padding(top = 2.dp)
+                                            )
+
+                                            Text(
+                                                text = "%,d ${strings.liveTv}  •  %,d ${strings.movies}  •  %,d ${strings.series}".format(
+                                                    Locale.US, source.channelCount, source.movieCount, source.seriesCount
+                                                ),
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = AccentCyan,
+                                                modifier = Modifier.padding(top = 4.dp)
+                                            )
+                                        }
+
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            if (source.type != SourceType.DEMO) {
+                                                IconButton(
+                                                    onClick = { onDeleteSource(source.id) },
+                                                    modifier = Modifier.size(36.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Delete,
+                                                        contentDescription = strings.delete,
+                                                        tint = Slate400,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                            }
+
+                                            if (!isActive) {
+                                                Button(
+                                                    onClick = { onSwitchSource(source) },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = Slate800, contentColor = PureWhite),
+                                                    shape = RoundedCornerShape(10.dp),
+                                                    modifier = Modifier.padding(start = 4.dp)
+                                                ) {
+                                                    Text(strings.activate, fontSize = 12.sp)
+                                                }
+                                            } else {
+                                                Icon(
+                                                    imageVector = Icons.Default.CheckCircle,
+                                                    contentDescription = strings.active,
+                                                    tint = AccentEmerald,
+                                                    modifier = Modifier.size(24.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            item {
+                                DemoStreamsBanner(onLoadDemo = onLoadDemo)
+                            }
+
+                            item {
+                                SupportDeveloperButton(
+                                    isAr = isAr,
+                                    onClick = { showDonationDialog = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+
+                            item {
+                                Spacer(modifier = Modifier.height(70.dp))
+                            }
                         }
                     }
                 }
+            }
+
+            if (showDonationDialog) {
+                DonationDialog(
+                    onDismiss = { showDonationDialog = false }
+                )
             }
         }
     }
