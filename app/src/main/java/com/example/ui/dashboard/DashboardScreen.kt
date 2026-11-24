@@ -53,7 +53,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -84,7 +86,9 @@ import coil.compose.AsyncImage
 import com.example.model.IptvItem
 import com.example.model.IptvSource
 import com.example.model.IptvType
+import com.example.ui.DonationDialog
 import com.example.ui.Screen
+import com.example.ui.SupportDeveloperIconChip
 import com.example.ui.components.LanguageToggleButton
 import com.example.ui.locale.LocalAppLanguage
 import com.example.ui.locale.LocalAppStrings
@@ -135,6 +139,8 @@ fun DashboardScreen(
     val isMiniPlayerActive = LocalMiniPlayerActive.current
     val layoutDirection = if (isRtl) LayoutDirection.Rtl else LayoutDirection.Ltr
 
+    var showDonationDialog by remember { mutableStateOf(false) }
+
     val positionPrefs = remember {
         context.getSharedPreferences("hypnostream_playback_positions", Context.MODE_PRIVATE)
     }
@@ -179,6 +185,7 @@ fun DashboardScreen(
                     DashboardHeader(
                         activeSource = activeSource,
                         onOpenSources = { onNavigate(Screen.SOURCES) },
+                        onOpenDonation = { showDonationDialog = true },
                         onToggleLanguage = onToggleLanguage,
                         onSelectLanguage = onSelectLanguage
                     )
@@ -401,6 +408,12 @@ fun DashboardScreen(
                     Spacer(modifier = Modifier.height(70.dp))
                 }
             }
+
+            if (showDonationDialog) {
+                DonationDialog(
+                    onDismiss = { showDonationDialog = false }
+                )
+            }
         }
     }
 }
@@ -409,6 +422,7 @@ fun DashboardScreen(
 fun DashboardHeader(
     activeSource: IptvSource?,
     onOpenSources: () -> Unit,
+    onOpenDonation: () -> Unit = {},
     onToggleLanguage: () -> Unit = {},
     onSelectLanguage: ((String) -> Unit)? = null
 ) {
@@ -465,6 +479,10 @@ fun DashboardHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            SupportDeveloperIconChip(
+                onClick = onOpenDonation
+            )
+
             LanguageToggleButton(
                 onToggleLanguage = onToggleLanguage,
                 onSelectLanguage = onSelectLanguage
