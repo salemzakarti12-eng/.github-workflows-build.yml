@@ -19,7 +19,6 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -40,9 +39,9 @@ import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AspectRatio
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.ViewColumn
@@ -64,6 +63,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -112,11 +112,11 @@ import com.example.ui.theme.PureWhite
 import com.example.ui.theme.Slate300
 import com.example.ui.theme.Slate400
 import com.example.ui.theme.Slate700
-import com.example.ui.theme.Slate800
 import com.example.ui.theme.Slate850
 import com.example.ui.theme.Slate900
 import com.example.ui.theme.Slate950
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -130,57 +130,77 @@ fun MultiViewScreen(
     val localView = LocalView.current
     val strings = LocalAppStrings.current
     val isAr = LocalAppLanguage.current == "ar"
+    val scope = rememberCoroutineScope()
 
-    // 2 = تقسيم ثنائي متلاصق (نصفين), 4 = شبكة رباعية متلاصقة (2x2)
     var screenCount by remember { mutableIntStateOf(2) }
     var activeAudioSlot by remember { mutableIntStateOf(0) }
     var fillScreenMode by remember { mutableStateOf(true) }
     var showOverlayHud by remember { mutableStateOf(true) }
     var hudTriggerKey by remember { mutableIntStateOf(0) }
-
-    // فتح نافذة اختيار قناة لمربع محدد
     var pickerSlotIndex by remember { mutableStateOf<Int?>(null) }
 
-    // قائمة القنوات في المربعات الأربعة
+    // اختيار قنوات مختلفة تماماً في الشاشتين الأولى والثانية لتجنب حظر السيرفر لتكرار نفس القناة
+    val firstChannel = remember(initialChannel, allChannels) {
+        initialChannel ?: allChannels.firstOrNull()
+    }
+    val secondChannel = remember(firstChannel, allChannels) {
+        allChannels.firstOrNull { ch ->
+            ch.id != firstChannel?.id &&
+            ch.streamUrl != firstChannel?.streamUrl &&
+            !ch.name.equals(firstChannel?.name, ignoreCase = true)
+        }
+    }
+
     val slotChannels = remember {
         mutableStateListOf<IptvItem?>(
-            initialChannel ?: allChannels.firstOrNull(),
-            allChannels.firstOrNull { it.id != initialChannel?.id },
+            firstChannel,
+            secondChannel,
             null,
             null
         )
     }
 
-    // حالات التحميل والأخطاء لكل مربع
     val slotBuffering = remember { mutableStateListOf(false, false, false, false) }
     val slotErrors = remember { mutableStateListOf<String?>(null, null, null, null) }
+    val slotRetryCounts = remember { mutableStateListOf(0, 0, 0, 0) }
 
-    // إنشاء 4 مشغلات ExoPlayer خفيفة ومضبوطة لحماية المعالج والـ RAM
+    // بصمات اتصال مستقلة لكل مشغل حتى لا يدمجها سيرفر IPTV في جلسة واحدة أو يحظرها كطلب مكرر
+    val slotHttpFactories = remember {
+        val agents = listOf(
+            "IPTVSmartersPlayer",
+            "VLC/3.0.20 LibVLC/3.0.20",
+            "Lavf/60.16.100",
+            "ExoPlayer/2.19.1 (Linux; Android 14)"
+        )
+        List(4) { idx ->
+            DefaultHttpDataSource.Factory()
+                .setUserAgent(agents[idx])
+                .setAllowCrossProtocolRedirects(true)
+                .setConnectTimeoutMs(15_000)
+                .setReadTimeoutMs(25_000)
+        }
+    }
+
+    lateinit var triggerSlotLoad: (Int, IptvItem?, Boolean) -> Unit
+
     val players = remember {
-        val httpFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("IPTVSmartersPlayer")
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(12_000)
-            .setReadTimeoutMs(20_000)
-
         val renderersFactory = DefaultRenderersFactory(context)
             .setEnableDecoderFallback(true)
-            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
 
-        // تقليل الـ Buffer لتوفير الذاكرة عند تشغيل 4 قنوات معاً
         val lightweightLoadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                6_000,
-                15_000,
-                500,
-                1_000
+                8_000,
+                20_000,
+                600,
+                1_200
             )
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
         List(4) { index ->
             ExoPlayer.Builder(context, renderersFactory)
-                .setMediaSourceFactory(DefaultMediaSourceFactory(httpFactory))
+                .setMediaSourceFactory(DefaultMediaSourceFactory(slotHttpFactories[index]))
                 .setLoadControl(lightweightLoadControl)
                 .build()
                 .apply {
@@ -196,6 +216,7 @@ fun MultiViewScreen(
                                 Player.STATE_READY -> {
                                     slotBuffering[index] = false
                                     slotErrors[index] = null
+                                    slotRetryCounts[index] = 0
                                 }
                                 Player.STATE_IDLE, Player.STATE_ENDED -> {
                                     slotBuffering[index] = false
@@ -204,11 +225,36 @@ fun MultiViewScreen(
                         }
 
                         override fun onPlayerError(error: PlaybackException) {
+                            val currentItem = slotChannels[index]
+                            if (currentItem != null && slotRetryCounts[index] < 2) {
+                                slotRetryCounts[index]++
+                                slotBuffering[index] = true
+                                slotErrors[index] = null
+                                scope.launch {
+                                    delay(1200L * slotRetryCounts[index])
+                                    if (slotChannels[index]?.id == currentItem.id) {
+                                        triggerSlotLoad(index, currentItem, true)
+                                    }
+                                }
+                                return
+                            }
+
                             slotBuffering[index] = false
-                            slotErrors[index] = if (isAr) {
-                                "تعذّر تشغيل القناة (قد لا يدعم المعالج قنوات إضافية)"
-                            } else {
-                                "Stream failed (Hardware decoder limit or offline)"
+                            slotErrors[index] = when (error.errorCode) {
+                                PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ->
+                                    if (isAr) "رفض السيرفر الاتصال (${error.errorCodeName}) - اضغط للتبديل أو إعادة المحاولة"
+                                    else "Server rejected (${error.errorCodeName}) - Tap to retry or switch"
+                                PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+                                PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
+                                    if (isAr) "تعذر الاتصال بالقناة أو البث متوقف (${error.errorCodeName})"
+                                    else "Stream offline or timeout (${error.errorCodeName})"
+                                PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
+                                PlaybackException.ERROR_CODE_DECODING_FAILED ->
+                                    if (isAr) "تجاوز حد المعالج (${error.errorCodeName})"
+                                    else "Decoder limit (${error.errorCodeName})"
+                                else ->
+                                    if (isAr) "فشل التشغيل (${error.errorCodeName})"
+                                    else "Stream failed (${error.errorCodeName})"
                             }
                         }
                     })
@@ -216,51 +262,45 @@ fun MultiViewScreen(
         }
     }
 
-    val httpDataSourceFactory = remember {
-        DefaultHttpDataSource.Factory()
-            .setUserAgent("IPTVSmartersPlayer")
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(12_000)
-            .setReadTimeoutMs(20_000)
-    }
-
-    // دالة تحميل البث داخل مربع محدد
-    fun loadChannelInSlot(slotIdx: Int, item: IptvItem?) {
+    triggerSlotLoad = { slotIdx, item, isRetry ->
         val p = players[slotIdx]
         if (item == null) {
             p.stop()
             p.clearMediaItems()
             slotBuffering[slotIdx] = false
             slotErrors[slotIdx] = null
-            return
-        }
-        try {
-            slotBuffering[slotIdx] = true
-            slotErrors[slotIdx] = null
-            val uri = Uri.parse(item.streamUrl.trim())
-            val mediaItem = MediaItem.fromUri(uri)
-            val isHls = item.detectFormat() == StreamFormat.HLS ||
-                    item.streamUrl.contains(".m3u8", ignoreCase = true)
+        } else {
+            try {
+                if (!isRetry) {
+                    slotRetryCounts[slotIdx] = 0
+                }
+                slotBuffering[slotIdx] = true
+                slotErrors[slotIdx] = null
+                val uri = Uri.parse(item.streamUrl.trim())
+                val mediaItem = MediaItem.fromUri(uri)
+                val isHls = item.detectFormat() == StreamFormat.HLS ||
+                        item.streamUrl.contains(".m3u8", ignoreCase = true)
 
-            val mediaSource = if (isHls) {
-                HlsMediaSource.Factory(httpDataSourceFactory)
-                    .setAllowChunklessPreparation(true)
-                    .createMediaSource(mediaItem)
-            } else {
-                DefaultMediaSourceFactory(httpDataSourceFactory)
-                    .createMediaSource(mediaItem)
+                val factory = slotHttpFactories[slotIdx]
+                val mediaSource = if (isHls) {
+                    HlsMediaSource.Factory(factory)
+                        .setAllowChunklessPreparation(true)
+                        .createMediaSource(mediaItem)
+                } else {
+                    DefaultMediaSourceFactory(factory)
+                        .createMediaSource(mediaItem)
+                }
+
+                p.setMediaSource(mediaSource, true)
+                p.prepare()
+                p.playWhenReady = true
+            } catch (e: Exception) {
+                slotBuffering[slotIdx] = false
+                slotErrors[slotIdx] = e.localizedMessage ?: "Error"
             }
-
-            p.setMediaSource(mediaSource, true)
-            p.prepare()
-            p.playWhenReady = true
-        } catch (e: Exception) {
-            slotBuffering[slotIdx] = false
-            slotErrors[slotIdx] = e.localizedMessage ?: "Error"
         }
     }
 
-    // إخفاء شريط النظام لملء الشاشة 100% وتنظيف المشغلات عند الخروج
     DisposableEffect(localView) {
         val prevKeepScreenOn = localView.keepScreenOn
         localView.keepScreenOn = true
@@ -271,14 +311,19 @@ fun MultiViewScreen(
             hide(WindowInsetsCompat.Type.systemBars())
         }
 
-        // تشغيل القنوات المبدئية
-        for (i in 0 until screenCount) {
-            if (slotChannels[i] != null) {
-                loadChannelInSlot(i, slotChannels[i])
+        // تشغيل متدرج بفاصل زمني لمنع حظر السيرفر للطلبات المتزامنة من نفس الـ IP
+        val startupJob = scope.launch {
+            for (i in 0 until screenCount) {
+                val ch = slotChannels[i]
+                if (ch != null) {
+                    triggerSlotLoad(i, ch, false)
+                    delay(750L)
+                }
             }
         }
 
         onDispose {
+            startupJob.cancel()
             localView.keepScreenOn = prevKeepScreenOn
             insetsController?.show(WindowInsetsCompat.Type.systemBars())
             players.forEach {
@@ -290,14 +335,12 @@ fun MultiViewScreen(
         }
     }
 
-    // تحديث الصوت تلقائياً: فقط المربع النشط يعمل بصوت 100% والباقي مكتوم
     LaunchedEffect(activeAudioSlot, screenCount) {
         players.forEachIndexed { idx, player ->
             player.volume = if (idx == activeAudioSlot && idx < screenCount) 1f else 0f
         }
     }
 
-    // إيقاف المشغلات 3 و 4 تلقائياً عند العودة إلى وضع الشاشتين لتوفير المعالج والإنترنت
     LaunchedEffect(screenCount) {
         if (screenCount == 2) {
             for (idx in 2..3) {
@@ -311,14 +354,15 @@ fun MultiViewScreen(
             }
         } else if (screenCount == 4) {
             for (idx in 2..3) {
-                if (slotChannels[idx] != null && !players[idx].isPlaying) {
-                    loadChannelInSlot(idx, slotChannels[idx])
+                val ch = slotChannels[idx]
+                if (ch != null && !players[idx].isPlaying) {
+                    triggerSlotLoad(idx, ch, false)
+                    delay(750L)
                 }
             }
         }
     }
 
-    // إخفاء شريط التحكم العلوي تلقائياً بعد 4 ثوانٍ لتبقى الشاشة نظيفة بدون أي بازل
     LaunchedEffect(hudTriggerKey, showOverlayHud, pickerSlotIndex) {
         if (showOverlayHud && pickerSlotIndex == null) {
             delay(4000L)
@@ -331,7 +375,6 @@ fun MultiViewScreen(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // شبكة الفيديو المتلاصقة تماماً (Zero-Gap / No Bezel)
         if (screenCount == 2) {
             Row(modifier = Modifier.fillMaxSize()) {
                 for (slotIdx in 0..1) {
@@ -349,6 +392,9 @@ fun MultiViewScreen(
                             activeAudioSlot = slotIdx
                             showOverlayHud = true
                             hudTriggerKey++
+                        },
+                        onRetrySlot = {
+                            slotChannels[slotIdx]?.let { triggerSlotLoad(slotIdx, it, false) }
                         },
                         onChangeChannel = {
                             pickerSlotIndex = slotIdx
@@ -385,6 +431,9 @@ fun MultiViewScreen(
                                 showOverlayHud = true
                                 hudTriggerKey++
                             },
+                            onRetrySlot = {
+                                slotChannels[slotIdx]?.let { triggerSlotLoad(slotIdx, it, false) }
+                            },
                             onChangeChannel = {
                                 pickerSlotIndex = slotIdx
                             },
@@ -418,6 +467,9 @@ fun MultiViewScreen(
                                 showOverlayHud = true
                                 hudTriggerKey++
                             },
+                            onRetrySlot = {
+                                slotChannels[slotIdx]?.let { triggerSlotLoad(slotIdx, it, false) }
+                            },
                             onChangeChannel = {
                                 pickerSlotIndex = slotIdx
                             },
@@ -433,7 +485,6 @@ fun MultiViewScreen(
             }
         }
 
-        // شريط تحكم عائم علوي يظهر عند اللمس أو الضغط ويختفي تلقائياً
         AnimatedVisibility(
             visible = showOverlayHud,
             enter = fadeIn(),
@@ -464,7 +515,6 @@ fun MultiViewScreen(
                         )
                     }
 
-                    // زر التبديل إلى 2 شاشات متلاصقة
                     Surface(
                         onClick = {
                             screenCount = 2
@@ -493,7 +543,6 @@ fun MultiViewScreen(
                         }
                     }
 
-                    // زر التبديل إلى 4 شاشات متلاصقة
                     Surface(
                         onClick = {
                             screenCount = 4
@@ -522,7 +571,6 @@ fun MultiViewScreen(
                         }
                     }
 
-                    // زر ملء الشاشة بدون أشرطة سوداء (FILL vs FIT)
                     IconButton(
                         onClick = {
                             fillScreenMode = !fillScreenMode
@@ -541,7 +589,6 @@ fun MultiViewScreen(
             }
         }
 
-        // نافذة اختيار قناة للمربع المحدد
         if (pickerSlotIndex != null) {
             val targetSlot = pickerSlotIndex!!
             MultiViewChannelPickerDialog(
@@ -551,7 +598,7 @@ fun MultiViewScreen(
                 onSelect = { chosen ->
                     slotChannels[targetSlot] = chosen
                     activeAudioSlot = targetSlot
-                    loadChannelInSlot(targetSlot, chosen)
+                    triggerSlotLoad(targetSlot, chosen, false)
                     pickerSlotIndex = null
                     showOverlayHud = true
                     hudTriggerKey++
@@ -575,6 +622,7 @@ private fun MultiViewSlotPane(
     showControls: Boolean,
     isAr: Boolean,
     onSelectAudioFocus: () -> Unit,
+    onRetrySlot: () -> Unit,
     onChangeChannel: () -> Unit,
     onExpandFullscreen: () -> Unit,
     modifier: Modifier = Modifier
@@ -582,7 +630,6 @@ private fun MultiViewSlotPane(
     val interaction = remember { MutableInteractionSource() }
     val isFocused by interaction.collectIsFocusedAsState()
 
-    // إطار فائق النحافة (1.5dp) فقط عند تفعيل الصوت أو التركيز بالريموت لعدم وجود أي بازل
     val borderWidth = when {
         isFocused -> 2.dp
         isAudioActive -> 1.5.dp
@@ -678,14 +725,17 @@ private fun MultiViewSlotPane(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
                         .align(Alignment.Center)
-                        .background(Color(0xCC000000), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 12.dp)
+                        .background(Color(0xD9000000), RoundedCornerShape(12.dp))
+                        .border(1.dp, AccentRed.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                        .clickable(onClick = onRetrySlot)
                         .padding(12.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Warning,
                         contentDescription = null,
                         tint = AccentRed,
-                        modifier = Modifier.size(26.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -694,10 +744,27 @@ private fun MultiViewSlotPane(
                         fontSize = 11.sp,
                         textAlign = TextAlign.Center
                     )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            tint = AccentCyan,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = if (isAr) "إعادة المحاولة" else "Tap to Retry",
+                            color = AccentCyan,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
 
-            // شارة صغيرة شفافة تظهر فقط عند لمس الشاشة أو تفعيل الصوت ثم تختفي لتترك الصورة صافية
             AnimatedVisibility(
                 visible = showControls || isFocused,
                 enter = fadeIn(),
@@ -764,7 +831,6 @@ private fun MultiViewSlotPane(
                 }
             }
         } else {
-            // مربع فارغ لإضافة قناة جديدة
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
