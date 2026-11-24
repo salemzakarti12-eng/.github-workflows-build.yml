@@ -2,6 +2,7 @@ package com.example.ui.player
 
 import android.app.Activity
 import android.net.Uri
+import android.view.TextureView
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.annotation.OptIn
@@ -115,6 +116,7 @@ import com.example.ui.theme.Slate700
 import com.example.ui.theme.Slate850
 import com.example.ui.theme.Slate900
 import com.example.ui.theme.Slate950
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -139,7 +141,6 @@ fun MultiViewScreen(
     var hudTriggerKey by remember { mutableIntStateOf(0) }
     var pickerSlotIndex by remember { mutableStateOf<Int?>(null) }
 
-    // اختيار قنوات مختلفة تماماً في الشاشتين الأولى والثانية لتجنب حظر السيرفر لتكرار نفس القناة
     val firstChannel = remember(initialChannel, allChannels) {
         initialChannel ?: allChannels.firstOrNull()
     }
@@ -163,14 +164,14 @@ fun MultiViewScreen(
     val slotBuffering = remember { mutableStateListOf(false, false, false, false) }
     val slotErrors = remember { mutableStateListOf<String?>(null, null, null, null) }
     val slotRetryCounts = remember { mutableStateListOf(0, 0, 0, 0) }
+    val slotLoadTriggers = remember { mutableStateListOf(0, 0, 0, 0) }
 
-    // بصمات اتصال مستقلة لكل مشغل حتى لا يدمجها سيرفر IPTV في جلسة واحدة أو يحظرها كطلب مكرر
     val slotHttpFactories = remember {
         val agents = listOf(
             "IPTVSmartersPlayer",
             "VLC/3.0.20 LibVLC/3.0.20",
             "Lavf/60.16.100",
-            "ExoPlayer/2.19.1 (Linux; Android 14)"
+            "ExoPlayer/2.19.1"
         )
         List(4) { idx ->
             DefaultHttpDataSource.Factory()
@@ -181,20 +182,13 @@ fun MultiViewScreen(
         }
     }
 
-    lateinit var triggerSlotLoad: (Int, IptvItem?, Boolean) -> Unit
-
     val players = remember {
         val renderersFactory = DefaultRenderersFactory(context)
             .setEnableDecoderFallback(true)
-            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
 
         val lightweightLoadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(
-                8_000,
-                20_000,
-                600,
-                1_200
-            )
+            .setBufferDurationsMs(8_000, 20_000, 600, 1_200)
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
@@ -230,31 +224,21 @@ fun MultiViewScreen(
                                 slotRetryCounts[index]++
                                 slotBuffering[index] = true
                                 slotErrors[index] = null
-                                scope.launch {
+                                scope.launch(Dispatchers.Main) {
                                     delay(1200L * slotRetryCounts[index])
                                     if (slotChannels[index]?.id == currentItem.id) {
-                                        triggerSlotLoad(index, currentItem, true)
+                                        slotLoadTriggers[index]++
                                     }
                                 }
                                 return
                             }
 
                             slotBuffering[index] = false
-                            slotErrors[index] = when (error.errorCode) {
-                                PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ->
-                                    if (isAr) "رفض السيرفر الاتصال (${error.errorCodeName}) - اضغط للتبديل أو إعادة المحاولة"
-                                    else "Server rejected (${error.errorCodeName}) - Tap to retry or switch"
-                                PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
-                                PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
-                                    if (isAr) "تعذر الاتصال بالقناة أو البث متوقف (${error.errorCodeName})"
-                                    else "Stream offline or timeout (${error.errorCodeName})"
-                                PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
-                                PlaybackException.ERROR_CODE_DECODING_FAILED ->
-                                    if (isAr) "تجاوز حد المعالج (${error.errorCodeName})"
-                                    else "Decoder limit (${error.errorCodeName})"
-                                else ->
-                                    if (isAr) "فشل التشغيل (${error.errorCodeName})"
-                                    else "Stream failed (${error.errorCodeName})"
+                            val causeDetail = error.cause?.localizedMessage?.take(45) ?: error.errorCodeName
+                            slotErrors[index] = if (isAr) {
+                                "فشل التشغيل ($causeDetail) - اضغط لإعادة المحاولة"
+                            } else {
+                                "Stream failed ($causeDetail) - Tap to Retry"
                             }
                         }
                     })
@@ -262,41 +246,53 @@ fun MultiViewScreen(
         }
     }
 
-    triggerSlotLoad = { slotIdx, item, isRetry ->
+    fun loadSlotStream(slotIdx: Int, item: IptvItem?) {
         val p = players[slotIdx]
         if (item == null) {
-            p.stop()
-            p.clearMediaItems()
+            try {
+                p.stop()
+                p.clearMediaItems()
+            } catch (_: Exception) {}
             slotBuffering[slotIdx] = false
             slotErrors[slotIdx] = null
-        } else {
-            try {
-                if (!isRetry) {
-                    slotRetryCounts[slotIdx] = 0
-                }
-                slotBuffering[slotIdx] = true
-                slotErrors[slotIdx] = null
-                val uri = Uri.parse(item.streamUrl.trim())
-                val mediaItem = MediaItem.fromUri(uri)
-                val isHls = item.detectFormat() == StreamFormat.HLS ||
-                        item.streamUrl.contains(".m3u8", ignoreCase = true)
+            return
+        }
+        try {
+            slotBuffering[slotIdx] = true
+            slotErrors[slotIdx] = null
+            p.stop()
+            p.clearMediaItems()
 
-                val factory = slotHttpFactories[slotIdx]
-                val mediaSource = if (isHls) {
-                    HlsMediaSource.Factory(factory)
-                        .setAllowChunklessPreparation(true)
-                        .createMediaSource(mediaItem)
-                } else {
-                    DefaultMediaSourceFactory(factory)
-                        .createMediaSource(mediaItem)
-                }
+            val uri = Uri.parse(item.streamUrl.trim())
+            val mediaItem = MediaItem.fromUri(uri)
+            val isHls = item.detectFormat() == StreamFormat.HLS ||
+                    item.streamUrl.contains(".m3u8", ignoreCase = true)
 
-                p.setMediaSource(mediaSource, true)
-                p.prepare()
-                p.playWhenReady = true
-            } catch (e: Exception) {
-                slotBuffering[slotIdx] = false
-                slotErrors[slotIdx] = e.localizedMessage ?: "Error"
+            val factory = slotHttpFactories[slotIdx]
+            val mediaSource = if (isHls) {
+                HlsMediaSource.Factory(factory)
+                    .setAllowChunklessPreparation(true)
+                    .createMediaSource(mediaItem)
+            } else {
+                DefaultMediaSourceFactory(factory)
+                    .createMediaSource(mediaItem)
+            }
+
+            p.setMediaSource(mediaSource, true)
+            p.prepare()
+            p.playWhenReady = true
+        } catch (e: Exception) {
+            slotBuffering[slotIdx] = false
+            slotErrors[slotIdx] = e.localizedMessage ?: "Error"
+        }
+    }
+
+    // مراقب إعادة التحميل التلقائي عند طلب إعادة المحاولة
+    for (idx in 0..3) {
+        val trigger = slotLoadTriggers[idx]
+        LaunchedEffect(trigger) {
+            if (trigger > 0) {
+                loadSlotStream(idx, slotChannels[idx])
             }
         }
     }
@@ -311,13 +307,14 @@ fun MultiViewScreen(
             hide(WindowInsetsCompat.Type.systemBars())
         }
 
-        // تشغيل متدرج بفاصل زمني لمنع حظر السيرفر للطلبات المتزامنة من نفس الـ IP
-        val startupJob = scope.launch {
+        val startupJob = scope.launch(Dispatchers.Main) {
+            delay(150L)
             for (i in 0 until screenCount) {
                 val ch = slotChannels[i]
                 if (ch != null) {
-                    triggerSlotLoad(i, ch, false)
-                    delay(750L)
+                    slotRetryCounts[i] = 0
+                    loadSlotStream(i, ch)
+                    delay(700L)
                 }
             }
         }
@@ -337,15 +334,19 @@ fun MultiViewScreen(
 
     LaunchedEffect(activeAudioSlot, screenCount) {
         players.forEachIndexed { idx, player ->
-            player.volume = if (idx == activeAudioSlot && idx < screenCount) 1f else 0f
+            try {
+                player.volume = if (idx == activeAudioSlot && idx < screenCount) 1f else 0f
+            } catch (_: Exception) {}
         }
     }
 
     LaunchedEffect(screenCount) {
         if (screenCount == 2) {
             for (idx in 2..3) {
-                players[idx].stop()
-                players[idx].clearMediaItems()
+                try {
+                    players[idx].stop()
+                    players[idx].clearMediaItems()
+                } catch (_: Exception) {}
                 slotBuffering[idx] = false
                 slotErrors[idx] = null
             }
@@ -356,8 +357,9 @@ fun MultiViewScreen(
             for (idx in 2..3) {
                 val ch = slotChannels[idx]
                 if (ch != null && !players[idx].isPlaying) {
-                    triggerSlotLoad(idx, ch, false)
-                    delay(750L)
+                    slotRetryCounts[idx] = 0
+                    loadSlotStream(idx, ch)
+                    delay(700L)
                 }
             }
         }
@@ -394,7 +396,8 @@ fun MultiViewScreen(
                             hudTriggerKey++
                         },
                         onRetrySlot = {
-                            slotChannels[slotIdx]?.let { triggerSlotLoad(slotIdx, it, false) }
+                            slotRetryCounts[slotIdx] = 0
+                            loadSlotStream(slotIdx, slotChannels[slotIdx])
                         },
                         onChangeChannel = {
                             pickerSlotIndex = slotIdx
@@ -432,7 +435,8 @@ fun MultiViewScreen(
                                 hudTriggerKey++
                             },
                             onRetrySlot = {
-                                slotChannels[slotIdx]?.let { triggerSlotLoad(slotIdx, it, false) }
+                                slotRetryCounts[slotIdx] = 0
+                                loadSlotStream(slotIdx, slotChannels[slotIdx])
                             },
                             onChangeChannel = {
                                 pickerSlotIndex = slotIdx
@@ -468,7 +472,8 @@ fun MultiViewScreen(
                                 hudTriggerKey++
                             },
                             onRetrySlot = {
-                                slotChannels[slotIdx]?.let { triggerSlotLoad(slotIdx, it, false) }
+                                slotRetryCounts[slotIdx] = 0
+                                loadSlotStream(slotIdx, slotChannels[slotIdx])
                             },
                             onChangeChannel = {
                                 pickerSlotIndex = slotIdx
@@ -598,7 +603,8 @@ fun MultiViewScreen(
                 onSelect = { chosen ->
                     slotChannels[targetSlot] = chosen
                     activeAudioSlot = targetSlot
-                    triggerSlotLoad(targetSlot, chosen, false)
+                    slotRetryCounts[targetSlot] = 0
+                    loadSlotStream(targetSlot, chosen)
                     pickerSlotIndex = null
                     showOverlayHud = true
                     hudTriggerKey++
@@ -678,35 +684,22 @@ private fun MultiViewSlotPane(
             }
     ) {
         if (item != null) {
+            // استخدام TextureView مباشرة لمنع تعارض SurfaceView عند تعدد الشاشات في Compose
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        this.player = player
-                        useController = false
-                        isFocusable = false
-                        isFocusableInTouchMode = false
+                    TextureView(ctx).apply {
                         keepScreenOn = true
-                        resizeMode = if (fillScreenMode) {
-                            AspectRatioFrameLayout.RESIZE_MODE_FILL
-                        } else {
-                            AspectRatioFrameLayout.RESIZE_MODE_FIT
-                        }
                         layoutParams = FrameLayout.LayoutParams(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT
                         )
+                        player.setVideoTextureView(this)
                     }
                 },
-                update = { view ->
-                    if (view.player !== player) {
-                        view.player = player
-                    }
-                    view.resizeMode = if (fillScreenMode) {
-                        AspectRatioFrameLayout.RESIZE_MODE_FILL
-                    } else {
-                        AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    }
+                update = { textureView ->
+                    textureView.keepScreenOn = true
+                    player.setVideoTextureView(textureView)
                 }
             )
 
