@@ -229,17 +229,25 @@ class MainActivity : ComponentActivity() {
             false
         }
 
+        val isDexDevice = try {
+            DeviceUtils.isSamsungDexMode(this)
+        } catch (_: Exception) {
+            false
+        }
+
         try {
             DeviceUtils.configureDeviceOrientation(this)
         } catch (_: Exception) {}
 
-        if (!isTvDevice && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (!isTvDevice && !isDexDevice && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
                 enableEdgeToEdge()
             } catch (_: Exception) {}
         }
 
-        hideSystemStatusBar()
+        if (!isDexDevice) {
+            hideSystemStatusBar()
+        }
 
         setContent {
             val isTelevision = remember { isTvDevice }
@@ -288,7 +296,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
+        if (hasFocus && !DeviceUtils.isSamsungDexMode(this)) {
             hideSystemStatusBar()
         }
     }
@@ -342,12 +350,16 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        hideSystemStatusBar()
+        if (!DeviceUtils.isSamsungDexMode(this)) {
+            hideSystemStatusBar()
+        }
     }
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         try {
+            if (DeviceUtils.isSamsungDexMode(this)) return
+
             val isTvOrBox = DeviceUtils.isTelevision(this) ||
                 resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
             val hasActiveStream = mainViewModel.playerUiState.value.currentItem != null
@@ -386,7 +398,7 @@ class MainActivity : ComponentActivity() {
     }
 
     fun enterPipMode() {
-        if (DeviceUtils.isTelevision(this)) return
+        if (DeviceUtils.isTelevision(this) || DeviceUtils.isSamsungDexMode(this)) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             try {
                 val params = PictureInPictureParams.Builder()
