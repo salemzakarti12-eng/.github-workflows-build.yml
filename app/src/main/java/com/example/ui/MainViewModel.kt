@@ -29,7 +29,8 @@ enum class Screen {
     SERIES_DETAIL,
     SOURCES,
     HISTORY,
-    PLAYER
+    PLAYER,
+    MULTI_VIEW
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -44,6 +45,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val lastBrowseScreen: StateFlow<Screen> = _lastBrowseScreen.asStateFlow()
 
     private val _screenHistory = mutableListOf<Screen>()
+
+    private val _multiViewInitialChannel = MutableStateFlow<IptvItem?>(null)
+    val multiViewInitialChannel: StateFlow<IptvItem?> = _multiViewInitialChannel.asStateFlow()
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
@@ -136,7 +140,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         repository.movieCategories,
         repository.seriesCategories
     ) { screen, lastBrowse, liveCats, movCats, serCats ->
-        val effectiveScreen = if (screen == Screen.PLAYER || screen == Screen.SERIES_DETAIL) lastBrowse else screen
+        val effectiveScreen = if (screen == Screen.PLAYER || screen == Screen.SERIES_DETAIL || screen == Screen.MULTI_VIEW) {
+            lastBrowse
+        } else {
+            screen
+        }
         when (effectiveScreen) {
             Screen.LIVE_CHANNELS, Screen.EPG_GUIDE -> liveCats
             Screen.MOVIES -> movCats
@@ -161,7 +169,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _searchQuery,
         combine(_displayLimit, _dataRefreshTrigger) { limit, _ -> limit }
     ) { screen, lastBrowse, category, query, limit ->
-        val effectiveScreen = if (screen == Screen.PLAYER || screen == Screen.SERIES_DETAIL) lastBrowse else screen
+        val effectiveScreen = if (screen == Screen.PLAYER || screen == Screen.SERIES_DETAIL || screen == Screen.MULTI_VIEW) {
+            lastBrowse
+        } else {
+            screen
+        }
         val type = when (effectiveScreen) {
             Screen.LIVE_CHANNELS, Screen.EPG_GUIDE -> IptvType.LIVE_TV
             Screen.MOVIES -> IptvType.MOVIE
@@ -199,7 +211,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun openMultiView(initialChannel: IptvItem? = null) {
+        playerManager.stop()
+        _multiViewInitialChannel.value = initialChannel
+        navigateTo(Screen.MULTI_VIEW)
+    }
+
     fun handleBackPress(): Boolean {
+        if (_currentScreen.value == Screen.MULTI_VIEW) {
+            val previous = _screenHistory.removeLastOrNull() ?: Screen.LIVE_CHANNELS
+            _currentScreen.value = if (previous == Screen.PLAYER) Screen.LIVE_CHANNELS else previous
+            return true
+        }
+
         if (_currentScreen.value == Screen.PLAYER) {
             if (playerUiState.value.isQuickChannelListOpen) {
                 playerManager.closeQuickChannelList()
